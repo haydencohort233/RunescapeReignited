@@ -1,69 +1,93 @@
 import { useGame } from "../engine/GameEngineContext";
 import { QUEST_CATALOG } from "../content/quests";
+import { CONDITION_LABELS, formatReward } from "../content/display";
 import { describeConditionProgress, describeUnmetCondition } from "../engine/unlockConditions";
 import type { QuestDefinition } from "../engine/types";
+import { Page } from "./ui/Page";
 
-function QuestEntry({ quest }: { quest: QuestDefinition }) {
+function QuestCard({ quest }: { quest: QuestDefinition }) {
   const { engine, state } = useGame();
   const status = engine.getQuestStatus(quest.id);
   const progress = state.quests[quest.id];
   const stage = progress ? quest.stages[progress.stage] : undefined;
   const objective = engine.getQuestObjective(quest.id);
   const stageMet = engine.isQuestStageMet(quest.id);
-  const startBlocked = quest.startCondition ? describeUnmetCondition(quest.startCondition, state) : null;
+  const startBlocked = quest.startCondition
+    ? describeUnmetCondition(quest.startCondition, state, CONDITION_LABELS)
+    : null;
 
-  const statusColor = status === "completed" ? "var(--success)" : status === "in-progress" ? "var(--gold)" : "var(--text-faint)";
-  const statusText =
-    status === "completed"
-      ? "Completed"
-      : status === "in-progress"
-        ? `Step ${progress!.stage + 1}/${quest.stages.length}`
-        : "Not started";
+  const tag =
+    status === "completed" ? (
+      <span className="tag tag-success">Completed</span>
+    ) : status === "in-progress" ? (
+      <span className="tag tag-gold">
+        Step {progress!.stage + 1}/{quest.stages.length}
+      </span>
+    ) : (
+      <span className="tag">Not started</span>
+    );
 
   return (
-    <div style={{ border: "1px solid var(--border-subtle)", borderRadius: 6, padding: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <strong>{quest.name}</strong>
-        <span style={{ fontSize: 12, color: statusColor }}>{statusText}</span>
+    <div className={`card${status === "in-progress" ? " is-active" : ""}`}>
+      <div className="card-header">
+        <span className="card-title">{quest.name}</span>
+        {tag}
       </div>
-      <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "4px 0" }}>{quest.description}</p>
+      <p className="text-muted">{quest.description}</p>
+      {quest.reward && <p className="text-small">Reward: {formatReward(quest.reward)}</p>}
 
-      {status === "not-started" &&
-        (startBlocked ? (
-          <p style={{ fontSize: 12, color: "var(--text-faint)", margin: 0 }}>{startBlocked}</p>
-        ) : (
-          <button onClick={() => engine.startQuest(quest.id)}>Start quest</button>
-        ))}
+      {status === "not-started" && (
+        <div className="btn-row">
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!!startBlocked}
+            title={startBlocked ?? undefined}
+            onClick={() => engine.startQuest(quest.id)}
+          >
+            Start quest
+          </button>
+        </div>
+      )}
 
       {status === "in-progress" && stage && objective && (
-        <div style={{ fontSize: 13 }}>
-          <div>{stage.description}</div>
+        <>
+          <p className="text-small">{stage.description}</p>
           {!stageMet && (
-            <div style={{ fontSize: 12, color: "var(--danger)" }}>
-              {describeConditionProgress(stage.objective, state, progress!.baselines) ??
-                describeUnmetCondition(objective, state)}
+            <p className="text-small text-info">
+              {describeConditionProgress(stage.objective, state, progress!.baselines, CONDITION_LABELS) ??
+                describeUnmetCondition(objective, state, CONDITION_LABELS)}
+            </p>
+          )}
+          {stage.consumes && (
+            <div className="btn-row">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!stageMet}
+                title={stageMet ? undefined : "You don't have everything yet"}
+                onClick={() => engine.advanceQuest(quest.id)}
+              >
+                Hand over
+              </button>
             </div>
           )}
-          {stageMet && stage.consumes && (
-            <button style={{ marginTop: 4 }} onClick={() => engine.advanceQuest(quest.id)}>
-              Hand over
-            </button>
-          )}
-        </div>
+        </>
       )}
     </div>
   );
 }
 
 export default function QuestsPanel() {
+  const { engine } = useGame();
+  const done = QUEST_CATALOG.filter((q) => engine.getQuestStatus(q.id) === "completed").length;
   return (
-    <section style={{ maxWidth: 480 }}>
-      <h2 style={{ fontSize: 18, marginTop: 0 }}>Quests</h2>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <Page title="Quests" meta={`${done}/${QUEST_CATALOG.length} completed`}>
+      <div className="stack-sm">
         {QUEST_CATALOG.map((quest) => (
-          <QuestEntry key={quest.id} quest={quest} />
+          <QuestCard key={quest.id} quest={quest} />
         ))}
       </div>
-    </section>
+    </Page>
   );
 }

@@ -1,30 +1,30 @@
 import { useGame } from "../engine/GameEngineContext";
 import { SKILL_CATALOG } from "../content/skills";
 import { getLevelProgress } from "../engine/xpCurve";
+import { formatNumber } from "../engine/format";
 import SkillProgress from "./SkillProgress";
+import { Page } from "./ui/Page";
 
 export default function SkillsPanel() {
-  const { engine } = useGame();
-
+  const { engine, state } = useGame();
   return (
-    <section style={{ maxWidth: 480 }}>
-      <h2 style={{ fontSize: 18, marginTop: 0 }}>Skills</h2>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <Page title="Skills" meta={`Total level ${formatNumber(state.statistics.totalLevel ?? 0)}`}>
+      <div className="stack-sm">
         {SKILL_CATALOG.map((skill) => {
           const xp = engine.getSkillXp(skill.id);
           const progress = getLevelProgress(xp);
           return (
-            <div key={skill.id}>
+            <div key={skill.id} className="card">
               <SkillProgress skillId={skill.id} label={skill.name} />
-              <div style={{ fontSize: 12, color: "var(--text-faint)" }}>
-                {xp.toLocaleString()} xp
+              <span className="text-faint text-small">
+                {formatNumber(xp)} XP
                 {progress.xpForThisLevel > 0 &&
-                  ` — ${(progress.xpForThisLevel - progress.xpIntoLevel).toLocaleString()} to next level`}
-              </div>
+                  ` · ${formatNumber(progress.xpForThisLevel - progress.xpIntoLevel)} to next level`}
+              </span>
             </div>
           );
         })}
       </div>
-    </section>
+    </Page>
   );
 }

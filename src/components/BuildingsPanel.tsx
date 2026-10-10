@@ -1,83 +1,67 @@
 import { useGame } from "../engine/GameEngineContext";
 import { BUILDING_CATALOG } from "../content/buildings";
+import { CONDITION_LABELS, formatAmounts, resourceName } from "../content/display";
 import { describeUnmetCondition } from "../engine/unlockConditions";
-import { formatNumber } from "../engine/format";
 import { buildingIconPath } from "../content/assetPaths";
+import type { BuildingDefinition } from "../engine/types";
 import GameImage from "./GameImage";
+import { ActionCard, LockedCard, type CardAction } from "./ui/ActionCard";
+import { QUANTITY_STEPS } from "./ui/quantity";
+import { Page } from "./ui/Page";
 
-export default function BuildingsPanel() {
+function BuildingCard({ def }: { def: BuildingDefinition }) {
   const { engine, state } = useGame();
+  const icon = (
+    <GameImage src={buildingIconPath(def.id)} alt={def.name} style={{ width: 24, height: 24 }} fallback={<span>🏠</span>} />
+  );
+
+  if (!engine.isBuildingUnlocked(def.id)) {
+    const reason = def.unlockCondition ? describeUnmetCondition(def.unlockCondition, state, CONDITION_LABELS) : null;
+    return <LockedCard icon={icon} title={def.name} reason={reason ?? "Not available yet"} />;
+  }
+
+  const owned = engine.getBuildingQuantity(def.id);
+  const rate = def.baseRatePerSecond * owned;
+
+  const buyActions: CardAction[] = QUANTITY_STEPS.map((q) => {
+    const cost = engine.getBuildingPurchaseCost(def.id, q) ?? [];
+    const overLimit = def.maxOwned !== undefined && owned + q > def.maxOwned;
+    const affordable = cost.every((c) => engine.getOwnedCount(c.resource) >= c.amount);
+    return {
+      label: `Buy ${q} (${formatAmounts(cost)})`,
+      variant: q === 1 ? ("primary" as const) : undefined,
+      disabled: overLimit || !affordable,
+      reason: overLimit ? `You can own at most ${def.maxOwned}` : `Costs ${formatAmounts(cost)}`,
+      onClick: () => engine.purchaseBuilding(def.id, q),
+    };
+  });
+  const refund = engine.getBuildingSellRefund(def.id, 1);
+  const sellAction: CardAction = {
+    label: refund ? `Sell 1 (+${formatAmounts(refund)})` : "Sell 1",
+    disabled: owned === 0,
+    reason: "You don't own any",
+    onClick: () => engine.sellBuilding(def.id, 1),
+  };
 
   return (
-    <section style={{ maxWidth: 520 }}>
-      <h2 style={{ fontSize: 18, marginTop: 0 }}>Buildings</h2>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {BUILDING_CATALOG.map((def) => {
-          if (!def.baseCost) return null; // not a purchasable building (e.g. base income)
-          const owned = engine.getBuildingQuantity(def.id);
-          const unlocked = engine.isBuildingUnlocked(def.id);
-          const lockedReason = def.unlockCondition
-            ? describeUnmetCondition(def.unlockCondition, state)
-            : null;
+    <ActionCard
+      icon={icon}
+      title={def.name}
+      meta={`${owned}${def.maxOwned !== undefined ? `/${def.maxOwned}` : ""} owned · +${rate.toFixed(2)} ${resourceName(def.resource)}/s`}
+      description={`Each produces ${def.baseRatePerSecond} ${resourceName(def.resource)} per second.`}
+      actions={[...buyActions, sellAction]}
+    />
+  );
+}
 
-          if (!unlocked) {
-            return (
-              <div
-                key={def.id}
-                style={{
-                  border: "1px dashed var(--border)",
-                  borderRadius: 6,
-                  padding: 10,
-                  color: "var(--text-faint)",
-                }}
-              >
-                <strong>{def.name} (Locked)</strong>
-                <div style={{ fontSize: 13 }}>{lockedReason}</div>
-              </div>
-            );
-          }
-
-          const cost1 = engine.getBuildingPurchaseCost(def.id, 1);
-          const cost5 = engine.getBuildingPurchaseCost(def.id, 5);
-          const refund1 = engine.getBuildingSellRefund(def.id, 1);
-          const atLimit = def.maxOwned !== undefined && owned >= def.maxOwned;
-          const fitsFive = def.maxOwned === undefined || owned + 5 <= def.maxOwned;
-          const formatCost = (cost: { resource: string; amount: number }[] | null) =>
-            cost?.map((c) => `${formatNumber(c.amount)} ${c.resource}`).join(", ");
-
-          return (
-            <div key={def.id} style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <strong style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <GameImage
-                    src={buildingIconPath(def.id)}
-                    alt={def.name}
-                    style={{ width: 24, height: 24 }}
-                    fallback={<span style={{ fontSize: 18 }}>🏠</span>}
-                  />
-                  {def.name}
-                </strong>
-                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                  Owned: {owned}
-                  {def.maxOwned !== undefined && `/${def.maxOwned}`} ({(def.baseRatePerSecond * owned).toFixed(2)}{" "}
-                  {def.resource}/s)
-                </span>
-              </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
-                <button onClick={() => engine.purchaseBuilding(def.id, 1)} disabled={atLimit}>
-                  Buy 1 ({formatCost(cost1)})
-                </button>
-                <button onClick={() => engine.purchaseBuilding(def.id, 5)} disabled={!fitsFive}>
-                  Buy 5 ({formatCost(cost5)})
-                </button>
-                <button onClick={() => engine.sellBuilding(def.id, 1)} disabled={owned === 0}>
-                  Sell 1{refund1 && ` (+${formatCost(refund1)})`}
-                </button>
-              </div>
-            </div>
-          );
-        })}
+export default function BuildingsPanel() {
+  return (
+    <Page title="Buildings">
+      <div className="stack-sm">
+        {BUILDING_CATALOG.filter((def) => def.baseCost).map((def) => (
+          <BuildingCard key={def.id} def={def} />
+        ))}
       </div>
-    </section>
+    </Page>
   );
 }

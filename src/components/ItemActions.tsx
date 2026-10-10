@@ -1,28 +1,33 @@
-import { useGame } from "../engine/GameEngineContext";
+import type { GameEngine } from "../engine/gameEngine";
 import type { ItemDefinition, ItemActionId } from "../engine/types";
 import { getLocation } from "../content/mapLocations";
+import type { CardAction } from "./ui/ActionCard";
 
-/** Renders the buttons for one item's action list — same component powers
- *  both the click-panel and the right-click quick-menu, so the two never
- *  drift out of sync with each other. */
-export default function ItemActions({
-  def,
-  instanceId,
-  equipped,
-  excludeActions,
-  onAction,
-}: {
-  def: ItemDefinition;
-  /** Set for a non-stackable item (one specific copy); omitted for a stack. */
-  instanceId?: string;
-  equipped: boolean;
-  /** Actions to hide regardless of what the item definition declares — e.g.
-   *  the Equipment tab hides "drop" since OSRS requires unequipping first. */
-  excludeActions?: ItemActionId[];
-  onAction?: () => void; // called after any action, e.g. to close the menu
-}) {
-  const { engine } = useGame();
+const ACTION_LABEL: Record<ItemActionId, string> = {
+  equip: "Equip",
+  unequip: "Unequip",
+  drop: "Drop",
+  examine: "Examine",
+  eat: "Eat",
+  craft: "Craft",
+  teleport: "Teleport",
+};
 
+/** An item's actions as card actions — the same list powers the inline
+ *  panel and the right-click menu, in the Inventory and Equipment tabs. */
+export function itemActions(
+  engine: GameEngine,
+  def: ItemDefinition,
+  opts: {
+    /** Set for a non-stackable item (one specific copy); omitted for a stack. */
+    instanceId?: string;
+    equipped: boolean;
+    /** Actions to hide — e.g. the Equipment tab hides "drop" since OSRS
+     *  requires unequipping first. */
+    exclude?: ItemActionId[];
+  }
+): CardAction[] {
+  const { instanceId, equipped, exclude } = opts;
   const handlers: Partial<Record<ItemActionId, () => void>> = {
     equip: () => instanceId && engine.equipItem(def, instanceId),
     unequip: () => def.equipSlot && engine.unequipSlot(def.equipSlot),
@@ -43,27 +48,22 @@ export default function ItemActions({
     },
   };
 
-  // "equip" swaps to "unequip" once worn — remap the label, don't filter it out.
-  const actions = def.actions
-    .filter((a) => !excludeActions?.includes(a))
-    .map((a) => (a === "equip" && equipped ? "unequip" : a)) as ItemActionId[];
+  // "equip" becomes "unequip" once worn.
+  return def.actions
+    .filter((a) => !exclude?.includes(a))
+    .map((a) => (a === "equip" && equipped ? "unequip" : a))
+    .map((action) => ({
+      label: ACTION_LABEL[action],
+      variant: action === "drop" ? ("danger" as const) : undefined,
+      onClick: () => handlers[action]?.(),
+    }));
+}
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      {actions.map((action) => (
-        <button
-          key={action}
-          onClick={() => {
-            handlers[action]?.();
-            onAction?.();
-          }}
-          style={{ textAlign: "left" }}
-        >
-          {capitalize(action)}
-        </button>
-      ))}
-    </div>
-  );
+/** "Attack +67, Strength +66" for an item's description line. */
+export function formatItemStats(def: ItemDefinition): string {
+  return Object.entries(def.stats ?? {})
+    .map(([s, v]) => `${capitalize(s)} ${v >= 0 ? "+" : ""}${v}`)
+    .join(", ");
 }
 
 function capitalize(s: string): string {

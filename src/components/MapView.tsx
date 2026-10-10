@@ -3,8 +3,11 @@ import { useGame } from "../engine/GameEngineContext";
 import { MAP_LOCATIONS, getLocation } from "../content/mapLocations";
 import { getAmenitiesAtLocation } from "../content/amenities";
 import { describeUnmetCondition } from "../engine/unlockConditions";
+import { CONDITION_LABELS } from "../content/display";
+import { formatDuration } from "../engine/format";
+import ActivityCard from "./ActivityCard";
+import { Page } from "./ui/Page";
 import { confirmAndStartTravel } from "../engine/actionHelpers";
-import { getActiveTravel } from "../engine/activeAction";
 import { AMENITY_ICON } from "../content/amenities";
 import { worldMapPath, locationIconPath } from "../content/assetPaths";
 import { preloadImages, isImageLoaded } from "../lib/imagePreloader";
@@ -14,7 +17,6 @@ import GameImage from "./GameImage";
 // and this still works unchanged, since positions are rendered as
 // percentages of this space, not fixed pixels.
 const MAP_SPACE = 2000;
-const DISPLAY_SIZE = 400;
 
 export default function MapView() {
   const { engine, state } = useGame();
@@ -25,80 +27,45 @@ export default function MapView() {
   }, []);
 
   const currentLocation = getLocation(state.currentLocationId);
-  const travel = getActiveTravel(state);
   const selected = selectedId ? getLocation(selectedId) : undefined;
-
-  const travelRemainingMs = travel
-    ? Math.max(0, travel.startedAt + travel.durationMs - Date.now())
-    : 0;
+  const lockReason = (loc: typeof selected) =>
+    loc?.unlockCondition ? describeUnmetCondition(loc.unlockCondition, state, CONDITION_LABELS) : null;
 
   return (
-    <section style={{ maxWidth: 480 }}>
-      <h2 style={{ fontSize: 18, marginTop: 0 }}>World Map</h2>
+    <Page title="World map" meta={currentLocation ? `You're at ${currentLocation.name}` : undefined}>
+      <ActivityCard />
 
-      {travel && (
-        <p style={{ fontSize: 13 }}>
-          Traveling to {travel.destinationName} — arriving in {Math.ceil(travelRemainingMs / 1000)}s
-          <button style={{ marginLeft: 8 }} onClick={() => engine.cancelTravel()}>
-            Cancel
-          </button>
-        </p>
-      )}
-
+      {/* Positions are percentages of the map space, so the map scales to
+          the column width (and a phone screen) without moving pins. */}
       <div
-        style={{
-          position: "relative",
-          width: DISPLAY_SIZE,
-          height: DISPLAY_SIZE,
-          border: "1px solid var(--text-faint)",
-          background: "var(--map-bg)",
-          backgroundImage: isImageLoaded(worldMapPath()) ? `url(${worldMapPath()})` : undefined,
-          backgroundSize: "cover",
-        }}
+        className="world-map"
+        style={{ backgroundImage: isImageLoaded(worldMapPath()) ? `url(${worldMapPath()})` : undefined }}
       >
         {MAP_LOCATIONS.map((loc) => {
-          const isUnlockedHere = !loc.unlockCondition || describeUnmetCondition(loc.unlockCondition, state) === null;
+          const unlocked = !lockReason(loc);
           const isCurrent = loc.id === state.currentLocationId;
-          const left = (loc.x / MAP_SPACE) * DISPLAY_SIZE;
-          const top = (loc.y / MAP_SPACE) * DISPLAY_SIZE;
           return (
             <button
               key={loc.id}
+              type="button"
+              className={`map-pin${isCurrent ? " is-current" : ""}${loc.id === selectedId ? " is-selected" : ""}`}
               onClick={() => setSelectedId(loc.id)}
               title={loc.name}
+              aria-label={loc.name}
               style={{
-                position: "absolute",
-                left,
-                top,
-                transform: "translate(-50%, -50%)",
-                width: 24,
-                height: 24,
-                padding: 0,
-                border: isCurrent ? "2px solid var(--info)" : "none",
-                borderRadius: "50%",
-                background: "transparent",
-                cursor: "pointer",
-                opacity: isUnlockedHere ? 1 : 0.45,
+                left: `${(loc.x / MAP_SPACE) * 100}%`,
+                top: `${(loc.y / MAP_SPACE) * 100}%`,
+                opacity: unlocked ? 1 : 0.45,
               }}
             >
               <GameImage
-                src={locationIconPath(
-                  loc.name,
-                  isCurrent ? "current" : loc.id === selectedId ? "selected" : "default"
-                )}
-                alt={loc.name}
+                src={locationIconPath(loc.name, isCurrent ? "current" : loc.id === selectedId ? "selected" : "default")}
+                alt=""
                 style={{ width: 20, height: 20 }}
                 fallback={
                   <span
-                    style={{
-                      display: "block",
-                      width: 14,
-                      height: 14,
-                      margin: "0 auto",
-                      borderRadius: "50%",
-                      border: "1px solid var(--text-muted)",
-                      background: isUnlockedHere ? (isCurrent ? "var(--info)" : "var(--good)") : "var(--text-faint)",
-                    }}
+                    className="map-pin-dot"
+                    style={{ background: unlocked ? (isCurrent ? "var(--info)" : "var(--good)") : "var(--text-faint)" }}
                   />
                 }
               />
@@ -107,54 +74,48 @@ export default function MapView() {
         })}
       </div>
 
-      {currentLocation && (
-        <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Currently at: {currentLocation.name}</p>
-      )}
+      {!selected && <p className="empty-state">Select a location on the map to see what's there.</p>}
 
       {selected && (
-        <div style={{ border: "1px solid var(--border-subtle)", borderRadius: 6, padding: 10, marginTop: 8 }}>
-          <strong>{selected.name}</strong>
-          {selected.id === state.currentLocationId ? (
-            <p style={{ fontSize: 13, color: "var(--text-faint)" }}>You're already here.</p>
-          ) : selected.unlockCondition && describeUnmetCondition(selected.unlockCondition, state) ? (
-            <p style={{ fontSize: 13, color: "var(--danger)" }}>
-              {describeUnmetCondition(selected.unlockCondition, state)}
+        <div className={`card${lockReason(selected) ? " is-locked" : ""}`}>
+          <div className="card-header">
+            <span className="card-title">{selected.name}</span>
+            {selected.id === state.currentLocationId ? (
+              <span className="tag tag-success">You're here</span>
+            ) : lockReason(selected) ? (
+              <span className="card-meta">🔒 Locked</span>
+            ) : currentLocation ? (
+              <span className="card-meta">
+                {formatDuration(engine.getTravelDurationEstimate(currentLocation, selected))} away
+              </span>
+            ) : null}
+          </div>
+
+          {lockReason(selected) && <p className="locked-note">{lockReason(selected)}</p>}
+
+          {/* Read-only preview of what's there, even before you've been —
+              Home handles interaction for wherever you currently are. */}
+          {getAmenitiesAtLocation(selected.id).length > 0 && (
+            <p className="text-muted">
+              {getAmenitiesAtLocation(selected.id)
+                .map((a) => `${AMENITY_ICON[a.kind]} ${a.name}`)
+                .join(" · ")}
             </p>
-          ) : (
-            <>
-              {currentLocation && (
-                <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 6px" }}>
-                  Estimated travel time:{" "}
-                  {Math.round(engine.getTravelDurationEstimate(currentLocation, selected) / 1000)}s
-                </p>
-              )}
+          )}
+
+          {selected.id !== state.currentLocationId && !lockReason(selected) && (
+            <div className="btn-row">
               <button
-                disabled={!!travel}
-                onClick={() => {
-                  if (!currentLocation) return;
-                  confirmAndStartTravel(engine, currentLocation, selected);
-                }}
+                type="button"
+                className="btn btn-primary"
+                onClick={() => currentLocation && confirmAndStartTravel(engine, currentLocation, selected)}
               >
                 Travel here
               </button>
-            </>
+            </div>
           )}
-
-          {/* Quick, read-only preview — not interactive here (Home handles
-              full interaction for wherever you currently are). Shown for
-              ANY selected location, even ones you haven't traveled to yet,
-              so you know what's worth going somewhere for. */}
-          {(() => {
-            const amenities = getAmenitiesAtLocation(selected.id);
-            if (amenities.length === 0) return null;
-            return (
-              <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
-                Here: {amenities.map((a) => `${AMENITY_ICON[a.kind]} ${a.name}`).join(", ")}
-              </p>
-            );
-          })()}
         </div>
       )}
-    </section>
+    </Page>
   );
 }

@@ -603,3 +603,58 @@ input[type="checkbox"] {
     transform: translate(-50%, -24px);
   }
 }
+
+.history-log {
+  max-height: 260px;
+  overflow-y: auto;
+  gap: 0;
+}
+
+.history-log .data-row > :last-child {
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* ── World map ────────────────────────────────────────────────────────── */
+
+.world-map {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--map-bg);
+  background-size: cover;
+  overflow: hidden;
+}
+
+.map-pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.map-pin.is-selected {
+  border-color: var(--text-strong);
+}
+
+.map-pin.is-current {
+  border-color: var(--info);
+}
+
+.map-pin-dot {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--text-muted);
+}
