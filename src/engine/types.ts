@@ -141,6 +141,12 @@ export interface ItemDefinition {
    *  browsable at scale instead of one flat folder with 1,000 entries.
    *  Omit for a top-level item. */
   assetFolder?: string;
+  /** Food: HP restored per bite (before "healing" modifiers). Gives the
+   *  item an "eat" action its meaning. */
+  healAmount?: number;
+  /** Base value in GP — what shops pay a fraction of (see tuning.ts).
+   *  Omit for items no shop will buy. */
+  value?: number;
   /** Teleports the player directly to this location id when the "teleport"
    *  action is used — bypasses normal travel time entirely. Not charge-
    *  limited yet (see maxDurability note above). */

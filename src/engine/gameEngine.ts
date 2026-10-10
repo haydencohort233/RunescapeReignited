@@ -24,7 +24,7 @@ import { levelForXp, xpForLevel, MAX_LEVEL, calculateCombatLevel } from "./xpCur
 import { isUnlocked, captureBaselines, offsetByBaselines } from "./unlockConditions";
 import { getDailyPeriodNumber } from "./time";
 import { formatDuration } from "./format";
-import { BUILDING_SELL_REFUND_FRACTION, DEFAULT_COST_SCALING_FACTOR } from "./tuning";
+import { BUILDING_SELL_REFUND_FRACTION, DEFAULT_COST_SCALING_FACTOR, EAT_ATTACK_DELAY_MS } from "./tuning";
 import { resolveAttack } from "./combatMath";
 import { weightedRandomPick } from "./rng";
 import { countOwned } from "./ledger";
@@ -1304,12 +1304,23 @@ export class GameEngine {
     this.notifications.push("status", `Dropped ${amount.toLocaleString()}x ${this.nameOf(itemDefId)}.`);
   }
 
-  /** Stub — eating just consumes one unit for now. Wire in real effects
-   *  (healing) here. */
-  consumeItem(itemDefId: string): void {
-    if (this.getOwnedCount(itemDefId) < 1) return;
+  /** Eats one unit of a food item, healing its healAmount (scaled by
+   *  "healing" modifiers). Works mid-fight, at the cost of delaying your
+   *  next attack by EAT_ATTACK_DELAY_MS. */
+  eatItem(itemDefId: string): boolean {
+    const def = this.itemsById.get(itemDefId);
+    if (!def?.healAmount || this.getOwnedCount(itemDefId) < 1) return false;
     this.removeOwned(itemDefId, 1);
-    this.notifications.push("status", `You eat the ${this.nameOf(itemDefId)}.`);
+    const before = this.getCurrentHp();
+    this.healHp(this.getModifiedValue("healing", def.healAmount));
+    const healed = Math.floor(this.getCurrentHp() - before);
+
+    const session = this.combatSession;
+    if (session) session.playerStartedAt += EAT_ATTACK_DELAY_MS;
+
+    this.incrementStatistic(`eaten:${itemDefId}`, 1);
+    this.notifications.push("status", `You eat the ${def.name}. It heals ${healed} HP.`);
+    return true;
   }
 
   // ── Shops ────────────────────────────────────────────────────────────

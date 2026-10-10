@@ -229,6 +229,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "consumable",
     rarity: "common",
     stackable: true,
+    healAmount: 20,
     actions: ["eat", "drop", "examine"],
   },
   {

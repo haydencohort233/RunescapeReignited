@@ -35,7 +35,7 @@ export default function ItemActions({
           : "";
       engine.notifications.push("status", `${def.description}${statText}`, { durationMs: null });
     },
-    eat: () => engine.consumeItem(def.id),
+    eat: () => engine.eatItem(def.id),
     craft: () => engine.notifications.push("status", "Nothing to craft with this yet.", { severity: "warning" }),
     teleport: () => {
       const destination = def.teleportTo ? getLocation(def.teleportTo) : undefined;
