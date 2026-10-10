@@ -6,6 +6,7 @@ import { MAX_LEVEL } from "../engine/xpCurve";
 import { BUILDING_CATALOG } from "../content/buildings";
 import { getThemeChoice, setThemeChoice, type ThemeChoice } from "../lib/theme";
 import { Page, Section } from "./ui/Page";
+import { requestConfirm } from "../lib/dialog";
 
 export default function SettingsPanel() {
   const { engine, autosaveMs, actions } = useGame();
@@ -13,6 +14,7 @@ export default function SettingsPanel() {
   const [spawnItemId, setSpawnItemId] = useState(ITEM_CATALOG[0].id);
   const [levelInputs, setLevelInputs] = useState<Record<string, number>>({});
   const [theme, setTheme] = useState<ThemeChoice>(getThemeChoice);
+  const [pastedSave, setPastedSave] = useState("");
 
   // Dev actions don't all notify, so re-render explicitly afterwards.
   const dev = (fn: () => void) => () => {
@@ -62,7 +64,7 @@ export default function SettingsPanel() {
               Export save
             </button>
             <button type="button" className="btn" onClick={() => importInputRef.current?.click()}>
-              Import save
+              Import save file
             </button>
             <input
               id="import-save"
@@ -76,6 +78,31 @@ export default function SettingsPanel() {
                 e.target.value = "";
               }}
             />
+          </div>
+          <div className="stack-sm">
+            <label className="text-muted" htmlFor="paste-save">
+              Or paste an exported save:
+            </label>
+            <textarea
+              id="paste-save"
+              className="dialog-text"
+              style={{ minHeight: 60 }}
+              value={pastedSave}
+              onChange={(e) => setPastedSave(e.target.value)}
+            />
+            <div className="btn-row">
+              <button
+                type="button"
+                className="btn"
+                disabled={!pastedSave.trim()}
+                onClick={() => {
+                  actions.importSaveText(pastedSave);
+                  setPastedSave("");
+                }}
+              >
+                Import pasted save
+              </button>
+            </div>
           </div>
           <div className="btn-row">
             <button type="button" className="btn btn-danger" onClick={() => actions.clearResource("gp")}>
@@ -91,7 +118,10 @@ export default function SettingsPanel() {
               type="button"
               className="btn btn-danger"
               onClick={() => {
-                if (window.confirm("This wipes your entire save. Are you sure?")) actions.resetAll();
+                void requestConfirm("This wipes your entire save and can't be undone. Delete it?", {
+                  confirmLabel: "Delete save",
+                  danger: true,
+                }).then((ok) => ok && actions.resetAll());
               }}
             >
               Delete save

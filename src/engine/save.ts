@@ -99,18 +99,11 @@ interface SaveFile {
   data: string; // engine.serialize() output
 }
 
-export function exportSaveToFile(engine: GameEngine): void {
+/** The exported save as text — a download where the host allows it, and
+ *  copy/paste everywhere (some embedded hosts block downloads). */
+export function exportSaveText(engine: GameEngine): string {
   const payload: SaveFile = { exportedAt: Date.now(), data: engine.serialize() };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `idlegame-save-${new Date().toISOString().slice(0, 10)}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  // Revoking synchronously can cancel the download in some browsers.
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return JSON.stringify(payload);
 }
 
 /**

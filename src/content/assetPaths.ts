@@ -32,7 +32,9 @@ export function slugify(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 }
 
-const ASSET_ROOT = "/assets";
+// Relative to wherever the game is served from (vite base), so it works at
+// a site root or inside a subfolder / embedded host alike.
+const ASSET_ROOT = `${import.meta.env.BASE_URL}assets`;
 
 /** Encodes each path segment separately so "Armor/Bronze" stays a real
  *  folder path rather than becoming one escaped string. */

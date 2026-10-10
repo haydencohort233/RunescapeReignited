@@ -658,3 +658,35 @@ input[type="checkbox"] {
   border-radius: 50%;
   border: 1px solid var(--text-muted);
 }
+
+/* ── Dialogs ──────────────────────────────────────────────────────────── */
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.dialog {
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 10px 30px var(--shadow);
+}
+
+.dialog-text {
+  width: 100%;
+  min-height: 140px;
+  box-sizing: border-box;
+  font: 12px/1.4 var(--mono);
+  color: var(--text-strong);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px;
+  resize: vertical;
+}

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { GameEngine } from "./gameEngine";
 import { NotificationQueue } from "./notificationQueue";
-import { loadGame, saveGame, createAutoSaver, exportSaveToFile, importSaveFromFileText } from "./save";
+import { loadGame, saveGame, createAutoSaver, exportSaveText, importSaveFromFileText } from "./save";
+import { showText } from "../lib/dialog";
 import { GAME_CONTENT } from "../content";
 import { ACHIEVEMENT_CATALOG } from "../content/achivements";
 import type { GameNotification, GameState } from "./types";
@@ -97,6 +98,17 @@ export function useGameEngine() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, suspended]);
 
+  const importText = (text: string) => {
+    try {
+      const imported = importSaveFromFileText(text.trim(), GAME_CONTENT);
+      imported.checkAchievements(ACHIEVEMENT_CATALOG);
+      setEngine(imported); // swaps the whole engine — effects re-subscribe automatically
+      saveGame(imported); // persist immediately so a refresh doesn't lose the import
+    } catch (err) {
+      engine.notifications.push("error", `Couldn't import that save: ${(err as Error).message}`, { severity: "error" });
+    }
+  };
+
   const actions = {
     /** For the few actions that don't push a notification (Attack Now,
      *  tending a gather node): re-render right away. */
@@ -104,23 +116,17 @@ export function useGameEngine() {
 
     saveNow: () => saveGame(engine),
 
-    exportSave: () => exportSaveToFile(engine),
+    exportSave: () =>
+      void showText(
+        "Export save",
+        "Copy this text and keep it somewhere safe. Paste it into Import save to restore it.",
+        exportSaveText(engine)
+      ),
 
-    importSave: async (file: File) => {
-      try {
-        const text = await file.text();
-        const imported = importSaveFromFileText(text, GAME_CONTENT);
-        imported.checkAchievements(ACHIEVEMENT_CATALOG);
-        setEngine(imported); // swaps the whole engine — effects re-subscribe automatically
-        saveGame(imported); // persist immediately so a refresh doesn't lose the import
-      } catch (err) {
-        engine.notifications.push(
-          "error",
-          `Couldn't import that save file: ${(err as Error).message}`,
-          { severity: "error" }
-        );
-      }
-    },
+    /** Same as importing a file, from pasted text. */
+    importSaveText: (text: string) => importText(text),
+
+    importSave: async (file: File) => importText(await file.text()),
 
     resetAll: () => {
       engine.resetAll();

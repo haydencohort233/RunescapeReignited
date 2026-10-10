@@ -13,6 +13,7 @@ import StatisticsPanel from "./components/StatisticsPanel";
 import AchievementsPanel from "./components/AchievementsPanel";
 import SettingsPanel from "./components/SettingsPanel";
 import NotificationOverlay from "./components/NotificationOverlay";
+import { DialogHost } from "./components/ui/DialogHost";
 import { ACHIEVEMENT_CATALOG } from "./content/achivements";
 import { preloadImages } from "./lib/imagePreloader";
 import {
@@ -88,6 +89,7 @@ export default function App() {
     <GameEngineProvider>
       <NotificationOverlay />
       <AppContent />
+      <DialogHost />
     </GameEngineProvider>
   );
 }
