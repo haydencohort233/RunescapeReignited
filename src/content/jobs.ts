@@ -1,10 +1,10 @@
 import type { JobDefinition } from "../engine/types";
 
-// Fixed content for now (no random rotation yet) — mostly one-time, since
-// that was the priority. Deliberately varied to exercise every shape the
-// type supports: a plain delivery, a milestone with no consumption, a
-// repeatable grind job, and one that sets a flag on completion (the
-// quest-starting hook — this one behaves exactly like a tiny quest).
+// Deliberately varied to exercise every shape the type supports: a plain
+// daily delivery, a one-time milestone with no consumption, a repeatable
+// grind job, a daily kill count (counted from when you accept it), and a
+// one-time job that sets a flag on completion (the quest-starting hook).
+// Jobs are "daily" unless they say otherwise.
 export const JOB_CATALOG: JobDefinition[] = [
   {
     id: "deliver-wood",
@@ -21,6 +21,7 @@ export const JOB_CATALOG: JobDefinition[] = [
     objective: { kind: "skillLevel", skill: "woodcutting", atLeast: 15 },
     // No consumesOnTurnIn — nothing to hand over, the level itself is the task.
     reward: { achievementPoints: 15 },
+    frequency: "once", // a level, once reached, stays reached
   },
   {
     id: "flax-for-the-fletcher",
@@ -29,7 +30,7 @@ export const JOB_CATALOG: JobDefinition[] = [
     objective: { kind: "resourceAtLeast", resource: "flax", amount: 10 },
     consumesOnTurnIn: [{ resource: "flax", amount: 10 }],
     reward: { gp: 40 },
-    repeatable: true,
+    frequency: "repeatable",
   },
   {
     id: "clear-the-den",
@@ -40,6 +41,15 @@ export const JOB_CATALOG: JobDefinition[] = [
     // first step of something bigger, not just a delivery.
     objective: { kind: "flag", flag: "investigatedDen" },
     reward: { gp: 250, setFlags: ["denCleared"] },
+    frequency: "once",
+  },
+  {
+    id: "goblin-trouble",
+    title: "Goblin Trouble",
+    description: "Defeat 5 goblins in the Dark Forest.",
+    // Counts kills made AFTER accepting, not lifetime kills.
+    objective: { kind: "statisticAtLeast", statistic: "kills:goblin", atLeast: 5 },
+    reward: { gp: 75 },
   },
 ];
 

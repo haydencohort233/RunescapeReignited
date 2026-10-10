@@ -72,6 +72,50 @@ export function describeUnmetCondition(condition: UnlockCondition, state: GameSt
   }
 }
 
+/** Counter values snapshotted when a job is accepted, keyed by
+ *  baselineKey(). Lets "defeat 10 goblins" mean 10 MORE from now, rather
+ *  than being instantly met by lifetime kills. */
+export type ConditionBaselines = Record<string, number>;
+
+/** Only counters that only ever go up get a baseline — current holdings
+ *  (resourceAtLeast) and levels are naturally "reach X", not "gain X". */
+function baselineKey(condition: UnlockCondition): string | null {
+  if (condition.kind === "statisticAtLeast") return `stat:${condition.statistic}`;
+  if (condition.kind === "resourceLifetimeAtLeast") return `lifetime:${condition.resource}`;
+  return null;
+}
+
+function baselineValue(condition: UnlockCondition, state: GameState): number {
+  if (condition.kind === "statisticAtLeast") return state.statistics[condition.statistic] ?? 0;
+  if (condition.kind === "resourceLifetimeAtLeast") return state.resources[condition.resource]?.lifetimeEarned ?? 0;
+  return 0;
+}
+
+/** Snapshots every counter the condition (including nested all/any) reads. */
+export function captureBaselines(condition: UnlockCondition, state: GameState): ConditionBaselines {
+  const baselines: ConditionBaselines = {};
+  const visit = (c: UnlockCondition) => {
+    if (c.kind === "all" || c.kind === "any") return c.conditions.forEach(visit);
+    const key = baselineKey(c);
+    if (key) baselines[key] = baselineValue(c, state);
+  };
+  visit(condition);
+  return baselines;
+}
+
+/** The same condition with each counter target raised by its baseline, so
+ *  isUnlocked() measures progress made since the snapshot. */
+export function offsetByBaselines(condition: UnlockCondition, baselines: ConditionBaselines): UnlockCondition {
+  if (condition.kind === "all" || condition.kind === "any") {
+    return { ...condition, conditions: condition.conditions.map((c) => offsetByBaselines(c, baselines)) };
+  }
+  const key = baselineKey(condition);
+  const base = key ? (baselines[key] ?? 0) : 0;
+  if (condition.kind === "statisticAtLeast") return { ...condition, atLeast: condition.atLeast + base };
+  if (condition.kind === "resourceLifetimeAtLeast") return { ...condition, amount: condition.amount + base };
+  return condition;
+}
+
 /** "You have 3/10 Flax" style progress — for content the player is actively
  *  working toward (an accepted job), where a live fraction reads better
  *  than a static "Requires 10 Flax". Returns null for condition kinds with
@@ -80,14 +124,20 @@ export function describeUnmetCondition(condition: UnlockCondition, state: GameSt
  *  job board turn-ins for now, not retrofitted onto buildings/achievements/
  *  equip requirements, where "Requires X" (locked, not-yet-started content)
  *  reads better than a progress bar. */
-export function describeConditionProgress(condition: UnlockCondition, state: GameState): string | null {
+export function describeConditionProgress(
+  condition: UnlockCondition,
+  state: GameState,
+  baselines: ConditionBaselines = {}
+): string | null {
+  const key = baselineKey(condition);
+  const base = key ? (baselines[key] ?? 0) : 0;
   switch (condition.kind) {
     case "resourceAtLeast": {
       const have = Math.floor(countOwned(state, condition.resource));
       return `${have.toLocaleString()}/${condition.amount.toLocaleString()} ${capitalize(condition.resource)}`;
     }
     case "resourceLifetimeAtLeast": {
-      const have = Math.floor(state.resources[condition.resource]?.lifetimeEarned ?? 0);
+      const have = Math.floor((state.resources[condition.resource]?.lifetimeEarned ?? 0) - base);
       return `${have.toLocaleString()}/${condition.amount.toLocaleString()} ${capitalize(condition.resource)} (lifetime)`;
     }
     case "skillLevel": {
@@ -95,7 +145,7 @@ export function describeConditionProgress(condition: UnlockCondition, state: Gam
       return `${capitalize(condition.skill)} level ${have}/${condition.atLeast}`;
     }
     case "statisticAtLeast": {
-      const have = state.statistics[condition.statistic] ?? 0;
+      const have = (state.statistics[condition.statistic] ?? 0) - base;
       return `${have.toLocaleString()}/${condition.atLeast.toLocaleString()} ${condition.statistic}`;
     }
     case "buildingOwned": {

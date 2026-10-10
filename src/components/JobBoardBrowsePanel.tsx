@@ -59,12 +59,14 @@ export default function JobBoardBrowsePanel({
           if (!job) return null;
 
           const accepted = engine.isJobAccepted(job.id);
-          const completed = !job.repeatable && engine.isJobCompleted(job.id);
+          const completed = engine.isJobCompleted(job);
 
           // Completed: hide everything else about the job — showing a done
           // job's title/description/reward reads as if it's still on offer,
-          // which is confusing. Just the countdown.
+          // which is confusing. Just the countdown, or nothing for a job
+          // that never comes back.
           if (completed) {
+            if (job.frequency === "once") return null;
             return (
               <div key={job.id} style={{ border: "1px solid #eee", borderRadius: 6, padding: 8 }}>
                 <span style={{ fontSize: 12, color: "#888" }}>
@@ -75,16 +77,20 @@ export default function JobBoardBrowsePanel({
           }
 
           const objectiveMet = engine.isJobObjectiveMet(job);
+          const objective = engine.getJobObjective(job);
+          const baselines = state.jobs.accepted[job.id]?.baselines;
           const progressOrReason =
             accepted && !objectiveMet
-              ? (describeConditionProgress(job.objective, state) ?? describeUnmetCondition(job.objective, state))
+              ? (describeConditionProgress(job.objective, state, baselines) ??
+                describeUnmetCondition(objective, state))
               : null;
 
           return (
             <div key={job.id} style={{ border: "1px solid #eee", borderRadius: 6, padding: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <strong>{job.title}</strong>
-                {job.repeatable && <span style={{ fontSize: 11, color: "#888" }}>Repeatable</span>}
+                {job.frequency === "repeatable" && <span style={{ fontSize: 11, color: "#888" }}>Repeatable</span>}
+                {job.frequency === "once" && <span style={{ fontSize: 11, color: "#888" }}>One-time</span>}
               </div>
               <p style={{ fontSize: 13, color: "#666", margin: "4px 0" }}>{job.description}</p>
               {job.reward && (

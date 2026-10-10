@@ -18,8 +18,8 @@ export const JOB_BOARD_CATALOG: JobBoardDefinition[] = [
     id: "town-board",
     title: "Town Notice Board",
     locationId: "town",
-    jobIds: ["deliver-wood", "reach-woodcutting-15", "flax-for-the-fletcher", "clear-the-den"],
-    slotsPerDay: 3, // 3 of 4 jobs show each day — which one is left out rotates
+    jobIds: ["deliver-wood", "reach-woodcutting-15", "flax-for-the-fletcher", "clear-the-den", "goblin-trouble"],
+    slotsPerDay: 3, // 3 of 5 jobs show each day — which ones rotates
   },
 ];
 

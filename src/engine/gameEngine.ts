@@ -13,6 +13,7 @@ import type {
   JobDefinition,
   EnemyDefinition,
   WeaponType,
+  UnlockCondition,
   ActiveCraftJob,
   ActiveGatherSession,
   ActiveTravel,
@@ -20,7 +21,7 @@ import type {
 } from "./types";
 import { NotificationQueue } from "./notificationQueue";
 import { levelForXp, xpForLevel, MAX_LEVEL, calculateCombatLevel } from "./xpCurve";
-import { isUnlocked } from "./unlockConditions";
+import { isUnlocked, captureBaselines, offsetByBaselines } from "./unlockConditions";
 import { getDailyPeriodNumber } from "./time";
 import { formatDuration } from "./format";
 import { BUILDING_SELL_REFUND_FRACTION, DEFAULT_COST_SCALING_FACTOR } from "./tuning";
@@ -35,7 +36,7 @@ import {
   getActiveTravel,
 } from "./activeAction";
 
-const SCHEMA_VERSION = 17;
+const SCHEMA_VERSION = 18;
 
 /** OSRS-authentic: Hitpoints starts pre-leveled at 10 (unlike every other
  *  skill, which starts at 1) — this is the XP threshold for level 10. */
@@ -105,7 +106,7 @@ export function createInitialState(now: number = Date.now()): GameState {
     equipment: {},
     activeAction: null,
     currentHp: 10, // matches STARTING_HITPOINTS_XP's level-10 max
-    acceptedJobs: {},
+    jobs: { accepted: {}, lastCompletedPeriod: {}, completedOnce: {} },
     currentLocationId: STARTING_LOCATION_ID,
     statistics: {},
     lastTickTimestamp: now,
@@ -299,6 +300,24 @@ const MIGRATIONS: Record<number, (old: any, now: number) => any> = {
       activeAction = { ...activeAction, lootTable };
     }
     return { ...old, resources, inventory, equipment, activeAction };
+  },
+  // v17 -> v18: job board state moved out of `statistics` (where
+  // completion days were stored as jobCompletedPeriod:<id>) into its own
+  // `jobs` field, and accepted jobs gained objective baselines. Jobs
+  // accepted before this keep empty baselines, i.e. the old absolute check.
+  17: (old) => {
+    const accepted: Record<string, any> = {};
+    for (const [jobId, record] of Object.entries<any>(old.acceptedJobs ?? {})) {
+      accepted[jobId] = { ...record, baselines: {} };
+    }
+    const statistics: Record<string, number> = {};
+    const lastCompletedPeriod: Record<string, number> = {};
+    for (const [key, value] of Object.entries<number>(old.statistics ?? {})) {
+      if (key.startsWith("jobCompletedPeriod:")) lastCompletedPeriod[key.slice("jobCompletedPeriod:".length)] = value;
+      else statistics[key] = value;
+    }
+    const { acceptedJobs: _acceptedJobs, ...rest } = old;
+    return { ...rest, statistics, jobs: { accepted, lastCompletedPeriod, completedOnce: {} } };
   },
 };
 
@@ -1795,27 +1814,23 @@ export class GameEngine {
   // ── Job board ────────────────────────────────────────────────────────
 
   isJobAccepted(jobId: string): boolean {
-    return !!this.state.acceptedJobs[jobId];
+    return !!this.state.jobs.accepted[jobId];
   }
 
-  /** One-time jobs stay done forever once turned in. Repeatable ones are
-   *  never "completed" in this permanent sense — they just cycle through
-   *  accept -> turn in -> accept again. */
-  /** One-time jobs stay done until the next UTC daily reset — checked by
-   *  comparing the stored completion period against the current one, not a
-   *  permanent flag. The moment the period number advances (crossing UTC
-   *  midnight), this flips back to false on its own — no scheduled reset
-   *  process needed, same "resolve lazily when checked" approach the rest
-   *  of the engine already uses for offline catch-up. Repeatable jobs never
-   *  set this at all, so they're always available regardless of period. */
-  isJobCompleted(jobId: string): boolean {
-    const completedPeriod = this.state.statistics[`jobCompletedPeriod:${jobId}`];
-    if (completedPeriod === undefined) return false;
-    return completedPeriod === getDailyPeriodNumber(this.clock());
+  /** Whether the job is done and not currently offerable — see
+   *  JobDefinition.frequency. Daily completion is checked by comparing the
+   *  stored period to today's, so it flips back on its own at UTC midnight
+   *  with no scheduled reset process. */
+  isJobCompleted(job: JobDefinition): boolean {
+    const frequency = job.frequency ?? "daily";
+    if (frequency === "repeatable") return false;
+    if (frequency === "once") return !!this.state.jobs.completedOnce[job.id];
+    return this.state.jobs.lastCompletedPeriod[job.id] === getDailyPeriodNumber(this.clock());
   }
 
   /** Accepts a job, at its board's location. Refuses if already accepted,
-   *  or (for a one-time job) already completed. */
+   *  or already completed (see isJobCompleted). Snapshots any counters the
+   *  objective reads, so progress counts from now. */
   acceptJob(job: JobDefinition, boardLocationId: string): boolean {
     if (this.state.currentLocationId !== boardLocationId) {
       this.notifications.push("status", "You need to be at the job board to accept this.", {
@@ -1823,7 +1838,7 @@ export class GameEngine {
       });
       return false;
     }
-    if (!job.repeatable && this.isJobCompleted(job.id)) {
+    if (this.isJobCompleted(job)) {
       this.notifications.push("status", `You've already completed "${job.title}".`, {
         severity: "warning",
       });
@@ -1835,25 +1850,32 @@ export class GameEngine {
       });
       return false;
     }
-    this.state.acceptedJobs[job.id] = {
+    this.state.jobs.accepted[job.id] = {
       acceptedAt: this.state.lastTickTimestamp,
       acceptedPeriod: getDailyPeriodNumber(this.clock()),
+      baselines: captureBaselines(job.objective, this.state),
     };
     this.notifications.push("status", `Accepted job: ${job.title}.`);
     return true;
   }
 
+  /** The job's objective as it applies right now: for an accepted job,
+   *  counters are measured from when it was accepted. */
+  getJobObjective(job: JobDefinition): UnlockCondition {
+    const accepted = this.state.jobs.accepted[job.id];
+    return accepted ? offsetByBaselines(job.objective, accepted.baselines) : job.objective;
+  }
+
   /** Whether a job's objective is currently met — same check used to gate
    *  the turn-in button in the UI and to enforce it here. */
   isJobObjectiveMet(job: JobDefinition): boolean {
-    return isUnlocked(job.objective, this.state);
+    return isUnlocked(this.getJobObjective(job), this.state);
   }
 
-  /** Turns in an accepted job: consumes delivery resources (if any), grants
-   *  the reward (GP/achievement points modifier-scaled, items and flags
-   *  never scaled), and either permanently marks it done (one-time) or
-   *  clears it back to acceptable (repeatable). Must be at the board's
-   *  location — same enforcement as accepting. */
+  /** Turns in an accepted job: consumes deliveries (if any), grants the
+   *  reward (GP/achievement points modifier-scaled, items and flags never
+   *  scaled), and records completion per the job's frequency. Must be at
+   *  the board's location — same enforcement as accepting. */
   turnInJob(job: JobDefinition, boardLocationId: string): boolean {
     if (this.state.currentLocationId !== boardLocationId) {
       this.notifications.push("status", "You need to be at the job board to turn this in.", {
@@ -1885,16 +1907,13 @@ export class GameEngine {
     }
 
     if (job.reward?.gp) {
-      const scaledGp = this.getModifiedValue("jobReward:gp", job.reward.gp);
-      this.ensureResourceExists("gp");
-      this.state.resources.gp.amount += scaledGp;
-      this.state.resources.gp.lifetimeEarned += scaledGp;
+      this.gainResource("gp", this.getModifiedValue("jobReward:gp", job.reward.gp));
     }
     if (job.reward?.achievementPoints) {
-      const scaledPoints = this.getModifiedValue("jobReward:achievementPoints", job.reward.achievementPoints);
-      this.ensureResourceExists("achievement-points");
-      this.state.resources["achievement-points"].amount += scaledPoints;
-      this.state.resources["achievement-points"].lifetimeEarned += scaledPoints;
+      this.gainResource(
+        "achievement-points",
+        this.getModifiedValue("jobReward:achievementPoints", job.reward.achievementPoints)
+      );
     }
     if (job.reward?.items) {
       // Deliberately NOT modifier-scaled — a fixed item count is a fixed
@@ -1909,24 +1928,25 @@ export class GameEngine {
       for (const flag of job.reward.setFlags) this.setFlag(flag, true);
     }
 
-    delete this.state.acceptedJobs[job.id];
+    delete this.state.jobs.accepted[job.id];
     this.incrementStatistic(`jobCompletions:${job.id}`, 1);
     this.incrementStatistic("jobCompletions:total", 1);
-    if (!job.repeatable) {
-      this.state.statistics[`jobCompletedPeriod:${job.id}`] = getDailyPeriodNumber(this.clock());
+    const frequency = job.frequency ?? "daily";
+    if (frequency === "daily") {
+      this.state.jobs.lastCompletedPeriod[job.id] = getDailyPeriodNumber(this.clock());
+    } else if (frequency === "once") {
+      this.state.jobs.completedOnce[job.id] = true;
     }
 
     this.notifications.push("reward", `Turned in "${job.title}".`);
     return true;
   }
 
-  /** Dev tool — immediately unlocks every daily-locked job, without waiting
-   *  for the actual UTC reset. Clears the stored completion periods rather
-   *  than un-accepting anything currently in progress. */
+  /** Dev tool — immediately unlocks every daily job, without waiting for
+   *  the actual UTC reset. "once" jobs stay done; nothing in progress is
+   *  un-accepted. */
   devForceJobBoardReset(): void {
-    for (const key of Object.keys(this.state.statistics)) {
-      if (key.startsWith("jobCompletedPeriod:")) delete this.state.statistics[key];
-    }
+    this.state.jobs.lastCompletedPeriod = {};
     this.notifications.push("status", "Dev: job board reset forced.", { severity: "warning" });
   }
 
@@ -1939,9 +1959,9 @@ export class GameEngine {
   private resolveJobExpiry(now: number): void {
     const currentPeriod = getDailyPeriodNumber(now);
     let expiredCount = 0;
-    for (const [jobId, record] of Object.entries(this.state.acceptedJobs)) {
+    for (const [jobId, record] of Object.entries(this.state.jobs.accepted)) {
       if (record.acceptedPeriod !== currentPeriod) {
-        delete this.state.acceptedJobs[jobId];
+        delete this.state.jobs.accepted[jobId];
         expiredCount++;
       }
     }
@@ -1997,7 +2017,11 @@ export class GameEngine {
       activeAction: parsed.activeAction ?? null,
       currentLocationId: parsed.currentLocationId ?? STARTING_LOCATION_ID,
       currentHp: typeof parsed.currentHp === "number" ? parsed.currentHp : 10,
-      acceptedJobs: parsed.acceptedJobs ?? {},
+      jobs: {
+        accepted: parsed.jobs?.accepted ?? {},
+        lastCompletedPeriod: parsed.jobs?.lastCompletedPeriod ?? {},
+        completedOnce: parsed.jobs?.completedOnce ?? {},
+      },
       statistics: parsed.statistics ?? {},
       lastTickTimestamp:
         typeof parsed.lastTickTimestamp === "number" ? parsed.lastTickTimestamp : clock(),

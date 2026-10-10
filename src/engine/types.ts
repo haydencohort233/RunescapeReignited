@@ -258,17 +258,7 @@ export interface GameState {
    *  stored separately. Not clamped on read by the type system; the
    *  engine clamps to [0, maxHp] whenever it mutates this. */
   currentHp: number;
-  /** jobId -> acceptance record. Completion status lives in flags
-   *  (jobCompleted:<id>, one-time only) and statistics (jobCompletions:<id>,
-   *  a running count for repeatable ones) — same reused substrates as
-   *  everything else, not a new tracking mechanism. */
-  /** jobId -> acceptance record. acceptedPeriod is the UTC daily period
-   *  (see getDailyPeriodNumber) the job was accepted in — if the CURRENT
-   *  period no longer matches, the job auto-expires (resolveJobExpiry)
-   *  rather than lingering forever tied to a shift that's already reset.
-   *  Completion status lives in `statistics` (jobCompletedPeriod:<id>),
-   *  same reused-substrate approach as everything else. */
-  acceptedJobs: Record<string, { acceptedAt: number; acceptedPeriod: number }>;
+  jobs: JobBoardState;
   /** Where the player currently is on the world map — a MapLocation id. */
   currentLocationId: string;
   /** Counters — building purchases, resource spend, travel time, craft
@@ -371,10 +361,34 @@ export interface JobDefinition {
     /** Sets these flags on completion — the quest-chaining hook described above. */
     setFlags?: string[];
   };
-  /** Default false. One-time jobs are permanently done once turned in
-   *  (tracked via flags, same substrate as achievements); repeatable ones
-   *  can be accepted again immediately after turn-in. */
-  repeatable?: boolean;
+  /** How often the job can be done:
+   *    "daily"      (default) — once per UTC day, then it's back tomorrow.
+   *    "once"       — never again after it's turned in. Use this for jobs
+   *                   that set flags or otherwise act like a quest step.
+   *    "repeatable" — can be accepted again right after turn-in.
+   *  Objectives that count something (statisticAtLeast,
+   *  resourceLifetimeAtLeast) always count from the moment of accepting. */
+  frequency?: "daily" | "once" | "repeatable";
+}
+
+export interface AcceptedJob {
+  acceptedAt: number;
+  /** The UTC daily period (see getDailyPeriodNumber) the job was accepted
+   *  in. Once the current period moves on, the job auto-expires
+   *  (resolveJobExpiry) rather than lingering past the board reset. */
+  acceptedPeriod: number;
+  /** Counter values at acceptance, so the objective measures progress made
+   *  since then — see captureBaselines in unlockConditions.ts. */
+  baselines: Record<string, number>;
+}
+
+export interface JobBoardState {
+  accepted: Record<string, AcceptedJob>;
+  /** Daily jobs: the UTC period each was last turned in. Done for today
+   *  while it matches the current period. */
+  lastCompletedPeriod: Record<string, number>;
+  /** "once" jobs that have been turned in, permanently. */
+  completedOnce: Record<string, true>;
 }
 
 /**

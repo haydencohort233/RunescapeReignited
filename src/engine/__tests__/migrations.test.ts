@@ -55,3 +55,14 @@ describe("v14 stacked inventory", () => {
     expect(action?.kind === "craft" && action.output).toEqual({ resource: "wooden-bow-u", amount: 1 });
   });
 });
+
+describe("v14 job board", () => {
+  it("moves accepted jobs and completion days out of statistics", () => {
+    const state = load().getState();
+    expect(state).not.toHaveProperty("acceptedJobs");
+    expect(state.jobs.accepted["flax-for-the-fletcher"]).toMatchObject({ baselines: {} });
+    expect(state.jobs.lastCompletedPeriod["deliver-wood"]).toBeTypeOf("number");
+    expect(Object.keys(state.statistics).some((k) => k.startsWith("jobCompletedPeriod:"))).toBe(false);
+    expect(state.statistics["kills:goblin"]).toBe(12);
+  });
+});
