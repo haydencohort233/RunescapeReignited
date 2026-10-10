@@ -1,20 +1,26 @@
-/* Theme tokens. Every component color comes from these, so the light and
-   dark palettes are each defined once. The theme follows the system
-   setting unless the player picks one in Settings, which sets
-   data-theme on <html>. */
+/* ── Theme tokens ────────────────────────────────────────────────────────
+   Every color in the UI comes from these. lib/theme.ts always sets
+   data-theme on <html> (resolving "Match system" itself), so each palette
+   is defined exactly once. */
 :root {
-  --bg: #fff;
+  --bg: #f6f6f8;
+  --surface: #fff;
+  --surface-hover: #f0f0f3;
   --surface-raised: #fff;
-  --text: #6b6375;
-  --text-h: #08060d;
-  --text-strong: #333;
-  --text-muted: #666;
-  --text-faint: #888;
-  --border: #ccc;
-  --border-subtle: #ddd;
-  --track: #eee;
+  --text: #4b4f58;
+  --text-h: #111318;
+  --text-strong: #22252b;
+  --text-muted: #5f6470;
+  --text-faint: #858a96;
+  --border: #c9ccd3;
+  --border-subtle: #e2e4e9;
+  --track: #e8e9ed;
   --map-bg: #eef6ee;
-  --shadow: rgba(0, 0, 0, 0.2);
+  --shadow: rgba(0, 0, 0, 0.18);
+  --focus: #2563eb;
+
+  --accent-bg: #1a5fa8;
+  --accent-fg: #fff;
 
   --danger: #b91c1c;
   --danger-bg: #fee2e2;
@@ -24,7 +30,7 @@
   --info-bg: #e0f2fe;
   --success: #1a7a3a;
   --good: #4b8;
-  --gold: #b8860b;
+  --gold: #a87a08;
   --gold-border: #d4af37;
   --gold-bg: #fff8e1;
 
@@ -36,74 +42,36 @@
   /* Outline for sprites; only needed against a dark background. */
   --icon-outline: none;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --sans: system-ui, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
+  font: 14px/1.45 var(--sans);
   color-scheme: light;
-  color: var(--text);
-  background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0b0c0f;
-    --surface-raised: #1c1f26;
-    --text: #c9ccd3;
-    --text-h: #f3f4f6;
-    --text-strong: #e5e7eb;
-    --text-muted: #a1a7b3;
-    --text-faint: #7c8290;
-    --border: #2c303a;
-    --border-subtle: #23262e;
-    --track: #23262e;
-    --map-bg: #121a14;
-    --shadow: rgba(0, 0, 0, 0.6);
-
-    --danger: #f87171;
-    --danger-bg: #3a1517;
-    --warning: #fbbf24;
-    --warning-bg: #3a2c0f;
-    --info: #60a5fa;
-    --info-bg: #10263a;
-    --success: #4ade80;
-    --good: #4b8;
-    --gold: #e0b44a;
-    --gold-border: #a8842a;
-    --gold-bg: #2a2310;
-
-    --splat-hit: #f87171;
-    --splat-block: #60a5fa;
-    --splat-miss: #7c8290;
-    --icon-outline: drop-shadow(0 0 1px rgba(255, 255, 255, 0.55));
-
-    color-scheme: dark;
-  }
 }
 
 :root[data-theme="dark"] {
   --bg: #0b0c0f;
+  --surface: #14161b;
+  --surface-hover: #1c1f26;
   --surface-raised: #1c1f26;
   --text: #c9ccd3;
   --text-h: #f3f4f6;
   --text-strong: #e5e7eb;
   --text-muted: #a1a7b3;
   --text-faint: #7c8290;
-  --border: #2c303a;
+  --border: #2f333d;
   --border-subtle: #23262e;
   --track: #23262e;
   --map-bg: #121a14;
   --shadow: rgba(0, 0, 0, 0.6);
+  --focus: #60a5fa;
+
+  --accent-bg: #2f6fb5;
+  --accent-fg: #fff;
 
   --danger: #f87171;
   --danger-bg: #3a1517;
@@ -125,17 +93,7 @@
   color-scheme: dark;
 }
 
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border-subtle);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-}
+/* ── Base ─────────────────────────────────────────────────────────────── */
 
 body {
   margin: 0;
@@ -144,30 +102,452 @@ body {
 }
 
 h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
+h2,
+h3 {
   color: var(--text-h);
+  margin: 0;
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
 p {
   margin: 0;
+}
+
+select,
+input[type="number"] {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-strong);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+
+input[type="checkbox"] {
+  accent-color: var(--accent-bg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ── App shell ────────────────────────────────────────────────────────── */
+
+.app {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 16px 16px 48px;
+  box-sizing: border-box;
+}
+
+.app-title {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 4px 0 12px;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-bottom: 10px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tab {
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.tab:hover {
+  background: var(--surface-hover);
+  color: var(--text-strong);
+}
+
+.tab[aria-current="page"] {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.tab.has-alert {
+  border-color: var(--gold-border);
+  animation: tab-alert-pulse 1.5s infinite;
+}
+
+@keyframes tab-alert-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(212, 175, 55, 0);
+  }
+}
+
+/* ── Page structure ───────────────────────────────────────────────────── */
+
+.page,
+.section,
+.stack {
+  display: flex;
+  flex-direction: column;
+}
+
+.page {
+  gap: 20px;
+}
+
+.section,
+.stack {
+  gap: 8px;
+}
+
+.stack-sm {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.page-title {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.row-between {
+  justify-content: space-between;
+}
+
+/* ── Cards ────────────────────────────────────────────────────────────── */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface);
+  min-width: 0;
+}
+
+.card.is-locked {
+  border-style: dashed;
+  background: transparent;
+}
+
+.card.is-highlight {
+  border-color: var(--gold-border);
+  background: var(--gold-bg);
+}
+
+.card.is-active {
+  border-color: var(--accent-bg);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* The clickable header of an expandable card — a real button so it's
+   reachable by keyboard, styled to look like the card's title row. */
+.card-toggle {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.card-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--text-strong);
+  min-width: 0;
+}
+
+.card-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────── */
+
+.btn {
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.3;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-strong);
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent-bg);
+  border-color: var(--accent-bg);
+  color: var(--accent-fg);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-bg);
+  filter: brightness(1.1);
+}
+
+.btn-danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ── Quick menu (right-click) ─────────────────────────────────────────── */
+
+.quick-menu {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 150px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  box-shadow: 0 6px 16px var(--shadow);
+}
+
+.quick-menu .btn {
+  text-align: left;
+  border-color: transparent;
+  background: transparent;
+}
+
+.quick-menu .btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+/* ── Text ─────────────────────────────────────────────────────────────── */
+
+.text-muted {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.text-small {
+  font-size: 12px;
+}
+
+.text-faint {
+  color: var(--text-faint);
+}
+
+.text-danger {
+  color: var(--danger);
+}
+
+.text-success {
+  color: var(--success);
+}
+
+.text-info {
+  color: var(--info);
+}
+
+.text-gold {
+  color: var(--gold);
+}
+
+.empty-state {
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+.locked-note {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.tag-gold {
+  border-color: var(--gold-border);
+  color: var(--gold);
+}
+
+.tag-success {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+/* Label/value rows (statistics, resources). */
+.data-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 13px;
+}
+
+.data-row:last-child {
+  border-bottom: none;
+}
+
+.data-row > :last-child {
+  font-weight: 600;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.progress-track {
+  height: 6px;
+  border-radius: 4px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--good);
+}
+
+/* ── Toasts ───────────────────────────────────────────────────────────── */
+
+.toast-zone {
+  position: fixed;
+  z-index: 9999;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  max-height: 80vh;
+  overflow-y: auto;
+  pointer-events: none;
+}
+
+.toast-zone-top {
+  top: 16px;
+  right: 16px;
+}
+
+.toast-zone-bottom {
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 360px;
+}
+
+.toast-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.toast {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  color: var(--text-strong);
+  background: var(--info-bg);
+  box-shadow: 0 2px 8px var(--shadow);
+  cursor: pointer;
+}
+
+.toast-warning {
+  background: var(--warning-bg);
+}
+
+.toast-error {
+  background: var(--danger-bg);
+}
+
+.toast-achievement {
+  background: var(--gold-bg);
+  border-color: var(--gold-border);
+}
+
+.toast .btn {
+  padding: 0 6px;
+  line-height: 1.2;
 }

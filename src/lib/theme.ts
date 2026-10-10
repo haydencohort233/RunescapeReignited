@@ -1,11 +1,14 @@
-// The player's theme choice. "system" follows the OS setting via the
-// prefers-color-scheme rules in index.css; "light"/"dark" pin it by setting
-// data-theme on <html>. Stored per browser — it's a display preference, not
-// game progress, so it doesn't belong in the save.
+// The player's theme choice. "system" follows the OS setting; "light" and
+// "dark" pin it. Either way data-theme is set on <html> to the theme
+// actually in effect, so the CSS only needs one rule per palette. Stored
+// per browser — it's a display preference, not game progress, so it
+// doesn't belong in the save.
 
 export type ThemeChoice = "system" | "light" | "dark";
 
 const THEME_KEY = "idlegame:theme";
+const darkQuery = typeof window !== "undefined" ? window.matchMedia?.("(prefers-color-scheme: dark)") : undefined;
+let currentChoice: ThemeChoice = "system";
 
 export function getThemeChoice(): ThemeChoice {
   try {
@@ -18,9 +21,9 @@ export function getThemeChoice(): ThemeChoice {
 }
 
 export function applyTheme(choice: ThemeChoice): void {
-  const root = document.documentElement;
-  if (choice === "system") delete root.dataset.theme;
-  else root.dataset.theme = choice;
+  currentChoice = choice;
+  const resolved = choice === "system" ? (darkQuery?.matches ? "dark" : "light") : choice;
+  document.documentElement.dataset.theme = resolved;
 }
 
 export function setThemeChoice(choice: ThemeChoice): void {
@@ -32,3 +35,8 @@ export function setThemeChoice(choice: ThemeChoice): void {
     // Not persisted, but still applied for this session.
   }
 }
+
+/** Re-applies "Match system" when the OS theme changes mid-session. */
+darkQuery?.addEventListener?.("change", () => {
+  if (currentChoice === "system") applyTheme("system");
+});

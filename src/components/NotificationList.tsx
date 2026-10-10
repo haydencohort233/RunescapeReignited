@@ -2,6 +2,13 @@ import { useGame } from "../engine/GameEngineContext";
 import type { GameNotification } from "../engine/types";
 import RichText from "./Richtext";
 
+function toastClass(n: GameNotification): string {
+  if (n.type === "achievement") return "toast toast-achievement";
+  if (n.severity === "error") return "toast toast-error";
+  if (n.severity === "warning") return "toast toast-warning";
+  return "toast";
+}
+
 export default function NotificationList({
   filter,
 }: {
@@ -11,55 +18,32 @@ export default function NotificationList({
 }) {
   const { engine, notifications } = useGame();
   const visible = filter ? notifications.filter(filter) : notifications;
+  if (visible.length === 0) return null;
 
   return (
-    <ul style={{ listStyle: "none", padding: 0, fontSize: 14, margin: 0 }}>
+    <ul className="toast-list" aria-live="polite">
       {visible
         .slice()
         .reverse()
         .map((n) => (
           <li
             key={n.id}
+            className={toastClass(n)}
             onClick={() => engine.notifications.dismiss(n.id)}
             title="Click to dismiss"
-            style={{
-              padding: "6px 8px",
-              marginBottom: 4,
-              borderRadius: 4,
-              cursor: "pointer",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 8,
-              background:
-                n.type === "achievement"
-                  ? "var(--gold-bg)"
-                  : n.severity === "error"
-                    ? "var(--danger-bg)"
-                    : n.severity === "warning"
-                      ? "var(--warning-bg)"
-                      : "var(--info-bg)",
-              border: n.type === "achievement" ? "1px solid var(--gold-border)" : undefined,
-            }}
           >
             <span>
               {n.type === "achievement" && "🏆 "}
               <RichText text={n.message} />
             </span>
             <button
+              type="button"
+              className="btn btn-ghost"
               onClick={(e) => {
                 e.stopPropagation();
                 engine.notifications.dismiss(n.id);
               }}
               aria-label="Dismiss notification"
-              style={{
-                border: "none",
-                background: "transparent",
-                cursor: "pointer",
-                fontSize: 14,
-                lineHeight: 1,
-                padding: "2px 4px",
-              }}
             >
               ×
             </button>

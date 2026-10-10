@@ -44,26 +44,54 @@ export function isUnlocked(condition: UnlockCondition, state: GameState): boolea
   }
 }
 
+/** How condition text names things. The engine only knows ids; the UI
+ *  passes labels from content so players see "Goblin kills" rather than
+ *  "kills:goblin". Every field falls back to a readable default. */
+export interface ConditionLabels {
+  resource?: (id: string) => string;
+  building?: (id: string) => string;
+  skill?: (id: string) => string;
+  statistic?: (key: string) => string;
+  /** Formats a statistic's value (e.g. a duration stored in ms). */
+  statisticValue?: (key: string, value: number) => string;
+}
+
+function resolveLabels(labels: ConditionLabels = {}): Required<ConditionLabels> {
+  return {
+    resource: labels.resource ?? capitalize,
+    building: labels.building ?? capitalize,
+    skill: labels.skill ?? capitalize,
+    statistic: labels.statistic ?? ((key) => key),
+    statisticValue: labels.statisticValue ?? ((_key, value) => Math.floor(value).toLocaleString()),
+  };
+}
+
 /** Short, human-readable reason a condition ISN'T met yet — for greying out
  *  a building/location with a tooltip like "Requires Fletching level 10". */
-export function describeUnmetCondition(condition: UnlockCondition, state: GameState): string | null {
+export function describeUnmetCondition(
+  condition: UnlockCondition,
+  state: GameState,
+  labels?: ConditionLabels
+): string | null {
   if (isUnlocked(condition, state)) return null;
+  const l = resolveLabels(labels);
   switch (condition.kind) {
     case "skillLevel":
-      return `Requires ${capitalize(condition.skill)} level ${condition.atLeast}`;
+      return `Requires ${l.skill(condition.skill)} level ${condition.atLeast}`;
     case "flag":
-      return `Locked`;
+      return `Not unlocked yet`;
     case "resourceAtLeast":
-      return `Requires ${condition.amount.toLocaleString()} ${condition.resource}`;
+      return `Requires ${condition.amount.toLocaleString()} ${l.resource(condition.resource)}`;
     case "resourceLifetimeAtLeast":
-      return `Requires ${condition.amount.toLocaleString()} ${condition.resource} earned (lifetime)`;
+      return `Requires ${condition.amount.toLocaleString()} ${l.resource(condition.resource)} earned in total`;
     case "buildingOwned":
-      return `Requires ${condition.atLeast}x ${condition.buildingId}`;
+      return `Requires ${condition.atLeast}x ${l.building(condition.buildingId)}`;
     case "statisticAtLeast":
-      return `Requires ${condition.statistic}: ${condition.atLeast.toLocaleString()}`;
+      // A running total reads best as progress toward the target.
+      return describeConditionProgress(condition, state, {}, labels);
     case "all": {
       const firstUnmet = condition.conditions.find((c) => !isUnlocked(c, state));
-      return firstUnmet ? describeUnmetCondition(firstUnmet, state) : null;
+      return firstUnmet ? describeUnmetCondition(firstUnmet, state, labels) : null;
     }
     case "any":
       return `Requires one of several conditions`;
@@ -127,30 +155,33 @@ export function offsetByBaselines(condition: UnlockCondition, baselines: Conditi
 export function describeConditionProgress(
   condition: UnlockCondition,
   state: GameState,
-  baselines: ConditionBaselines = {}
+  baselines: ConditionBaselines = {},
+  labels?: ConditionLabels
 ): string | null {
+  const l = resolveLabels(labels);
   const key = baselineKey(condition);
   const base = key ? (baselines[key] ?? 0) : 0;
   switch (condition.kind) {
     case "resourceAtLeast": {
       const have = Math.floor(countOwned(state, condition.resource));
-      return `${have.toLocaleString()}/${condition.amount.toLocaleString()} ${capitalize(condition.resource)}`;
+      return `${l.resource(condition.resource)}: ${have.toLocaleString()}/${condition.amount.toLocaleString()}`;
     }
     case "resourceLifetimeAtLeast": {
       const have = Math.floor((state.resources[condition.resource]?.lifetimeEarned ?? 0) - base);
-      return `${have.toLocaleString()}/${condition.amount.toLocaleString()} ${capitalize(condition.resource)} (lifetime)`;
+      return `${l.resource(condition.resource)} earned: ${have.toLocaleString()}/${condition.amount.toLocaleString()}`;
     }
     case "skillLevel": {
       const have = levelForXp(state.skills[condition.skill]?.xp ?? 0);
-      return `${capitalize(condition.skill)} level ${have}/${condition.atLeast}`;
+      return `${l.skill(condition.skill)} level: ${have}/${condition.atLeast}`;
     }
     case "statisticAtLeast": {
       const have = (state.statistics[condition.statistic] ?? 0) - base;
-      return `${have.toLocaleString()}/${condition.atLeast.toLocaleString()} ${condition.statistic}`;
+      const k = condition.statistic;
+      return `${l.statistic(k)}: ${l.statisticValue(k, Math.max(0, have))}/${l.statisticValue(k, condition.atLeast)}`;
     }
     case "buildingOwned": {
       const have = state.buildings[condition.buildingId] ?? 0;
-      return `${have}/${condition.atLeast} ${condition.buildingId}`;
+      return `${l.building(condition.buildingId)} owned: ${have}/${condition.atLeast}`;
     }
     case "flag":
     case "all":

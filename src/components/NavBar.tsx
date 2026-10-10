@@ -36,42 +36,18 @@ interface NavBarProps {
 /** Persists across every view — only the content below it swaps out. */
 export default function NavBar({ activeView, onChange, alerts }: NavBarProps) {
   return (
-    <nav
-      style={{
-        display: "flex",
-        gap: 4,
-        borderBottom: "1px solid var(--border)",
-        marginBottom: 16,
-        paddingBottom: 8,
-      }}
-    >
-      {/* Scoped keyframes — inline styles alone can't reference @keyframes,
-          so this small stylesheet injection is the simplest way to get a
-          pulse animation without adding a build-time CSS pipeline. */}
-      <style>{`
-        @keyframes navAlertPulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.6); }
-          50% { box-shadow: 0 0 0 4px rgba(212, 175, 55, 0); }
-        }
-      `}</style>
-      {TABS.map((tab) => {
-        const hasAlert = alerts?.[tab.id];
-        return (
-          <button
-            key={tab.id}
-            onClick={() => onChange(tab.id)}
-            style={{
-              fontWeight: activeView === tab.id ? "bold" : "normal",
-              textDecoration: activeView === tab.id ? "underline" : "none",
-              border: hasAlert ? "1px solid var(--gold-border)" : undefined,
-              borderRadius: hasAlert ? 4 : undefined,
-              animation: hasAlert ? "navAlertPulse 1.5s infinite" : undefined,
-            }}
-          >
-            {tab.label}
-          </button>
-        );
-      })}
+    <nav className="tabs" aria-label="Game sections">
+      {TABS.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          className={`tab${alerts?.[tab.id] ? " has-alert" : ""}`}
+          aria-current={activeView === tab.id ? "page" : undefined}
+          onClick={() => onChange(tab.id)}
+        >
+          {tab.label}
+        </button>
+      ))}
     </nav>
   );
 }

@@ -47,17 +47,23 @@ function AppContent() {
 
   if (suspended) {
     return (
-      <div style={{ fontFamily: "system-ui", padding: 24, maxWidth: 520, margin: "0 auto" }}>
-        <h1>Idle Engine</h1>
-        <p>The game was opened in another tab, so this one has paused to keep your progress from being overwritten.</p>
-        <button onClick={() => window.location.reload()}>Play here instead</button>
+      <div className="app">
+        <h1 className="app-title">Idle Engine</h1>
+        <div className="card">
+          <p>The game was opened in another tab, so this one has paused to keep your progress from being overwritten.</p>
+          <div className="btn-row">
+            <button type="button" className="btn btn-primary" onClick={() => window.location.reload()}>
+              Play here instead
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ fontFamily: "system-ui", padding: 24, maxWidth: 520, margin: "0 auto" }}>
-      <h1>Idle Engine</h1>
+    <div className="app">
+      <h1 className="app-title">Idle Engine</h1>
       <NavBar
         activeView={activeView}
         onChange={setActiveView}
