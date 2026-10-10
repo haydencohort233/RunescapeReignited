@@ -7,6 +7,7 @@ import { getMsUntilNextDailyReset, formatCountdown } from "../engine/time";
 import { getRecipe } from "../content/recipes";
 import { describeUnmetCondition } from "../engine/unlockConditions";
 import { confirmAndStartCraftJob, confirmAndStartGatherSession } from "../engine/actionHelpers";
+import { getActiveGatherSession } from "../engine/activeAction";
 import ShopNpcEntry from "./ShopNpcEntry";
 import ShopBrowsePanel from "./ShopBrowsePanel";
 import JobBoardBrowsePanel from "./JobBoardBrowsePanel";
@@ -153,7 +154,7 @@ export default function AmenityEntry({ amenity }: { amenity: Amenity }) {
     }
   }
 
-  const session = state.activeGatherSession;
+  const session = getActiveGatherSession(state);
   const thisNodeIsActive = session?.amenityId === amenity.id;
 
   if (amenity.gatherMode === "batch") {

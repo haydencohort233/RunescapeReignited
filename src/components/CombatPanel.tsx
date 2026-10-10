@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useGame } from "../engine/GameEngineContext";
 import { getEnemy } from "../content/enemies";
+import { getActiveCombat } from "../engine/activeAction";
 import { getEquipmentBonuses } from "../content/combatStats";
 import { enemyImagePath } from "../content/assetPaths";
 import HpBar from "./HpBar";
@@ -36,7 +37,7 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
     return () => window.clearInterval(id);
   }, []);
 
-  const session = state.activeCombatSession;
+  const session = getActiveCombat(state);
 
   // Spawns a hitsplat for every log entry that's new since the last render.
   // "attacker: player" means the PLAYER dealt it, so it floats over the

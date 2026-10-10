@@ -4,6 +4,7 @@ import { MAP_LOCATIONS, getLocation } from "../content/mapLocations";
 import { getAmenitiesAtLocation } from "../content/amenities";
 import { describeUnmetCondition } from "../engine/unlockConditions";
 import { confirmAndStartTravel } from "../engine/actionHelpers";
+import { getActiveTravel } from "../engine/activeAction";
 import { AMENITY_ICON } from "./AmenityEntry";
 import { worldMapPath, locationIconPath } from "../content/assetPaths";
 import { preloadImages, isImageLoaded } from "../lib/imagePreloader";
@@ -34,7 +35,7 @@ export default function MapView() {
   }, []);
 
   const currentLocation = getLocation(state.currentLocationId);
-  const travel = state.activeTravel;
+  const travel = getActiveTravel(state);
   const selected = selectedId ? getLocation(selectedId) : undefined;
 
   const travelRemainingMs = travel

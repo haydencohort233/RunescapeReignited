@@ -2,6 +2,7 @@ import { useGame } from "../engine/GameEngineContext";
 import { getLocation } from "../content/mapLocations";
 import { getAmenitiesAtLocation } from "../content/amenities";
 import { confirmAndStartCraftJob } from "../engine/actionHelpers";
+import { getActiveCraftJob } from "../engine/activeAction";
 import { WOODEN_BOW_RECIPE } from "../content/recipes";
 import ResourceList from "./ResourceList";
 import SkillProgress from "./SkillProgress";
@@ -22,7 +23,7 @@ export default function HomeView() {
 
   const wood = state.resources.wood?.amount ?? 0;
   const woodPerSecond = engine.getEffectiveRatePerSecond("wood");
-  const job = state.activeCraftJob;
+  const job = getActiveCraftJob(state);
   const woodPerBow = WOODEN_BOW_RECIPE.inputs[0].amount;
   const maxCraftable = Math.floor(wood / woodPerBow);
 

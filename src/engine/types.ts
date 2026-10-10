@@ -241,14 +241,14 @@ export interface GameState {
   inventory: Record<string, ItemInstance>;
   /** slot -> the instanceId currently worn there. Absent key = nothing worn. */
   equipment: Partial<Record<EquipSlot, string>>;
-  /** Only one crafting job runs at a time in v1 — extend to an array/queue later if needed. */
-  activeCraftJob: ActiveCraftJob | null;
-  activeGatherSession: ActiveGatherSession | null;
+  /** Whatever the player is doing right now — crafting, gathering,
+   *  traveling or fighting. One field, not four, so "one thing at a time"
+   *  holds by construction. */
+  activeAction: ActiveAction | null;
   /** Current HP — max is derived from the Hitpoints skill level, not
    *  stored separately. Not clamped on read by the type system; the
    *  engine clamps to [0, maxHp] whenever it mutates this. */
   currentHp: number;
-  activeCombatSession: ActiveCombatSession | null;
   /** jobId -> acceptance record. Completion status lives in flags
    *  (jobCompleted:<id>, one-time only) and statistics (jobCompletions:<id>,
    *  a running count for repeatable ones) — same reused substrates as
@@ -262,9 +262,6 @@ export interface GameState {
   acceptedJobs: Record<string, { acceptedAt: number; acceptedPeriod: number }>;
   /** Where the player currently is on the world map — a MapLocation id. */
   currentLocationId: string;
-  /** In-progress travel, if any. Only one trip at a time, same "single
-   *  action" rule as crafting. */
-  activeTravel: ActiveTravel | null;
   /** Counters — building purchases, resource spend, travel time, craft
    *  completions, etc. Keyed by convention (see gameEngine.ts's
    *  incrementStatistic call sites for the actual key strings in use).
@@ -279,6 +276,12 @@ export interface GameState {
   /** Schema version, bump when GameState shape changes — see migrations in gameEngine.ts. */
   version: number;
 }
+
+export type ActiveAction =
+  | ({ kind: "craft" } & ActiveCraftJob)
+  | ({ kind: "gather" } & ActiveGatherSession)
+  | ({ kind: "travel" } & ActiveTravel)
+  | ({ kind: "combat" } & ActiveCombatSession);
 
 export interface SkillState {
   xp: number;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { makeEngine, HOUR, SECOND } from "./helpers";
+import { getActiveCraftJob, getActiveGatherSession } from "../activeAction";
 import { CHOP_NORMAL_TREE_RECIPE, WOODEN_BOW_RECIPE } from "../../content/recipes";
 
 // Regression: the offline cap used to apply only to the catch-up tick
@@ -21,10 +22,10 @@ describe("offline cap", () => {
     g.state().resources.wood = { amount: 100_000, lifetimeEarned: 0 };
     g.engine.startCraftJob(WOODEN_BOW_RECIPE, 50_000);
     g.advance(10 * HOUR);
-    const done = g.state().activeCraftJob!.quantityCompleted;
+    const done = getActiveCraftJob(g.state())!.quantityCompleted;
     expect(done).toBe(HOUR / WOODEN_BOW_RECIPE.timePerItemMs);
     g.advance(SECOND);
-    expect(g.state().activeCraftJob!.quantityCompleted).toBeLessThanOrEqual(done + 1);
+    expect(getActiveCraftJob(g.state())!.quantityCompleted).toBeLessThanOrEqual(done + 1);
   });
 
   it("does not shorten a keep-alive window with time beyond the cap", () => {
@@ -32,7 +33,7 @@ describe("offline cap", () => {
     g.engine.startGatherSession("willows", CHOP_NORMAL_TREE_RECIPE, { requiresKeepAliveEveryMs: 2 * HOUR });
     g.advance(10 * HOUR); // only 1h counts, so the 2h keep-alive hasn't lapsed
     g.advance(SECOND);
-    expect(g.state().activeGatherSession).not.toBeNull();
+    expect(getActiveGatherSession(g.state())).not.toBeNull();
   });
 
   it("live ticks under the cap are unaffected", () => {

@@ -12,6 +12,10 @@ import type {
   JobDefinition,
   EnemyDefinition,
   WeaponType,
+  ActiveCraftJob,
+  ActiveGatherSession,
+  ActiveTravel,
+  ActiveCombatSession,
 } from "./types";
 import { NotificationQueue } from "./notificationQueue";
 import { levelForXp, xpForLevel, MAX_LEVEL, calculateCombatLevel } from "./xpCurve";
@@ -20,8 +24,15 @@ import { getDailyPeriodNumber } from "./time";
 import { formatDuration } from "./format";
 import { resolveAttack } from "./combatMath";
 import { weightedRandomPick } from "./rng";
+import {
+  describeAction,
+  getActiveCombat,
+  getActiveCraftJob,
+  getActiveGatherSession,
+  getActiveTravel,
+} from "./activeAction";
 
-const SCHEMA_VERSION = 14;
+const SCHEMA_VERSION = 15;
 
 /** OSRS-authentic: Hitpoints starts pre-leveled at 10 (unlike every other
  *  skill, which starts at 1) — this is the XP threshold for level 10. */
@@ -91,13 +102,10 @@ export function createInitialState(now: number = Date.now()): GameState {
     flags: { [`visited:${STARTING_LOCATION_ID}`]: true },
     inventory: {},
     equipment: {},
-    activeCraftJob: null,
-    activeGatherSession: null,
+    activeAction: null,
     currentHp: 10, // matches STARTING_HITPOINTS_XP's level-10 max
-    activeCombatSession: null,
     acceptedJobs: {},
     currentLocationId: STARTING_LOCATION_ID,
-    activeTravel: null,
     statistics: {},
     lastTickTimestamp: now,
     offlineCapMs: DEFAULT_OFFLINE_CAP_MS,
@@ -206,6 +214,38 @@ const MIGRATIONS: Record<number, (old: any, now: number) => any> = {
     }));
     return { ...old, activeCombatSession: { ...old.activeCombatSession, log } };
   },
+  // v14 -> v15: the four separate action fields (craft job, gather session,
+  // travel, combat) collapsed into one `activeAction` union so "one thing
+  // at a time" can't be bypassed. Older builds allowed some combinations
+  // (e.g. gathering mid-fight); keep the first in priority order and end
+  // the rest. A dropped craft job refunds its unfinished materials, same
+  // as cancelling it would.
+  14: (old) => {
+    const candidates: [string, string][] = [
+      ["combat", "activeCombatSession"],
+      ["travel", "activeTravel"],
+      ["craft", "activeCraftJob"],
+      ["gather", "activeGatherSession"],
+    ];
+    let activeAction: any = null;
+    const resources = { ...(old.resources ?? {}) };
+    for (const [kind, field] of candidates) {
+      const value = old[field];
+      if (!value) continue;
+      if (!activeAction) {
+        activeAction = { kind, ...value };
+      } else if (kind === "craft") {
+        const remaining = value.quantityTotal - value.quantityCompleted;
+        for (const input of value.inputsPerItem ?? []) {
+          const r = resources[input.resource] ?? { amount: 0, lifetimeEarned: 0 };
+          resources[input.resource] = { ...r, amount: r.amount + input.amount * remaining };
+        }
+      }
+    }
+    const next = { ...old, resources, activeAction };
+    for (const [, field] of candidates) delete next[field];
+    return next;
+  },
 };
 
 /**
@@ -239,6 +279,57 @@ export class GameEngine {
 
   now(): number {
     return this.clock();
+  }
+
+  // ── The single active action (crafting, gathering, travel, combat) ─────
+
+  private get craftJob(): ActiveCraftJob | null {
+    return getActiveCraftJob(this.state);
+  }
+
+  private get gatherSession(): ActiveGatherSession | null {
+    return getActiveGatherSession(this.state);
+  }
+
+  private get travel(): ActiveTravel | null {
+    return getActiveTravel(this.state);
+  }
+
+  private get combatSession(): ActiveCombatSession | null {
+    return getActiveCombat(this.state);
+  }
+
+  /** Every start* method gates on this, so "one thing at a time" is
+   *  enforced in exactly one place — adding a new action kind can't
+   *  forget to check the others. */
+  private ensureIdle(): boolean {
+    const action = this.state.activeAction;
+    if (!action) return true;
+    this.notifications.push("status", `You're busy ${describeAction(action)} — stop that first.`, {
+      severity: "warning",
+    });
+    return false;
+  }
+
+  /** Stops whatever is running, using that action's own stop rules
+   *  (crafting refunds, travel returns you to your origin, combat counts
+   *  as fleeing and can be refused). Returns false if it couldn't stop. */
+  stopActiveAction(): boolean {
+    const action = this.state.activeAction;
+    if (!action) return true;
+    switch (action.kind) {
+      case "craft":
+        this.cancelCraftJob();
+        return true;
+      case "gather":
+        this.stopGatherSession();
+        return true;
+      case "travel":
+        this.cancelTravel();
+        return true;
+      case "combat":
+        return this.fleeCombat();
+    }
   }
 
   getState(): GameState {
@@ -459,22 +550,7 @@ export class GameEngine {
       return false;
     }
 
-    if (this.state.activeCraftJob) {
-      this.notifications.push(
-        "status",
-        `Already crafting ${this.state.activeCraftJob.recipeName} — finish or cancel that first.`,
-        { severity: "warning" }
-      );
-      return false;
-    }
-    if (this.state.activeGatherSession) {
-      this.notifications.push(
-        "status",
-        `Currently gathering ${this.state.activeGatherSession.recipeName} — stop that first.`,
-        { severity: "warning" }
-      );
-      return false;
-    }
+    if (!this.ensureIdle()) return false;
 
     for (const input of recipe.inputs) {
       const needed = input.amount * quantity;
@@ -496,7 +572,8 @@ export class GameEngine {
       this.ensureResourceExists(recipe.output.resource);
     }
 
-    this.state.activeCraftJob = {
+    this.state.activeAction = {
+      kind: "craft",
       recipeId: recipe.id,
       recipeName: recipe.name,
       skill: recipe.skill,
@@ -523,20 +600,20 @@ export class GameEngine {
    * items were never actually produced.
    */
   cancelCraftJob(): void {
-    const job = this.state.activeCraftJob;
+    const job = this.craftJob;
     if (!job) return;
     const remaining = job.quantityTotal - job.quantityCompleted;
     for (const input of job.inputsPerItem) {
       this.ensureResourceExists(input.resource);
       this.state.resources[input.resource].amount += input.amount * remaining;
     }
-    this.state.activeCraftJob = null;
+    this.state.activeAction = null;
     this.notifications.push("status", `Cancelled crafting ${job.recipeName}. Unused materials refunded.`);
   }
 
   /** Resolve craft-job completions up to `effectiveNow`. Internal — called from resolveElapsed(). */
   private resolveCraftJob(effectiveNow: number): void {
-    const job = this.state.activeCraftJob;
+    const job = this.craftJob;
     if (!job) return;
 
     const elapsedSinceStart = effectiveNow - job.startedAt;
@@ -569,7 +646,7 @@ export class GameEngine {
         "production",
         `Made x${job.quantityTotal} ${job.recipeName} (+${job.xpPerItem * job.quantityTotal} ${capitalize(job.skill)} XP)`
       );
-      this.state.activeCraftJob = null;
+      this.state.activeAction = null;
     } else {
       this.notifications.push(
         "production",
@@ -597,25 +674,11 @@ export class GameEngine {
       return false;
     }
 
-    if (this.state.activeGatherSession) {
-      this.notifications.push(
-        "status",
-        `Already gathering ${this.state.activeGatherSession.recipeName} — stop that first.`,
-        { severity: "warning" }
-      );
-      return false;
-    }
-    if (this.state.activeCraftJob) {
-      this.notifications.push(
-        "status",
-        `Currently crafting ${this.state.activeCraftJob.recipeName} — finish or cancel that first.`,
-        { severity: "warning" }
-      );
-      return false;
-    }
+    if (!this.ensureIdle()) return false;
 
     const now = this.state.lastTickTimestamp;
-    this.state.activeGatherSession = {
+    this.state.activeAction = {
+      kind: "gather",
       amenityId,
       recipeId: recipe.id,
       recipeName: recipe.name,
@@ -635,9 +698,9 @@ export class GameEngine {
 
   /** Stops the current session early (player choice, not a cap being hit). */
   stopGatherSession(): void {
-    const session = this.state.activeGatherSession;
+    const session = this.gatherSession;
     if (!session) return;
-    this.state.activeGatherSession = null;
+    this.state.activeAction = null;
     this.notifications.push(
       "status",
       `Stopped gathering ${session.recipeName}. Gathered ${session.quantityGathered.toLocaleString()} total.`
@@ -650,7 +713,7 @@ export class GameEngine {
    *  lastTickTimestamp anchor, since this is a live player action, not
    *  something resolved retroactively during offline catch-up. */
   keepGatherSessionAlive(): boolean {
-    const session = this.state.activeGatherSession;
+    const session = this.gatherSession;
     if (!session || session.requiresKeepAliveEveryMs === undefined) return false;
     session.lastKeepAliveAt = this.clock();
     return true;
@@ -661,7 +724,7 @@ export class GameEngine {
    *  / timePerItem)" approach, except the cap is a TIME cutoff (whichever is
    *  sooner: maxDurationMs, or a missed keep-alive) instead of a fixed quantity. */
   private resolveGatherSession(effectiveNow: number): void {
-    const session = this.state.activeGatherSession;
+    const session = this.gatherSession;
     if (!session) return;
 
     let cutoff = session.startedAt + session.maxDurationMs;
@@ -704,7 +767,7 @@ export class GameEngine {
         "status",
         `Your ${session.recipeName} gathering session ended (${reason}). Gathered ${session.quantityGathered.toLocaleString()} total.`
       );
-      this.state.activeGatherSession = null;
+      this.state.activeAction = null;
     }
   }
 
@@ -729,28 +792,6 @@ export class GameEngine {
   }
 
   startTravel(from: MapLocation, to: MapLocation, opts?: { msPerDistanceUnit?: number }): boolean {
-    if (this.state.activeTravel) {
-      this.notifications.push("status", `Already traveling to ${this.state.activeTravel.destinationName}.`, {
-        severity: "warning",
-      });
-      return false;
-    }
-    if (this.state.activeCraftJob) {
-      this.notifications.push(
-        "status",
-        `Currently crafting ${this.state.activeCraftJob.recipeName} — stop that first.`,
-        { severity: "warning" }
-      );
-      return false;
-    }
-    if (this.state.activeGatherSession) {
-      this.notifications.push(
-        "status",
-        `Currently gathering ${this.state.activeGatherSession.recipeName} — stop that first.`,
-        { severity: "warning" }
-      );
-      return false;
-    }
     if (this.state.currentLocationId === to.id) {
       this.notifications.push("status", `You're already at ${to.name}.`, { severity: "warning" });
       return false;
@@ -759,10 +800,12 @@ export class GameEngine {
       this.notifications.push("status", `You can't travel to ${to.name} yet.`, { severity: "warning" });
       return false;
     }
+    if (!this.ensureIdle()) return false;
 
     const durationMs = this.getTravelDurationEstimate(from, to, opts);
 
-    this.state.activeTravel = {
+    this.state.activeAction = {
+      kind: "travel",
       destinationLocationId: to.id,
       destinationName: to.name,
       startedAt: this.state.lastTickTimestamp,
@@ -776,9 +819,9 @@ export class GameEngine {
   /** Cancels an in-progress trip. Simplification: you stay at your ORIGIN,
    *  not somewhere partway there — no partial-position tracking (yet). */
   cancelTravel(): void {
-    const travel = this.state.activeTravel;
+    const travel = this.travel;
     if (!travel) return;
-    this.state.activeTravel = null;
+    this.state.activeAction = null;
     this.notifications.push("status", `Travel to ${travel.destinationName} cancelled.`);
   }
 
@@ -794,7 +837,9 @@ export class GameEngine {
       });
       return false;
     }
-    this.state.activeTravel = null;
+    // Teleporting interrupts whatever you were doing, same as OSRS — but it
+    // can't be used to escape a fight you aren't allowed to flee.
+    if (this.state.activeAction && !this.stopActiveAction()) return false;
     this.state.currentLocationId = destination.id;
     this.arriveAt(destination.id, destination.name, destination.onArriveSetFlag);
     this.notifications.push("status", `You teleport to ${destination.name} using ${def.name}.`);
@@ -803,11 +848,11 @@ export class GameEngine {
 
   /** Resolve travel completion up to `effectiveNow`. Internal — called from resolveElapsed(). */
   private resolveTravel(effectiveNow: number): void {
-    const travel = this.state.activeTravel;
+    const travel = this.travel;
     if (!travel) return;
     if (effectiveNow >= travel.startedAt + travel.durationMs) {
       this.state.currentLocationId = travel.destinationLocationId;
-      this.state.activeTravel = null;
+      this.state.activeAction = null;
       this.incrementStatistic("totalTravelTimeMs", travel.durationMs);
       this.arriveAt(travel.destinationLocationId, travel.destinationName, travel.onArriveSetFlag);
       this.notifications.push("status", `Arrived at ${travel.destinationName}.`);
@@ -902,7 +947,7 @@ export class GameEngine {
     // Checking "is there an active session right now" (i.e. AFTER combat
     // resolves) would wrongly grant regen for the whole window once the
     // session clears, even though most of it was spent fighting.
-    const wasInCombatThisTick = this.state.activeCombatSession !== null;
+    const wasInCombatThisTick = this.combatSession !== null;
     this.resolveCombatSession(effectiveNow);
     if (!wasInCombatThisTick) this.resolveHpRegen(cappedMs);
     this.resolveJobExpiry(now);
@@ -954,16 +999,21 @@ export class GameEngine {
   }
 
   private shiftActionAnchors(ms: number): void {
-    const { activeCraftJob, activeGatherSession, activeTravel, activeCombatSession } = this.state;
-    if (activeCraftJob) activeCraftJob.startedAt += ms;
-    if (activeGatherSession) {
-      activeGatherSession.startedAt += ms;
-      if (activeGatherSession.lastKeepAliveAt !== undefined) activeGatherSession.lastKeepAliveAt += ms;
-    }
-    if (activeTravel) activeTravel.startedAt += ms;
-    if (activeCombatSession) {
-      activeCombatSession.playerStartedAt += ms;
-      activeCombatSession.enemyStartedAt += ms;
+    const action = this.state.activeAction;
+    if (!action) return;
+    switch (action.kind) {
+      case "craft":
+      case "travel":
+        action.startedAt += ms;
+        break;
+      case "gather":
+        action.startedAt += ms;
+        if (action.lastKeepAliveAt !== undefined) action.lastKeepAliveAt += ms;
+        break;
+      case "combat":
+        action.playerStartedAt += ms;
+        action.enemyStartedAt += ms;
+        break;
     }
   }
 
@@ -1186,7 +1236,7 @@ export class GameEngine {
    *  (reliably factoring in modifiers/equipment/attacking/defending DURING
    *  a fight is a lot more complexity for later; simple and correct now). */
   private resolveHpRegen(elapsedMs: number): void {
-    if (this.state.activeCombatSession) return;
+    if (this.combatSession) return;
     if (this.getCurrentHp() >= this.getMaxHp()) return;
     const regenPerSecond = this.getModifiedValue("hpRegen", BASE_HP_REGEN_PER_SECOND);
     this.healHp(regenPerSecond * (elapsedMs / 1000));
@@ -1227,25 +1277,15 @@ export class GameEngine {
       weaponType?: WeaponType;
     }
   ): boolean {
-    if (this.state.activeCraftJob || this.state.activeGatherSession || this.state.activeTravel) {
-      this.notifications.push("status", "You're busy with something else — stop that first.", {
-        severity: "warning",
-      });
-      return false;
-    }
-    if (this.state.activeCombatSession) {
-      this.notifications.push("status", `Already fighting ${this.state.activeCombatSession.enemyName}.`, {
-        severity: "warning",
-      });
-      return false;
-    }
+    if (!this.ensureIdle()) return false;
     if (this.getCurrentHp() <= 0) {
       this.notifications.push("status", "You need to heal before fighting.", { severity: "warning" });
       return false;
     }
 
     const now = this.state.lastTickTimestamp;
-    this.state.activeCombatSession = {
+    this.state.activeAction = {
+      kind: "combat",
       enemyId: enemy.id,
       enemyName: enemy.name,
       enemyMaxHp: enemy.maxHp,
@@ -1282,7 +1322,7 @@ export class GameEngine {
   /** Leaves the fight with no reward and no penalty — only if the enemy
    *  allows it (bosses typically don't). */
   fleeCombat(): boolean {
-    const session = this.state.activeCombatSession;
+    const session = this.combatSession;
     if (!session) return false;
     if (!session.canFlee) {
       this.notifications.push("status", `You can't flee from ${session.enemyName}.`, {
@@ -1290,7 +1330,7 @@ export class GameEngine {
       });
       return false;
     }
-    this.state.activeCombatSession = null;
+    this.state.activeAction = null;
     this.notifications.push("status", `Fled from ${session.enemyName}.`);
     return true;
   }
@@ -1308,11 +1348,11 @@ export class GameEngine {
    *  playerStartedAt keeps the next attack exactly one weapon-speed away
    *  from THIS click, regardless of how many times you've clicked. */
   attackNow(): boolean {
-    const session = this.state.activeCombatSession;
+    const session = this.combatSession;
     if (!session) return false;
     this.resolvePlayerAttack(session);
-    if (this.state.activeCombatSession) {
-      const updated = this.state.activeCombatSession;
+    if (this.combatSession) {
+      const updated = this.combatSession;
       updated.playerAttacksResolved += 1;
       updated.playerStartedAt = this.clock() - updated.playerAttacksResolved * updated.playerAttackSpeedMs;
     }
@@ -1322,7 +1362,7 @@ export class GameEngine {
   private static readonly COMBAT_LOG_LIMIT = 20;
 
   private pushCombatLog(
-    session: NonNullable<GameState["activeCombatSession"]>,
+    session: ActiveCombatSession,
     attacker: "player" | "enemy",
     hit: boolean,
     damage: number
@@ -1333,8 +1373,8 @@ export class GameEngine {
   }
 
   /** One player attack. May end the session (victory) — callers must
-   *  re-check this.state.activeCombatSession afterward. */
-  private resolvePlayerAttack(session: NonNullable<GameState["activeCombatSession"]>): void {
+   *  re-check this.combatSession afterward. */
+  private resolvePlayerAttack(session: ActiveCombatSession): void {
     const accuracy = { level: this.getSkillLevel("attack"), bonus: session.playerAttackBonus };
     const power = { level: this.getSkillLevel("strength"), bonus: session.playerStrengthBonus };
     const defence = { level: session.enemyDefence, bonus: session.enemyDefenceBonus };
@@ -1358,8 +1398,8 @@ export class GameEngine {
   }
 
   /** One enemy attack. May end the session (defeat) — callers must
-   *  re-check this.state.activeCombatSession afterward. */
-  private resolveEnemyAttack(session: NonNullable<GameState["activeCombatSession"]>): void {
+   *  re-check this.combatSession afterward. */
+  private resolveEnemyAttack(session: ActiveCombatSession): void {
     const accuracy = { level: session.enemyAttack, bonus: session.enemyAttackBonus };
     const power = { level: session.enemyStrength, bonus: session.enemyStrengthBonus };
     const defence = { level: this.getSkillLevel("defence"), bonus: session.playerDefenceBonus };
@@ -1374,7 +1414,7 @@ export class GameEngine {
     }
   }
 
-  private grantCombatVictory(session: NonNullable<GameState["activeCombatSession"]>): void {
+  private grantCombatVictory(session: ActiveCombatSession): void {
     // No combat-style selection UI yet, so XP just splits evenly across the
     // four skills involved — revisit once style selection exists.
     const xpEach = session.xpReward / 4;
@@ -1408,7 +1448,7 @@ export class GameEngine {
 
     const lootText = lootMessages.length > 0 ? ` You got: ${lootMessages.join(", ")}.` : " No loot this time.";
     this.notifications.push("reward", `Defeated ${session.enemyName}!${lootText}`);
-    this.state.activeCombatSession = null;
+    this.state.activeAction = null;
   }
 
   /** Death penalty: lose a percentage of GP and of each other resource
@@ -1419,7 +1459,7 @@ export class GameEngine {
    *  EnemyDefinition.deathPenalty for a future dungeon/boss, but "lose a
    *  specific item on death" isn't built, only flagged as a natural
    *  extension of the same override pattern once something needs it. */
-  private applyDeathPenalty(session: NonNullable<GameState["activeCombatSession"]>): void {
+  private applyDeathPenalty(session: ActiveCombatSession): void {
     const gp = this.getResourceAmount("gp");
     const gpLost = Math.floor(gp * session.deathPenaltyGpLossPercent);
     if (gpLost > 0) this.spendResource("gp", gpLost);
@@ -1448,10 +1488,10 @@ export class GameEngine {
     );
   }
 
-  private endCombatDefeat(session: NonNullable<GameState["activeCombatSession"]>): void {
+  private endCombatDefeat(session: ActiveCombatSession): void {
     this.state.currentHp = 1;
     this.applyDeathPenalty(session);
-    this.state.activeCombatSession = null;
+    this.state.activeAction = null;
   }
 
   /** Resolve combat up to `effectiveNow`. Player and enemy attack on
@@ -1463,7 +1503,7 @@ export class GameEngine {
    *  land more attacks than a slow enemy, and vice versa, instead of both
    *  sides trading blows in lockstep. */
   private resolveCombatSession(effectiveNow: number): void {
-    let session = this.state.activeCombatSession;
+    let session = this.combatSession;
     if (!session) return;
 
     while (session) {
@@ -1476,11 +1516,11 @@ export class GameEngine {
 
       if (playerNextAt <= enemyNextAt) {
         this.resolvePlayerAttack(session);
-        session = this.state.activeCombatSession;
+        session = this.combatSession;
         if (session) session.playerAttacksResolved += 1;
       } else {
         this.resolveEnemyAttack(session);
-        session = this.state.activeCombatSession;
+        session = this.combatSession;
         if (session) session.enemyAttacksResolved += 1;
       }
     }
@@ -1819,12 +1859,9 @@ export class GameEngine {
       flags: parsed.flags ?? {},
       inventory: parsed.inventory ?? {},
       equipment: parsed.equipment ?? {},
-      activeCraftJob: parsed.activeCraftJob ?? null,
+      activeAction: parsed.activeAction ?? null,
       currentLocationId: parsed.currentLocationId ?? STARTING_LOCATION_ID,
-      activeTravel: parsed.activeTravel ?? null,
-      activeGatherSession: parsed.activeGatherSession ?? null,
       currentHp: typeof parsed.currentHp === "number" ? parsed.currentHp : 10,
-      activeCombatSession: parsed.activeCombatSession ?? null,
       acceptedJobs: parsed.acceptedJobs ?? {},
       statistics: parsed.statistics ?? {},
       lastTickTimestamp:
