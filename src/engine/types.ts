@@ -570,6 +570,12 @@ export interface ActiveCombatSession {
    *  Capped and cleared with the rest of the session when the fight ends;
    *  this is live-fight visibility, not a persistent combat history. */
   log: CombatLogEntry[];
+  /** Total entries ever logged this session. `log` is capped, so its
+   *  length stops changing; the UI uses this to tell what's new. Optional
+   *  for sessions saved before it existed. */
+  logCount?: number;
+  /** When the player last swung — rate-limits "Attack Now". */
+  lastPlayerAttackAt?: number;
 }
 
 export interface CombatLogEntry {

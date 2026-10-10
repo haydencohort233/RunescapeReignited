@@ -25,6 +25,15 @@ export const EAT_ATTACK_DELAY_MS = 1800;
 
 // ── Combat ──
 
+/** Fastest anything can attack (one OSRS game tick). Also a safety floor:
+ *  a 0 or negative speed in content would otherwise hang the combat loop. */
+export const MIN_ATTACK_SPEED_MS = 600;
+
+/** "Attack Now" can swing early, but no sooner than this fraction of the
+ *  weapon's speed after the previous swing — otherwise clicking fast
+ *  bypasses weapon speed entirely. */
+export const ATTACK_NOW_MIN_INTERVAL_FRACTION = 0.5;
+
 /** Default attack speed for an enemy that doesn't specify its own. */
 export const DEFAULT_ENEMY_ATTACK_SPEED_MS = 3000;
 

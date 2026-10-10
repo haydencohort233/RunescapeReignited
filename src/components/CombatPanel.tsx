@@ -32,7 +32,8 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
   const [splats, setSplats] = useState<ActiveSplat[]>([]);
   const [keepFighting, setKeepFighting] = useState(false);
   const [autoEatItemId, setAutoEatItemId] = useState("");
-  const lastLogLengthRef = useRef(0);
+  const lastLogCountRef = useRef(0);
+  const splatTimersRef = useRef(new Set<number>());
   const enemy = getEnemy(enemyId);
 
   useEffect(() => {
@@ -45,30 +46,42 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
   // Spawns a hitsplat for every log entry that's new since the last render.
   // "attacker: player" means the PLAYER dealt it, so it floats over the
   // ENEMY's bar (and vice versa) — same as OSRS showing a splat on whoever
-  // got hit, not whoever swung.
+  // got hit, not whoever swung. The log itself is capped at 20 entries, so
+  // its length stops changing; logCount keeps counting.
+  const logCount = session ? (session.logCount ?? session.log.length) : 0;
   useEffect(() => {
     if (!session) {
-      lastLogLengthRef.current = 0;
+      lastLogCountRef.current = 0;
       return;
     }
-    const newEntries = session.log.slice(lastLogLengthRef.current);
-    lastLogLengthRef.current = session.log.length;
-    if (newEntries.length === 0) return;
+    const newCount = Math.min(logCount - lastLogCountRef.current, session.log.length);
+    lastLogCountRef.current = logCount;
+    if (newCount <= 0) return;
+    const newEntries = session.log.slice(-newCount);
 
     const newSplats: ActiveSplat[] = newEntries.map((entry, i) => ({
-      id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+      id: `${entry.timestamp}-${logCount}-${i}`,
       side: entry.attacker === "player" ? "enemy" : "player",
       outcome: entry.outcome,
       damage: entry.damage,
     }));
     setSplats((prev) => [...prev, ...newSplats]);
 
-    const timer = setTimeout(() => {
+    // Not cleared when the next batch arrives: each batch removes itself
+    // after its own animation. (Cancelling it on re-run left splats stuck
+    // whenever two attacks landed within a second.)
+    const timer = window.setTimeout(() => {
+      splatTimersRef.current.delete(timer);
       setSplats((prev) => prev.filter((s) => !newSplats.some((n) => n.id === s.id)));
     }, 1000);
-    return () => clearTimeout(timer);
+    splatTimersRef.current.add(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.log.length]);
+  }, [logCount]);
+
+  useEffect(() => {
+    const timers = splatTimersRef.current;
+    return () => timers.forEach((t) => window.clearTimeout(t));
+  }, []);
 
   if (!enemy) return null;
 

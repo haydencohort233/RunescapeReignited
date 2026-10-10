@@ -1,6 +1,8 @@
 import type { WeaponType, GameState, ActiveCombatSession, EnemyDefinition } from "../types";
 import type { GameEngine } from "../gameEngine";
 import {
+  ATTACK_NOW_MIN_INTERVAL_FRACTION,
+  MIN_ATTACK_SPEED_MS,
   ENEMY_RESPAWN_MS,
   AUTO_EAT_BELOW_HP_FRACTION,
   DEFAULT_ENEMY_ATTACK_SPEED_MS,
@@ -13,6 +15,8 @@ import { STARTING_LOCATION_ID } from "../state";
 import { resolveAttack } from "../combatMath";
 import { weightedRandomPick } from "../rng";
 import { getActiveCombat } from "../activeAction";
+
+const MAX_COMBAT_EVENTS_PER_RESOLVE = 50_000;
 
 /** Fights: independent attack timers, auto-repeat and auto-eat, loot, death. */
 export class CombatSystem {
@@ -55,7 +59,7 @@ export class CombatSystem {
       return false;
     }
 
-    const now = this.state.lastTickTimestamp;
+    const now = this.engine.now();
     this.state.activeAction = {
       kind: "combat",
       enemyId: enemy.id,
@@ -79,8 +83,8 @@ export class CombatSystem {
       playerStrengthBonus: equipmentBonus.strength,
       playerDefenceBonus: equipmentBonus.defence,
       playerWeaponType: equipmentBonus.weaponType,
-      playerAttackSpeedMs: equipmentBonus.attackSpeedMs ?? UNARMED_ATTACK_SPEED_MS,
-      enemyAttackSpeedMs: enemy.attackSpeedMs ?? DEFAULT_ENEMY_ATTACK_SPEED_MS,
+      playerAttackSpeedMs: Math.max(MIN_ATTACK_SPEED_MS, equipmentBonus.attackSpeedMs ?? UNARMED_ATTACK_SPEED_MS),
+      enemyAttackSpeedMs: Math.max(MIN_ATTACK_SPEED_MS, enemy.attackSpeedMs ?? DEFAULT_ENEMY_ATTACK_SPEED_MS),
       playerStartedAt: now,
       enemyStartedAt: now,
       playerAttacksResolved: 0,
@@ -89,6 +93,7 @@ export class CombatSystem {
       autoEatItemId: opts?.autoEatItemId,
       kills: 0,
       log: [],
+      logCount: 0,
     };
     this.notifications.push("status", `Engaged ${enemy.name}!`);
     return true;
@@ -126,6 +131,10 @@ export class CombatSystem {
     const session = this.combatSession;
     if (!session) return false;
     const now = this.engine.now();
+    // Mid-respawn there's nothing to hit yet.
+    if (now < session.playerStartedAt) return false;
+    const minGap = session.playerAttackSpeedMs * ATTACK_NOW_MIN_INTERVAL_FRACTION;
+    if (session.lastPlayerAttackAt !== undefined && now - session.lastPlayerAttackAt < minGap) return false;
     const killsBefore = session.kills;
     this.resolvePlayerAttack(session, now);
     // A kill with autoRepeat has already re-anchored both timers for the
@@ -143,10 +152,12 @@ export class CombatSystem {
     session: ActiveCombatSession,
     attacker: "player" | "enemy",
     hit: boolean,
-    damage: number
+    damage: number,
+    at: number
   ): void {
     const outcome: "miss" | "block" | "hit" = !hit ? "miss" : damage <= 0 ? "block" : "hit";
-    session.log.push({ timestamp: this.engine.now(), attacker, outcome, damage });
+    session.log.push({ timestamp: at, attacker, outcome, damage });
+    session.logCount = (session.logCount ?? session.log.length - 1) + 1;
     if (session.log.length > CombatSystem.COMBAT_LOG_LIMIT) session.log.shift();
   }
 
@@ -166,7 +177,8 @@ export class CombatSystem {
       damage = Math.ceil(damage * WEAKNESS_DAMAGE_MULTIPLIER);
     }
 
-    this.pushCombatLog(session, "player", outcome.hit, damage);
+    session.lastPlayerAttackAt = at;
+    this.pushCombatLog(session, "player", outcome.hit, damage, at);
     if (outcome.hit) {
       session.enemyCurrentHp = Math.max(0, session.enemyCurrentHp - damage);
     }
@@ -177,13 +189,13 @@ export class CombatSystem {
 
   /** One enemy attack. May end the session (defeat) — callers must
    *  re-check this.combatSession afterward. */
-  private resolveEnemyAttack(session: ActiveCombatSession): void {
+  private resolveEnemyAttack(session: ActiveCombatSession, at: number): void {
     const accuracy = { level: session.enemyAttack, bonus: session.enemyAttackBonus };
     const power = { level: session.enemyStrength, bonus: session.enemyStrengthBonus };
     const defence = { level: this.engine.getSkillLevel("defence"), bonus: session.playerDefenceBonus };
 
     const outcome = resolveAttack(accuracy, power, defence);
-    this.pushCombatLog(session, "enemy", outcome.hit, outcome.damage);
+    this.pushCombatLog(session, "enemy", outcome.hit, outcome.damage, at);
     if (outcome.hit) {
       this.engine.damageHp(outcome.damage);
     }
@@ -288,13 +300,13 @@ export class CombatSystem {
       const lost = Math.floor(amount * session.deathPenaltyResourceLossPercent);
       if (lost > 0) {
         this.engine.spendResource(resourceId, lost);
-        resourceLosses.push(`${lost} ${resourceId}`);
+        resourceLosses.push(`${lost.toLocaleString()} ${this.engine.nameOf(resourceId)}`);
       }
     }
 
     this.state.currentLocationId = STARTING_LOCATION_ID;
 
-    const lossParts = [gpLost > 0 ? `${gpLost} GP` : null, ...resourceLosses].filter(
+    const lossParts = [gpLost > 0 ? `${gpLost.toLocaleString()} GP` : null, ...resourceLosses].filter(
       (part): part is string => part !== null
     );
     const lossText = lossParts.length > 0 ? ` You lost ${lossParts.join(", ")}.` : "";
@@ -323,7 +335,11 @@ export class CombatSystem {
     let session = this.combatSession;
     if (!session) return;
 
-    while (session) {
+    // Belt and braces against a hang: attack speeds are floored at
+    // MIN_ATTACK_SPEED_MS, so an hour of catch-up is ~12,000 events. If
+    // something still runs away, the rest resolves on later ticks.
+    let budget = MAX_COMBAT_EVENTS_PER_RESOLVE;
+    while (session && budget-- > 0) {
       const playerNextAt =
         session.playerStartedAt + (session.playerAttacksResolved + 1) * session.playerAttackSpeedMs;
       const enemyNextAt =
@@ -338,7 +354,7 @@ export class CombatSystem {
         this.resolvePlayerAttack(session, playerNextAt);
       } else {
         session.enemyAttacksResolved += 1;
-        this.resolveEnemyAttack(session);
+        this.resolveEnemyAttack(session, enemyNextAt);
       }
       session = this.combatSession;
     }

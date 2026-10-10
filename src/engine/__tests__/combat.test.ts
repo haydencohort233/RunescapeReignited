@@ -83,3 +83,47 @@ describe("keep fighting", () => {
     expect(g.engine.getCurrentHp()).toBeGreaterThan(0);
   });
 });
+
+describe("combat robustness", () => {
+  it("uses the equipped weapon's speed and type", async () => {
+    const { getEquipmentBonuses } = await import("../../content/combatStats");
+    const { getItemDef } = await import("../../content/items");
+    const g = makeEngine();
+    const [dagger] = g.engine.addItem("bronze-dagger", 1);
+    g.engine.equipItem(getItemDef("bronze-dagger")!, dagger);
+    const bonuses = getEquipmentBonuses(g.state());
+    expect(bonuses).toMatchObject({ attackSpeedMs: 1800, weaponType: "stab" });
+    g.engine.startCombat(getEnemy("goblin")!, bonuses);
+    const s = g.state().activeAction;
+    expect(s?.kind === "combat" && s.playerAttackSpeedMs).toBe(1800);
+  });
+
+  it("a zero attack speed in content can't hang the combat loop", () => {
+    const g = makeEngine();
+    g.engine.startCombat({ ...getEnemy("goblin")!, attackSpeedMs: 0 }, { ...NO_GEAR, attackSpeedMs: 0 });
+    g.advance(60 * 60 * 1000); // returns instead of spinning forever
+    expect(g.state().statistics["kills:goblin"] ?? 0).toBeGreaterThanOrEqual(0);
+  });
+
+  it("Attack Now can't be spammed faster than half the weapon's speed", () => {
+    const g = makeEngine();
+    g.engine.startCombat(getEnemy("den-guardian")!, NO_GEAR); // 4s unarmed, boss survives
+    expect(g.engine.attackNow()).toBe(true);
+    expect(g.engine.attackNow()).toBe(false);
+    g.setNow(g.now() + 2000);
+    expect(g.engine.attackNow()).toBe(true);
+  });
+
+  it("logCount keeps counting after the log hits its cap", () => {
+    const g = makeEngine();
+    g.engine.setSkillLevel("hitpoints", 99);
+    g.engine.setSkillLevel("defence", 99);
+    g.engine.devSetCurrentHp(99);
+    g.engine.startCombat(getEnemy("den-guardian")!, { ...NO_GEAR, defence: 500 });
+    g.advance(60 * 1000); // ~35 attacks between both sides
+    const s = g.state().activeAction;
+    if (s?.kind !== "combat") throw new Error("fight ended");
+    expect(s.log.length).toBe(20);
+    expect(s.logCount).toBeGreaterThan(20);
+  });
+});

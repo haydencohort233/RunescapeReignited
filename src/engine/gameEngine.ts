@@ -178,7 +178,7 @@ export class GameEngine {
   }
 
   /** Removes everything in `costs` (times `multiplier`). Callers check
-   *  canAfford first; this doesn't re-check. */
+   *  getOwnedCount first; this doesn't re-check. */
   payFor(costs: RecipeInput[], multiplier = 1): void {
     for (const c of costs) this.removeOwned(c.resource, c.amount * multiplier);
   }
@@ -208,16 +208,6 @@ export class GameEngine {
     if (this.isStackable(id)) this.gainResource(id, amount, { countAsEarned: false });
     else this.addItem(id, amount);
   }
-
-  // ── Buildings ────────────────────────────────────────────────────────
-
-
-
-
-
-
-
-
 
   // ── Modifiers (buffs/debuffs from items or events) ─────────────────────
 
@@ -330,26 +320,6 @@ export class GameEngine {
     // offline catch-up) could stack up a dozen undismissed "level up"
     // toasts, since each one persists until dismissed.
   }
-
-  // ── Crafting jobs (time-based, gated by skill/materials) ───────────────
-
-
-
-
-  // ── Gathering sessions (Woodcutting etc. — open-ended, time-capped) ────
-
-
-
-
-
-  // ── World map travel ─────────────────────────────────────────────────
-
-
-
-
-
-
-
 
   // ── Time resolution — the one true path for advancing the simulation ──
 
@@ -787,21 +757,6 @@ export class GameEngine {
     this.state.currentHp = Math.max(0, Math.min(this.getMaxHp(), hp));
   }
 
-  // ── Combat ───────────────────────────────────────────────────────────
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   // ── Save-data management (settings tab) ─────────────────────────────────
 
   clearResource(resourceId: ResourceId): void {
@@ -830,13 +785,6 @@ export class GameEngine {
     }
   }
 
-  /** Deducts a resource AND records it under `${resourceId}:spent` in
-   *  statistics. All resource spending should route through here rather
-   *  than mutating state.resources directly, so "Total GP Spent" etc. stay
-   *  accurate without scattering increment calls at every call site.
-   *  Known simplification: a cancelled crafting job's refund does NOT
-   *  reverse this stat — a minor overcount on cancel, not worth the extra
-   *  bookkeeping for an edge case. */
   /** Adds to a resource. `countAsEarned: false` is for refunds, which give
    *  back what was already yours rather than counting toward lifetime
    *  milestones like "earned 100 GP". */
@@ -847,6 +795,10 @@ export class GameEngine {
     if (opts?.countAsEarned !== false) this.state.resources[resourceId].lifetimeEarned += amount;
   }
 
+  /** Deducts a resource AND records it under `${resourceId}:spent` in
+   *  statistics. All resource spending should route through here rather
+   *  than mutating state.resources directly, so "Total GP Spent" etc. stay
+   *  accurate without scattering increment calls at every call site. */
   spendResource(resourceId: ResourceId, amount: number): void {
     this.ensureResourceExists(resourceId);
     this.state.resources[resourceId].amount -= amount;
@@ -883,11 +835,6 @@ export class GameEngine {
 
   // ── Achievements ─────────────────────────────────────────────────────
 
-  /** Checks every achievement not yet earned; grants reward + notification
-   *  for any newly met. "Earned" is tracked via flags["achievement:<id>"] —
-   *  same reused substrate as everything else UnlockCondition gates.
-   *  Content-driven (takes the catalog as a parameter) — call this from the
-   *  app layer's tick loop, same pattern as registerStartingContent. */
   /** Marks any newly-met achievement as earned and notifies — does NOT grant
    *  the reward. Reward collection is a separate, manual step (claimAchievementReward)
    *  so the player has to consciously see what they got, rather than it
@@ -941,28 +888,6 @@ export class GameEngine {
     this.notifications.push("reward", `Claimed reward for ${achievement.name}.`);
     return true;
   }
-
-  // ── Job board ────────────────────────────────────────────────────────
-
-
-
-
-
-
-
-
-
-  // ── Quests ───────────────────────────────────────────────────────────
-
-
-
-
-
-
-
-
-
-  // ── Serialization ──────────────────────────────────────────────────────
 
   // ── Systems ──────────────────────────────────────────────────────────
   // Each game system lives in engine/systems/. The methods below keep
@@ -1125,6 +1050,8 @@ export class GameEngine {
   advanceQuest(questId: string): boolean {
     return this.questSystem.advanceQuest(questId);
   }
+
+  // ── Serialization ──────────────────────────────────────────────────────
 
   serialize(): string {
     return JSON.stringify(this.state);
