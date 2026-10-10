@@ -227,7 +227,6 @@ export class CombatSystem {
             ? drop.quantityMin + Math.floor(Math.random() * (drop.quantityMax - drop.quantityMin + 1))
             : 1;
         this.engine.addItem(drop.id, quantity);
-        if (this.engine.catchUp) this.engine.catchUp.loot[drop.id] = (this.engine.catchUp.loot[drop.id] ?? 0) + quantity;
         // <id> tags render as item icons in RichText; currencies have no
         // item definition, so they're written out plainly.
         lootMessages.push(this.engine.itemsById.has(drop.id) ? `${quantity}x <${drop.id}>` : `${quantity} ${drop.id}`);

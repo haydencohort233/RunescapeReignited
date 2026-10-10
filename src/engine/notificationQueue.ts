@@ -3,6 +3,11 @@ import { DEFAULT_NOTIFICATION_DURATIONS } from "./types";
 
 const HISTORY_LIMIT = 200;
 
+/** Most toasts on screen at once. Persistent ones (quests, errors) would
+ *  otherwise pile up without limit; past this, the oldest non-error toast
+ *  goes first. */
+const MAX_ACTIVE = 8;
+
 /**
  * A simple pub/sub queue. Engine code pushes notifications without knowing
  * anything about how (or whether) they get rendered. UI subscribes.
@@ -73,11 +78,16 @@ export class NotificationQueue {
 
     if (opts?.replaceKey) {
       const existingId = this.replaceKeyToId.get(opts.replaceKey);
-      if (existingId) this.dismiss(existingId); // no-op if it already auto-dismissed
+      if (existingId) this.removeActive(existingId); // no-op if it already auto-dismissed
       this.replaceKeyToId.set(opts.replaceKey, notification.id);
     }
 
     this.notifications = [...this.notifications, notification];
+    while (this.notifications.length > MAX_ACTIVE) {
+      const oldest =
+        this.notifications.find((n) => n.severity !== "error" && n.type !== "achievement") ?? this.notifications[0];
+      this.removeActive(oldest.id);
+    }
     this.emit();
 
     if (typeof durationMs === "number" && durationMs > 0) {
@@ -87,20 +97,26 @@ export class NotificationQueue {
   }
 
   dismiss(id: string): void {
-    const timer = this.timers.get(id);
-    if (timer) {
-      clearTimeout(timer);
-      this.timers.delete(id);
-    }
-    this.notifications = this.notifications.filter((n) => n.id !== id);
+    if (!this.notifications.some((n) => n.id === id)) return;
+    this.removeActive(id);
     this.emit();
   }
 
   clear(): void {
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
+    this.replaceKeyToId.clear();
     this.notifications = [];
     this.emit();
+  }
+
+  private removeActive(id: string): void {
+    const timer = this.timers.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      this.timers.delete(id);
+    }
+    this.notifications = this.notifications.filter((n) => n.id !== id);
   }
 
   getAll(): GameNotification[] {

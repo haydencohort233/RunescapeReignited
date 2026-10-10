@@ -37,6 +37,9 @@ import { QuestSystem } from "./systems/quests";
  *  it correctly either way. */
 const MIN_AWAY_MS_FOR_SUMMARY = 60 * 1000; // 1 minute
 
+/** Display names for ledger ids that have no item definition. */
+const CURRENCY_NAMES: Record<string, string> = { gp: "GP", "achievement-points": "Achievement Points" };
+
 /**
  * GameEngine owns the authoritative simulation. It has NO React dependency —
  * it's a plain class you can unit test, run in a web worker, or port to a
@@ -75,7 +78,7 @@ export class GameEngine {
   /** Non-null only while resolveElapsed() is replaying an away period.
    *  Combat outcomes collect here and go into the one "while you were
    *  away" summary instead of a toast per kill. */
-  catchUp: { kills: Record<string, number>; loot: Record<string, number>; eaten: number } | null = null;
+  catchUp: { kills: Record<string, number>; eaten: number } | null = null;
 
   constructor(
     content: GameContent,
@@ -168,7 +171,7 @@ export class GameEngine {
   /** Display name for a ledger id — the item's name, or the raw id for
    *  currencies that have no item definition. */
   nameOf(id: ResourceId): string {
-    return this.itemsById.get(id)?.name ?? id;
+    return this.itemsById.get(id)?.name ?? CURRENCY_NAMES[id] ?? id;
   }
 
   /** Ids without an item definition (gp, achievement points) are plain
@@ -349,7 +352,7 @@ export class GameEngine {
     }
 
     const wasOffline = elapsedMs > MIN_AWAY_MS_FOR_SUMMARY;
-    this.catchUp = wasOffline ? { kills: {}, loot: {}, eaten: 0 } : null;
+    this.catchUp = wasOffline ? { kills: {}, eaten: 0 } : null;
     const cappedMs = Math.min(elapsedMs, this.state.offlineCapMs);
     const effectiveNow = from + cappedMs;
 
@@ -366,6 +369,10 @@ export class GameEngine {
     // Resolve modifier expiry using the SAME capped horizon as everything
     // else, not the real `now` — see class doc comment.
     const expired = this.pruneExpiredModifiers(effectiveNow);
+
+    // Snapshot holdings so the away summary can report everything gained
+    // (production, gathering, crafting, loot), not just building output.
+    const holdingsBefore = wasOffline ? this.snapshotHoldings() : null;
 
     const levelsBefore: Record<string, number> = {};
     for (const skillId of Object.keys(this.state.skills)) {
@@ -427,10 +434,7 @@ export class GameEngine {
       // Folded into one summary line instead of one toast per level — this
       // is what actually fixes the spam, whether the burst came from a true
       // offline gap or many rapid ticks in a backgrounded tab.
-      const fought = this.catchUp && Object.keys(this.catchUp.kills).length > 0;
-      if (levelUps.length > 0 || Object.keys(gains).length > 0 || fought) {
-        this.emitOfflineSummary(elapsedMs, gains, levelUps);
-      }
+      this.emitOfflineSummary(elapsedMs, holdingsBefore ?? {}, levelUps);
     } else {
       // Live play: immediate per-level-up feedback is good here and won't
       // spam under normal pacing — it's naturally rate-limited by how fast
@@ -469,15 +473,27 @@ export class GameEngine {
     }
   }
 
+  /** Owned count per id: stacked amounts plus one per item instance. */
+  private snapshotHoldings(): Record<string, number> {
+    const holdings: Record<string, number> = {};
+    for (const [id, r] of Object.entries(this.state.resources)) holdings[id] = r.amount;
+    for (const instance of Object.values(this.state.inventory)) {
+      holdings[instance.itemDefId] = (holdings[instance.itemDefId] ?? 0) + 1;
+    }
+    return holdings;
+  }
+
   private emitOfflineSummary(
     elapsedMs: number,
-    gains: Record<ResourceId, number>,
+    holdingsBefore: Record<string, number>,
     levelUps: { skillId: string; from: number; to: number }[]
   ): void {
     const duration = formatDuration(elapsedMs);
-    const parts = Object.entries(gains)
-      .filter(([, amount]) => amount >= 1)
-      .map(([resource, amount]) => `${Math.floor(amount).toLocaleString()} ${resource.toUpperCase()}`);
+    const parts: string[] = [];
+    for (const [id, after] of Object.entries(this.snapshotHoldings())) {
+      const gained = Math.floor(after) - Math.floor(holdingsBefore[id] ?? 0);
+      if (gained >= 1) parts.push(`${gained.toLocaleString()} ${this.nameOf(id)}`);
+    }
 
     for (const levelUp of levelUps) {
       const gained = levelUp.to - levelUp.from;
@@ -488,9 +504,6 @@ export class GameEngine {
     if (this.catchUp) {
       for (const [enemyName, kills] of Object.entries(this.catchUp.kills)) {
         parts.push(`${kills} ${enemyName} ${kills === 1 ? "kill" : "kills"}`);
-      }
-      for (const [id, amount] of Object.entries(this.catchUp.loot)) {
-        parts.push(`${amount.toLocaleString()} ${this.nameOf(id)}`);
       }
       if (this.catchUp.eaten > 0) parts.push(`(ate ${this.catchUp.eaten} food)`);
     }
