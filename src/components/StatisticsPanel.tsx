@@ -32,7 +32,7 @@ export default function StatisticsPanel() {
 
       <h3 style={{ fontSize: 14, color: "#888", marginTop: 12, marginBottom: 4 }}>Buildings</h3>
       <StatRow label="Buildings Bought (Total)" value={stat("buildingsBought:total")} />
-      {BUILDING_CATALOG.map((b) => (
+      {BUILDING_CATALOG.filter((b) => b.baseCost).map((b) => (
         <StatRow key={b.id} label={`${b.name} Bought`} value={stat(`buildingsBought:${b.id}`)} />
       ))}
 
