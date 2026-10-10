@@ -804,16 +804,21 @@ export class GameEngine {
 
     job.quantityCompleted = completedByNow;
 
+    // One toast per job, updated in place as it progresses — a 30-item
+    // batch used to leave 30 separate toasts behind.
+    const replaceKey = "craft-progress";
     if (job.quantityCompleted >= job.quantityTotal) {
       this.notifications.push(
         "production",
-        `Made x${job.quantityTotal} ${job.recipeName} (+${job.xpPerItem * job.quantityTotal} ${capitalize(job.skill)} XP)`
+        `Made x${job.quantityTotal} ${job.recipeName} (+${job.xpPerItem * job.quantityTotal} ${capitalize(job.skill)} XP)`,
+        { replaceKey }
       );
       this.state.activeAction = null;
     } else {
       this.notifications.push(
         "production",
-        `Made x${newCompletions} ${job.recipeName} so far (+${job.xpPerItem * newCompletions} ${capitalize(job.skill)} XP)`
+        `Made ${job.quantityCompleted}/${job.quantityTotal} ${job.recipeName} so far (+${job.xpPerItem * job.quantityCompleted} ${capitalize(job.skill)} XP)`,
+        { replaceKey }
       );
     }
   }
