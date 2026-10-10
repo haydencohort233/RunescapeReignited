@@ -5,7 +5,7 @@ import { getAmenitiesAtLocation } from "../content/amenities";
 import { describeUnmetCondition } from "../engine/unlockConditions";
 import { confirmAndStartTravel } from "../engine/actionHelpers";
 import { getActiveTravel } from "../engine/activeAction";
-import { AMENITY_ICON } from "./AmenityEntry";
+import { AMENITY_ICON } from "../content/amenities";
 import { worldMapPath, locationIconPath } from "../content/assetPaths";
 import { preloadImages, isImageLoaded } from "../lib/imagePreloader";
 import GameImage from "./GameImage";

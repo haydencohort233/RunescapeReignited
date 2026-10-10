@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { useGame } from "../engine/GameEngineContext";
 import { getEnemy } from "../content/enemies";
 import { getActiveCombat } from "../engine/activeAction";
-import { ITEM_CATALOG } from "../content/items";
+import { ITEM_CATALOG, getItemDef } from "../content/items";
+import { confirmAndStartCombat } from "../engine/actionHelpers";
+import { ActionCard } from "./ui/ActionCard";
 import { getEquipmentBonuses } from "../content/combatStats";
 import { enemyImagePath } from "../content/assetPaths";
 import HpBar from "./HpBar";
@@ -22,10 +24,10 @@ const SPLAT_COLOR: Record<ActiveSplat["outcome"], string> = {
   miss: "var(--splat-miss)", // gray — didn't land at all
 };
 
-/** The fight UI for a combatEncounter amenity. Auto-resolves via the
- *  engine's own tick — this component doesn't drive combat, it just
- *  reflects state.activeCombatSession and offers the optional interactive
- *  "Attack Now" override plus Flee. */
+/** The fight card for a combatEncounter amenity. Collapsed like every other
+ *  card until clicked; held open while you're fighting this enemy. Combat
+ *  resolves on the engine's own tick — this only reflects it and offers
+ *  Attack Now and Flee. */
 export default function CombatPanel({ enemyId }: { enemyId: string }) {
   const { engine, state, actions } = useGame();
   const [splats, setSplats] = useState<ActiveSplat[]>([]);
@@ -80,40 +82,38 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
   if (!enemy) return null;
 
   const fightingThisEnemy = session?.enemyId === enemyId;
+  const bossTag = enemy.isBoss ? <span className="tag tag-gold">Boss</span> : null;
+  const title = (
+    <>
+      ⚔️ {enemy.name} {bossTag}
+    </>
+  );
 
-  const nextPlayerAttackSeconds = session
-    ? Math.max(
-        0,
-        Math.ceil(
-          (session.playerStartedAt + (session.playerAttacksResolved + 1) * session.playerAttackSpeedMs -
-            Date.now()) /
-            1000
-        )
-      )
-    : 0;
-  const nextEnemyAttackSeconds = session
-    ? Math.max(
-        0,
-        Math.ceil(
-          (session.enemyStartedAt + (session.enemyAttacksResolved + 1) * session.enemyAttackSpeedMs -
-            Date.now()) /
-            1000
-        )
-      )
-    : 0;
-
-  if (!fightingThisEnemy) {
+  if (!fightingThisEnemy || !session) {
     const foods = ITEM_CATALOG.filter((def) => def.healAmount && engine.getOwnedCount(def.id) >= 1);
+    const noHp = engine.getCurrentHp() <= 0;
     return (
-      <div style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 8 }}>
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <strong>⚔️ {enemy.name}</strong>
-          {enemy.isBoss && <span style={{ fontSize: 11, color: "var(--gold)" }}>Boss</span>}
-        </div>
-        <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "4px 0" }}>Max HP: {enemy.maxHp}</p>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", fontSize: 12, marginBottom: 6 }}>
+      <ActionCard
+        title={title}
+        meta={`Max HP ${enemy.maxHp}`}
+        actions={[
+          {
+            label: "Fight",
+            variant: "primary",
+            disabled: noHp,
+            reason: "Heal before fighting",
+            onClick: () =>
+              confirmAndStartCombat(engine, enemy, getEquipmentBonuses(state), {
+                autoRepeat: keepFighting,
+                autoEatItemId: autoEatItemId || undefined,
+              }),
+          },
+        ]}
+      >
+        <div className="row text-muted">
           <label>
             <input
+              id={`keep-fighting-${enemy.id}`}
               type="checkbox"
               checked={keepFighting}
               onChange={(e) => setKeepFighting(e.target.checked)}
@@ -122,7 +122,11 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
           </label>
           <label>
             Auto-eat{" "}
-            <select value={autoEatItemId} onChange={(e) => setAutoEatItemId(e.target.value)}>
+            <select
+              id={`auto-eat-${enemy.id}`}
+              value={autoEatItemId}
+              onChange={(e) => setAutoEatItemId(e.target.value)}
+            >
               <option value="">None</option>
               {foods.map((def) => (
                 <option key={def.id} value={def.id}>
@@ -132,48 +136,55 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
             </select>
           </label>
         </div>
-        <button
-          onClick={() => {
-            const bonuses = getEquipmentBonuses(state);
-            engine.startCombat(enemy, bonuses, {
-              autoRepeat: keepFighting,
-              autoEatItemId: autoEatItemId || undefined,
-            });
-          }}
-        >
-          Fight
-        </button>
-      </div>
+      </ActionCard>
     );
   }
+
+  const now = Date.now();
+  const nextPlayerAttackSeconds = Math.max(
+    0,
+    Math.ceil((session.playerStartedAt + (session.playerAttacksResolved + 1) * session.playerAttackSpeedMs - now) / 1000)
+  );
+  const nextEnemyAttackSeconds = Math.max(
+    0,
+    Math.ceil((session.enemyStartedAt + (session.enemyAttacksResolved + 1) * session.enemyAttackSpeedMs - now) / 1000)
+  );
 
   const renderSplats = (side: "player" | "enemy") =>
     splats
       .filter((s) => s.side === side)
-      .map((s, i) => (
-        <Hitsplat key={s.id} outcome={s.outcome} damage={s.damage} offsetIndex={i} />
-      ));
+      .map((s, i) => <Hitsplat key={s.id} outcome={s.outcome} damage={s.damage} offsetIndex={i} />);
+
+  const autoEatName = session.autoEatItemId ? getItemDef(session.autoEatItemId)?.name : undefined;
 
   return (
-    <div style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 8 }}>
-      <style>{`
-        @keyframes hitsplatFloat {
-          0% { opacity: 1; transform: translate(-50%, 0); }
-          100% { opacity: 0; transform: translate(-50%, -24px); }
-        }
-      `}</style>
-
-      <strong>⚔️ Fighting {session.enemyName}</strong>
-      {session.autoRepeat && (
-        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-          {" "}
-          — {session.kills} killed this trip
-          {session.autoEatItemId &&
-            `, auto-eating ${ITEM_CATALOG.find((d) => d.id === session.autoEatItemId)?.name ?? session.autoEatItemId}`}
-        </span>
-      )}
-
-      <div style={{ display: "flex", justifyContent: "center", margin: "6px 0" }}>
+    <ActionCard
+      className="is-active"
+      open
+      title={title}
+      meta={
+        session.autoRepeat
+          ? `${session.kills} defeated this trip${autoEatName ? ` · eating ${autoEatName}` : ""}`
+          : "Fighting"
+      }
+      actions={[
+        {
+          label: "Attack now",
+          variant: "primary",
+          onClick: () => {
+            engine.attackNow();
+            actions.refresh();
+          },
+        },
+        {
+          label: "Flee",
+          disabled: !session.canFlee,
+          reason: `You can't flee from ${session.enemyName}`,
+          onClick: () => engine.fleeCombat(),
+        },
+      ]}
+    >
+      <div className="combat-portrait">
         <GameImage
           src={enemyImagePath(
             session.enemyName,
@@ -182,82 +193,40 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
           )}
           alt={session.enemyName}
           style={{ width: 96, height: 96 }}
-          fallback={
-            <div
-              style={{
-                width: 96,
-                height: 96,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 40,
-              }}
-            >
-              ⚔️
-            </div>
-          }
+          fallback={<div className="combat-portrait-fallback">⚔️</div>}
         />
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
-        <div style={{ position: "relative" }}>
+      <div className="stack">
+        <div className="splat-anchor">
           {renderSplats("player")}
           <HpBar current={engine.getCurrentHp()} max={engine.getMaxHp()} label="You" />
         </div>
-        <div style={{ position: "relative" }}>
+        <div className="splat-anchor">
           {renderSplats("enemy")}
           <HpBar current={session.enemyCurrentHp} max={session.enemyMaxHp} label={session.enemyName} />
         </div>
       </div>
 
-      <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "6px 0 0" }}>
-        Your next attack: {nextPlayerAttackSeconds}s (every {(session.playerAttackSpeedMs / 1000).toFixed(1)}
-        s) — {session.enemyName}'s next attack: {nextEnemyAttackSeconds}s (every{" "}
-        {(session.enemyAttackSpeedMs / 1000).toFixed(1)}s)
+      <p className="text-muted text-small">
+        Your next attack in {nextPlayerAttackSeconds}s (every {(session.playerAttackSpeedMs / 1000).toFixed(1)}s) ·{" "}
+        {session.enemyName} in {nextEnemyAttackSeconds}s (every {(session.enemyAttackSpeedMs / 1000).toFixed(1)}s)
       </p>
 
-      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-        <button
-          onClick={() => {
-            engine.attackNow();
-            actions.refresh();
-          }}
-        >
-          Attack Now
-        </button>
-        {session.canFlee && <button onClick={() => engine.fleeCombat()}>Flee</button>}
-      </div>
-
-      {/* Compact log: fixed-width columns, tight rows, small font — fits far
-          more history in the same space than a full sentence per line did. */}
-      <div
-        style={{
-          marginTop: 8,
-          fontSize: 11,
-          fontFamily: "monospace",
-          maxHeight: 140,
-          overflowY: "auto",
-          border: "1px solid var(--border-subtle)",
-          borderRadius: 4,
-          padding: "4px 6px",
-          display: "flex",
-          flexDirection: "column-reverse", // newest at top
-        }}
-      >
-        {session.log.length === 0 && <span style={{ color: "var(--text-faint)" }}>No attacks yet.</span>}
+      {/* Compact log, newest first. */}
+      <div className="combat-log">
+        {session.log.length === 0 && <span className="text-faint">No attacks yet.</span>}
         {session.log.map((entry, i) => (
-          <div key={i} style={{ display: "flex", gap: 6, lineHeight: 1.5 }}>
-            <span
-              style={{ width: 12, fontWeight: 700, color: entry.attacker === "player" ? "var(--info)" : "var(--danger)" }}
-            >
-              {entry.attacker === "player" ? "Y" : "E"}
+          <div key={i} className="combat-log-row">
+            <span className={entry.attacker === "player" ? "text-info" : "text-danger"}>
+              {entry.attacker === "player" ? "You" : "Foe"}
             </span>
-            <span style={{ color: SPLAT_COLOR[entry.outcome], minWidth: 44 }}>
+            <span style={{ color: SPLAT_COLOR[entry.outcome] }}>
               {entry.outcome === "miss" ? "miss" : entry.outcome === "block" ? "block" : `hit ${entry.damage}`}
             </span>
           </div>
         ))}
       </div>
-    </div>
+    </ActionCard>
   );
 }

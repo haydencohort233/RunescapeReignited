@@ -1,286 +1,186 @@
-import { useEffect, useRef, useState } from "react";
 import { useGame } from "../engine/GameEngineContext";
-import type { Amenity } from "../content/amenities";
+import { AMENITY_ICON, type Amenity, type ResourceNodeAmenity } from "../content/amenities";
 import { getShop } from "../content/shops";
 import { getJobBoard } from "../content/jobBoards";
-import { getMsUntilNextDailyReset, formatCountdown } from "../engine/time";
 import { getRecipe } from "../content/recipes";
+import { CONDITION_LABELS } from "../content/display";
+import { getMsUntilNextDailyReset, formatCountdown } from "../engine/time";
 import { describeUnmetCondition } from "../engine/unlockConditions";
 import { confirmAndStartCraftJob, confirmAndStartGatherSession } from "../engine/actionHelpers";
 import { getActiveGatherSession } from "../engine/activeAction";
-import ShopNpcEntry from "./ShopNpcEntry";
 import ShopBrowsePanel from "./ShopBrowsePanel";
 import JobBoardBrowsePanel from "./JobBoardBrowsePanel";
 import CombatPanel from "./CombatPanel";
+import { ActionCard, LockedCard } from "./ui/ActionCard";
 
-export const AMENITY_ICON: Record<Amenity["kind"], string> = {
-  shop: "🛒",
-  resourceNode: "🌾",
-  craftingStation: "🔥",
-  dungeonEntrance: "🕳️",
-  jobBoard: "📋",
-  combatEncounter: "⚔️",
-};
+const BATCH_SIZES = [1, 5, 10, 25];
 
-/** Renders one amenity at the CURRENT location, fully interactive.
- *  Dispatches on `kind` — each variant gets whatever interaction makes
- *  sense for it (shop -> Talk/Browse, resourceNode -> batch pick or an
- *  open-ended session depending on gatherMode, the still-unbuilt kinds ->
- *  a placeholder action). Adding a new kind later means adding one more
- *  case here, not restructuring this file. */
+/** One amenity at the CURRENT location, as a card. Every kind uses the same
+ *  pattern (see ActionCard): click to show its actions, right-click for
+ *  the same actions in a menu, dashed card with a reason when locked. */
 export default function AmenityEntry({ amenity }: { amenity: Amenity }) {
+  const { state } = useGame();
+  const icon = AMENITY_ICON[amenity.kind];
+
+  const lockReason = amenity.unlockCondition
+    ? describeUnmetCondition(amenity.unlockCondition, state, CONDITION_LABELS)
+    : null;
+  if (lockReason) return <LockedCard icon={icon} title={amenity.name} reason={lockReason} />;
+
+  switch (amenity.kind) {
+    case "shop":
+      return <ShopCard shopId={amenity.shopId} />;
+    case "jobBoard":
+      return <JobBoardCard boardId={amenity.boardId} name={amenity.name} />;
+    case "combatEncounter":
+      return <CombatPanel enemyId={amenity.enemyId} />;
+    case "resourceNode":
+      return <ResourceNodeCard amenity={amenity} />;
+    case "craftingStation":
+    case "dungeonEntrance":
+      return <PlaceholderCard amenity={amenity} />;
+  }
+}
+
+function ShopCard({ shopId }: { shopId: string }) {
+  const { engine } = useGame();
+  // By the amenity's own shopId: a location lookup always found the first
+  // shop there, so a second shop at the same place was unreachable.
+  const shop = getShop(shopId);
+  if (!shop) return null;
+  return (
+    <ActionCard
+      icon={AMENITY_ICON.shop}
+      title={shop.title}
+      meta={shop.npcName}
+      actions={[
+        {
+          label: `Talk to ${shop.npcName}`,
+          onClick: () => engine.notifications.push("status", `${shop.npcName} has nothing to say right now.`),
+        },
+      ]}
+    >
+      <ShopBrowsePanel shop={shop} />
+    </ActionCard>
+  );
+}
+
+function JobBoardCard({ boardId, name }: { boardId: string; name: string }) {
+  const board = getJobBoard(boardId);
+  if (!board) return null;
+  return (
+    <ActionCard
+      icon={AMENITY_ICON.jobBoard}
+      title={name}
+      meta={`Resets in ${formatCountdown(getMsUntilNextDailyReset(Date.now()))}`}
+      actions={[]}
+    >
+      <JobBoardBrowsePanel board={board} />
+    </ActionCard>
+  );
+}
+
+function PlaceholderCard({ amenity }: { amenity: Amenity }) {
+  const { engine } = useGame();
+  const isDungeon = amenity.kind === "dungeonEntrance";
+  return (
+    <ActionCard
+      icon={AMENITY_ICON[amenity.kind]}
+      title={amenity.name}
+      description={amenity.description}
+      actions={[
+        {
+          label: isDungeon ? "Enter" : "Use",
+          onClick: () =>
+            engine.notifications.push(
+              "status",
+              isDungeon ? "Dungeons aren't implemented yet." : "Nothing usable here yet.",
+              { severity: "warning" }
+            ),
+        },
+      ]}
+    />
+  );
+}
+
+function ResourceNodeCard({ amenity }: { amenity: ResourceNodeAmenity }) {
   const { engine, state, actions } = useGame();
-  const [browsingShop, setBrowsingShop] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [quickMenuPos, setQuickMenuPos] = useState<{ x: number; y: number } | null>(null);
-  const quickMenuRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!quickMenuPos) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (quickMenuRef.current && !quickMenuRef.current.contains(e.target as Node)) {
-        setQuickMenuPos(null);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [quickMenuPos]);
-
-  const locked = !!amenity.unlockCondition && !!describeUnmetCondition(amenity.unlockCondition, state);
-  if (locked) {
-    return (
-      <div style={{ border: "1px dashed var(--border)", borderRadius: 6, padding: 8, color: "var(--text-faint)" }}>
-        {AMENITY_ICON[amenity.kind]} {amenity.name} (Locked)
-        <div style={{ fontSize: 12 }}>
-          {amenity.unlockCondition && describeUnmetCondition(amenity.unlockCondition, state)}
-        </div>
-      </div>
-    );
-  }
-
-  // Shops reuse the existing Map-tab components wholesale — same
-  // interaction, just surfaced here too since this is where players spend
-  // most of their time.
-  if (amenity.kind === "shop") {
-    // By the amenity's own shopId: a location lookup always found the
-    // first shop there, so a second shop at the same place was unreachable.
-    const shop = getShop(amenity.shopId);
-    if (!shop) return null;
-    return browsingShop ? (
-      <ShopBrowsePanel shop={shop} onClose={() => setBrowsingShop(false)} />
-    ) : (
-      <ShopNpcEntry shop={shop} onBrowse={() => setBrowsingShop(true)} />
-    );
-  }
-
-  // Job boards: a single click toggles the browse panel directly — no
-  // Talk/Browse split like shops, since a bulletin board isn't an NPC with
-  // something to say.
-  if (amenity.kind === "jobBoard") {
-    const board = getJobBoard(amenity.boardId);
-    if (!board) return null;
-    return panelOpen ? (
-      <JobBoardBrowsePanel board={board} onClose={() => setPanelOpen(false)} />
-    ) : (
-      <div
-        onClick={() => setPanelOpen(true)}
-        style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 8, cursor: "pointer" }}
-      >
-        {AMENITY_ICON[amenity.kind]} {amenity.name}
-        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-          Resets in {formatCountdown(getMsUntilNextDailyReset(Date.now()))}
-        </div>
-      </div>
-    );
-  }
-
-  if (amenity.kind === "combatEncounter") {
-    return <CombatPanel enemyId={amenity.enemyId} />;
-  }
-
-  const placeholderAction = () => {
-    const message =
-      amenity.kind === "dungeonEntrance"
-        ? "Dungeons aren't implemented yet."
-        : "Nothing usable here yet.";
-    engine.notifications.push("status", message, { severity: "warning" });
-    setPanelOpen(false);
-    setQuickMenuPos(null);
-  };
-
-  if (amenity.kind === "craftingStation" || amenity.kind === "dungeonEntrance") {
-    return (
-      <div>
-        <div
-          onClick={() => setPanelOpen((open) => !open)}
-          style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 8, cursor: "pointer" }}
-        >
-          {AMENITY_ICON[amenity.kind]} {amenity.name}
-        </div>
-        {panelOpen && (
-          <div style={{ marginTop: 4 }}>
-            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 4px" }}>{amenity.description}</p>
-            <button onClick={placeholderAction}>{amenity.kind === "dungeonEntrance" ? "Enter" : "Use"}</button>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // From here down: amenity.kind === "resourceNode"
+  const icon = AMENITY_ICON.resourceNode;
   const recipe = getRecipe(amenity.recipeId);
   if (!recipe) return null;
 
-  // The RECIPE can also gate things (e.g. Woodcutting 30 for Willow) —
-  // separate from the amenity's own unlockCondition checked above, since a
-  // location/amenity being open doesn't mean every recipe available there
-  // is too.
-  if (recipe.unlockCondition) {
-    const recipeLockReason = describeUnmetCondition(recipe.unlockCondition, state);
-    if (recipeLockReason) {
-      return (
-        <div style={{ border: "1px dashed var(--border)", borderRadius: 6, padding: 8, color: "var(--text-faint)" }}>
-          {AMENITY_ICON[amenity.kind]} {amenity.name} (Locked)
-          <div style={{ fontSize: 12 }}>{recipeLockReason}</div>
-        </div>
-      );
-    }
-  }
-
-  const session = getActiveGatherSession(state);
-  const thisNodeIsActive = session?.amenityId === amenity.id;
+  // The recipe can gate things too (e.g. Woodcutting 30 for Willow),
+  // separately from the amenity's own unlock.
+  const recipeLock = recipe.unlockCondition
+    ? describeUnmetCondition(recipe.unlockCondition, state, CONDITION_LABELS)
+    : null;
+  if (recipeLock) return <LockedCard icon={icon} title={amenity.name} reason={recipeLock} />;
 
   if (amenity.gatherMode === "batch") {
-    const gather = (quantity: number) => confirmAndStartCraftJob(engine, recipe, quantity);
-    const actions = (
-      <>
-        <button onClick={() => gather(1)} style={{ textAlign: "left" }}>
-          {amenity.actionLabel} x1
-        </button>
-        <button onClick={() => gather(5)} style={{ textAlign: "left" }}>
-          {amenity.actionLabel} x5
-        </button>
-        <button onClick={() => gather(25)} style={{ textAlign: "left" }}>
-          {amenity.actionLabel} x25
-        </button>
-      </>
-    );
     return (
-      <div>
-        <div
-          onClick={() => {
-            setQuickMenuPos(null);
-            setPanelOpen((open) => !open);
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            setPanelOpen(false);
-            setQuickMenuPos({ x: e.clientX, y: e.clientY });
-          }}
-          style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 8, cursor: "pointer" }}
-        >
-          {AMENITY_ICON[amenity.kind]} {amenity.name}
-        </div>
-        {panelOpen && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4 }}>
-            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 4px" }}>{amenity.description}</p>
-            {actions}
-          </div>
-        )}
-        {quickMenuPos && (
-          <div
-            ref={quickMenuRef}
-            style={{
-              position: "fixed",
-              left: quickMenuPos.x,
-              top: quickMenuPos.y,
-              background: "var(--surface-raised)",
-              border: "1px solid var(--text-faint)",
-              borderRadius: 4,
-              padding: 4,
-              boxShadow: "0 2px 8px var(--shadow)",
-              zIndex: 1000,
-              display: "flex",
-              flexDirection: "column",
-              gap: 2,
-            }}
-          >
-            {actions}
-          </div>
-        )}
-      </div>
+      <ActionCard
+        icon={icon}
+        title={amenity.name}
+        description={amenity.description}
+        actions={BATCH_SIZES.map((n) => ({
+          label: `${amenity.actionLabel} x${n}`,
+          onClick: () => confirmAndStartCraftJob(engine, recipe, n),
+        }))}
+      />
     );
   }
 
-  // gatherMode === "session" — open-ended, Start/Stop/Tend.
-  const maxDurationMs = amenity.maxDurationMs;
-  const requiresKeepAliveEveryMs = amenity.requiresKeepAliveEveryMs;
+  // gatherMode === "session" — open-ended, Start / Tend / Stop.
+  const session = getActiveGatherSession(state);
+  const active = session?.amenityId === amenity.id ? session : null;
 
-  const start = () =>
-    confirmAndStartGatherSession(engine, amenity.id, recipe, { maxDurationMs, requiresKeepAliveEveryMs });
-
-  let statusLine: string | null = null;
-  let keepAliveDueSoon = false;
-  if (thisNodeIsActive && session) {
+  let meta: string | undefined;
+  if (active) {
     const now = Date.now();
-    const capEndsAt = session.startedAt + session.maxDurationMs;
-    const remainingMs = Math.max(0, capEndsAt - now);
-    statusLine = `Gathered ${session.quantityGathered.toLocaleString()} so far — session ends in ${Math.ceil(
-      remainingMs / 60000
-    )}m`;
-    if (session.requiresKeepAliveEveryMs !== undefined && session.lastKeepAliveAt !== undefined) {
-      const keepAliveRemainingMs = Math.max(
-        0,
-        session.lastKeepAliveAt + session.requiresKeepAliveEveryMs - now
-      );
-      keepAliveDueSoon = keepAliveRemainingMs < 15 * 60 * 1000; // under 15 min left
-      statusLine += ` — needs attention in ${Math.ceil(keepAliveRemainingMs / 60000)}m`;
+    const endsIn = Math.max(0, active.startedAt + active.maxDurationMs - now);
+    meta = `${active.quantityGathered.toLocaleString()} gathered · ends in ${formatCountdown(endsIn)}`;
+    if (active.requiresKeepAliveEveryMs !== undefined && active.lastKeepAliveAt !== undefined) {
+      const tendIn = Math.max(0, active.lastKeepAliveAt + active.requiresKeepAliveEveryMs - now);
+      meta += ` · tend within ${formatCountdown(tendIn)}`;
     }
   }
 
   return (
-    <div>
-      <div
-        onClick={() => setPanelOpen((open) => !open)}
-        style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 8, cursor: "pointer" }}
-      >
-        {AMENITY_ICON[amenity.kind]} {amenity.name}
-        {thisNodeIsActive && " (gathering...)"}
-      </div>
-
-      {statusLine && (
-        <p style={{ fontSize: 12, color: keepAliveDueSoon ? "var(--danger)" : "var(--text-muted)", margin: "2px 0 0" }}>
-          {statusLine}
-        </p>
-      )}
-
-      {panelOpen && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
-          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 2px" }}>{amenity.description}</p>
-          {thisNodeIsActive ? (
-            <>
-              {requiresKeepAliveEveryMs !== undefined && (
-                <button
-                  onClick={() => {
-                    engine.keepGatherSessionAlive();
-                    actions.refresh();
-                  }}
-                  style={{ textAlign: "left" }}
-                >
-                  Tend to it
-                </button>
-              )}
-              <button onClick={() => engine.stopGatherSession()} style={{ textAlign: "left" }}>
-                Stop
-              </button>
-            </>
-          ) : (
-            <button onClick={start} disabled={!!session} style={{ textAlign: "left" }}>
-              {amenity.actionLabel}
-            </button>
-          )}
-        </div>
-      )}
-    </div>
+    <ActionCard
+      className={active ? "is-active" : ""}
+      icon={icon}
+      title={amenity.name}
+      meta={meta}
+      description={amenity.description}
+      actions={
+        active
+          ? [
+              ...(active.requiresKeepAliveEveryMs !== undefined
+                ? [
+                    {
+                      label: "Tend to it",
+                      variant: "primary" as const,
+                      onClick: () => {
+                        engine.keepGatherSessionAlive();
+                        actions.refresh();
+                      },
+                    },
+                  ]
+                : []),
+              { label: "Stop", onClick: () => engine.stopGatherSession() },
+            ]
+          : [
+              {
+                label: amenity.actionLabel,
+                variant: "primary" as const,
+                onClick: () =>
+                  confirmAndStartGatherSession(engine, amenity.id, recipe, {
+                    maxDurationMs: amenity.maxDurationMs,
+                    requiresKeepAliveEveryMs: amenity.requiresKeepAliveEveryMs,
+                  }),
+              },
+            ]
+      }
+    />
   );
 }

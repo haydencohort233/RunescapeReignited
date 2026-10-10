@@ -1,5 +1,5 @@
 import type { GameEngine } from "./gameEngine";
-import type { CraftingRecipe, MapLocation } from "./types";
+import type { CraftingRecipe, EnemyDefinition, MapLocation } from "./types";
 import { describeAction } from "./activeAction";
 
 /**
@@ -45,4 +45,14 @@ export function confirmAndStartGatherSession(
 export function confirmAndStartTravel(engine: GameEngine, from: MapLocation, to: MapLocation): boolean {
   if (!confirmStopCurrentAction(engine, `traveling to ${to.name}`)) return false;
   return engine.startTravel(from, to);
+}
+
+export function confirmAndStartCombat(
+  engine: GameEngine,
+  enemy: EnemyDefinition,
+  equipmentBonus: Parameters<GameEngine["startCombat"]>[1],
+  opts?: Parameters<GameEngine["startCombat"]>[2]
+): boolean {
+  if (!confirmStopCurrentAction(engine, `fighting ${enemy.name}`)) return false;
+  return engine.startCombat(enemy, equipmentBonus, opts);
 }

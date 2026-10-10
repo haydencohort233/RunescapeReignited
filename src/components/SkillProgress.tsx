@@ -12,29 +12,23 @@ export default function SkillProgress({ skillId, label }: { skillId: string; lab
   const progress = getLevelProgress(xp);
 
   return (
-    <div style={{ fontSize: 13, maxWidth: 220 }}>
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+    <div className="stack-sm text-small" style={{ maxWidth: 260 }}>
+      <div className="row row-between">
+        <span className="row" style={{ gap: 4 }}>
           <GameImage
             src={skillIconPath(skillId)}
             alt={label}
             style={{ width: 20, height: 20 }}
             fallback={<span style={{ width: 20, height: 20, display: "inline-block" }} />}
           />
-          {label}: level {progress.level}
+          <span>
+            {label}: level {progress.level}
+          </span>
         </span>
-        {progress.level < MAX_LEVEL && (
-          <span style={{ color: "var(--text-muted)" }}>{Math.round(progress.percent * 100)}%</span>
-        )}
+        {progress.level < MAX_LEVEL && <span className="text-faint">{Math.round(progress.percent * 100)}%</span>}
       </div>
-      <div style={{ background: "var(--track)", borderRadius: 4, height: 6, overflow: "hidden" }}>
-        <div
-          style={{
-            width: `${progress.percent * 100}%`,
-            background: "var(--good)",
-            height: "100%",
-          }}
-        />
+      <div className="progress-track">
+        <div className="progress-fill" style={{ width: `${progress.percent * 100}%` }} />
       </div>
     </div>
   );

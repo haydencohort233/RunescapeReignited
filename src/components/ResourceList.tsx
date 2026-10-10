@@ -1,34 +1,34 @@
 import { useGame } from "../engine/GameEngineContext";
-import { getResourceMeta, type ResourceCategory } from "../content/resources";
+import { getResourceMeta } from "../content/resources";
+import { formatNumber } from "../engine/format";
+import { EmptyState } from "./ui/Page";
 
-/** Renders every resource of a given category currently tracked by the
- *  engine — dynamic, not a hardcoded per-resource list, so a new resource
- *  (like coal was) shows up automatically the moment the engine tracks it. */
-export default function ResourceList({ category }: { category: ResourceCategory }) {
+/** Currencies and materials the player holds, with production rates.
+ *  Built from whatever the engine tracks, so new resources appear on their
+ *  own. Finished goods and gear live in the Inventory tab. */
+export default function ResourceList() {
   const { engine, state } = useGame();
 
-  const entries = Object.entries(state.resources).filter(
-    ([id]) => getResourceMeta(id).category === category
-  );
+  const entries = Object.entries(state.resources)
+    .map(([id, resource]) => ({ id, resource, meta: getResourceMeta(id), rate: engine.getEffectiveRatePerSecond(id) }))
+    .filter(({ meta, resource, rate }) => meta.category !== "item" && (resource.amount >= 1 || rate > 0))
+    .sort((a, b) => (a.meta.category === b.meta.category ? 0 : a.meta.category === "currency" ? -1 : 1));
 
-  if (entries.length === 0) {
-    return <p style={{ fontSize: 13, color: "var(--text-faint)" }}>Nothing here yet.</p>;
-  }
+  if (entries.length === 0) return <EmptyState>No resources yet. Buy a building or gather something to start.</EmptyState>;
 
   return (
-    <div>
-      {entries.map(([id, resource]) => {
-        const meta = getResourceMeta(id);
-        const rate = engine.getEffectiveRatePerSecond(id);
-        return (
-          <div key={id}>
-            {meta.name}: {Math.floor(resource.amount).toLocaleString()}
-            {rate !== 0 && (
-              <span style={{ color: "var(--text-muted)", fontSize: 13 }}> ({rate.toFixed(2)}/s)</span>
-            )}
+    <div className="card">
+      <div>
+        {entries.map(({ id, resource, meta, rate }) => (
+          <div key={id} className="data-row">
+            <span>{meta.name}</span>
+            <span>
+              {formatNumber(resource.amount)}
+              {rate !== 0 && <span className="text-muted text-small"> (+{rate.toFixed(2)}/s)</span>}
+            </span>
           </div>
-        );
-      })}
+        ))}
+      </div>
     </div>
   );
 }

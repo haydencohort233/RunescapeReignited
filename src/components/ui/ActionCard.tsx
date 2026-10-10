@@ -85,8 +85,8 @@ export function ActionCard({
         }}
       >
         <span className="card-title">
-          {icon}
-          {title}
+          {icon && <span aria-hidden="true">{icon}</span>}
+          <span>{title}</span>
         </span>
         {meta !== undefined && <span className="card-meta">{meta}</span>}
       </button>
@@ -115,8 +115,8 @@ export function LockedCard({ icon, title, reason }: { icon?: ReactNode; title: R
     <div className="card is-locked">
       <div className="card-header">
         <span className="card-title text-faint">
-          {icon}
-          {title}
+          {icon && <span aria-hidden="true">{icon}</span>}
+          <span>{title}</span>
         </span>
         <span className="card-meta">🔒 Locked</span>
       </div>

@@ -32,10 +32,10 @@ export default function HpBar({
   const useArt = isImageLoaded(HP_BAR_BACKGROUND) && isImageLoaded(fillSrc);
 
   return (
-    <div style={{ fontSize: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
+    <div className="stack-sm text-small">
+      <div className="row row-between">
         <span>{label}</span>
-        <span>
+        <span className="text-muted">
           {Math.ceil(current)}/{max} HP
         </span>
       </div>
@@ -67,8 +67,8 @@ export default function HpBar({
           </div>
         </div>
       ) : (
-        <div style={{ background: "var(--track)", borderRadius: 4, height: 8, overflow: "hidden" }}>
-          <div style={{ width: `${percent}%`, background: fallbackColor, height: "100%" }} />
+        <div className="progress-track">
+          <div className="progress-fill" style={{ width: `${percent}%`, background: fallbackColor }} />
         </div>
       )}
     </div>

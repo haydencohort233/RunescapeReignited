@@ -162,6 +162,16 @@ export const AMENITY_CATALOG: Amenity[] = [
   },
 ];
 
+/** One icon per amenity kind, used wherever amenities are listed. */
+export const AMENITY_ICON: Record<Amenity["kind"], string> = {
+  shop: "🛒",
+  resourceNode: "🌾",
+  craftingStation: "🔥",
+  dungeonEntrance: "🕳️",
+  jobBoard: "📋",
+  combatEncounter: "⚔️",
+};
+
 export function getAmenitiesAtLocation(locationId: string): Amenity[] {
   return AMENITY_CATALOG.filter((a) => a.locationId === locationId);
 }

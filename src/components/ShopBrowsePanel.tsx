@@ -1,180 +1,80 @@
-import { useEffect, useRef, useState } from "react";
 import { useGame } from "../engine/GameEngineContext";
 import type { ShopDefinition, ShopItem } from "../content/shops";
 import { getItemDef, ITEM_CATALOG } from "../content/items";
+import { formatAmounts } from "../content/display";
 import { formatNumber } from "../engine/format";
 import ItemIcon from "./ItemIcon";
+import { ActionCard } from "./ui/ActionCard";
+import { quantityActions } from "./ui/quantity";
+import { EmptyState, Section } from "./ui/Page";
 
-function ShopItemBuyActions({ shop, shopItem }: { shop: ShopDefinition; shopItem: ShopItem }) {
+function ShopItemCard({ shop, shopItem }: { shop: ShopDefinition; shopItem: ShopItem }) {
   const { engine } = useGame();
   const def = getItemDef(shopItem.itemDefId);
   if (!def) return null;
-
-  const buy = (quantity: number) => {
-    if (quantity <= 0) return;
-    engine.buyFromShop(shop.locationId, def.id, shopItem.price, quantity);
-  };
-
-  const maxAffordable = engine.getMaxAffordableQuantity(shopItem.price);
-
+  const affordable = engine.getMaxAffordableQuantity(shopItem.price);
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <button onClick={() => buy(1)} style={{ textAlign: "left" }}>
-        Buy 1
-      </button>
-      <button onClick={() => buy(5)} style={{ textAlign: "left" }}>
-        Buy 5
-      </button>
-      <button onClick={() => buy(10)} style={{ textAlign: "left" }}>
-        Buy 10
-      </button>
-      <button onClick={() => buy(maxAffordable)} disabled={maxAffordable === 0} style={{ textAlign: "left" }}>
-        Buy All ({maxAffordable})
-      </button>
-    </div>
+    <ActionCard
+      icon={<ItemIcon def={def} size={24} />}
+      title={def.name}
+      meta={formatAmounts(shopItem.price)}
+      description={def.description}
+      actions={quantityActions(
+        "Buy",
+        affordable,
+        (q) => engine.buyFromShop(shop.locationId, def.id, shopItem.price, q),
+        `Not enough to pay ${formatAmounts(shopItem.price)} each`
+      )}
+    />
   );
 }
 
-/** Everything the player could sell here: owned (and not worn) items
- *  that have a value. */
+/** Everything the player could sell here: owned (and not worn) items with
+ *  a value. */
 function ShopSellList({ shop }: { shop: ShopDefinition }) {
   const { engine, state } = useGame();
   // Only count what's actually owned; calling getOwnedCount for every item
   // in the catalog would scan the inventory once per catalog entry.
   const ownedIds = new Set(Object.values(state.inventory).map((i) => i.itemDefId));
   for (const [id, r] of Object.entries(state.resources)) if (r.amount >= 1) ownedIds.add(id);
-  const sellable = ITEM_CATALOG.filter((def) => ownedIds.has(def.id)).map((def) => ({
-    def,
-    owned: Math.floor(engine.getOwnedCount(def.id)),
-    unitPrice: engine.getShopSellPrice(def.id),
-  })).filter((e) => e.owned > 0 && e.unitPrice > 0);
+  const sellable = ITEM_CATALOG.filter((def) => ownedIds.has(def.id))
+    .map((def) => ({ def, owned: Math.floor(engine.getOwnedCount(def.id)), unitPrice: engine.getShopSellPrice(def.id) }))
+    .filter((e) => e.owned > 0 && e.unitPrice > 0);
 
-  if (sellable.length === 0) {
-    return <p style={{ fontSize: 13, color: "var(--text-faint)", margin: 0 }}>You have nothing this shop will buy.</p>;
-  }
+  if (sellable.length === 0) return <EmptyState>You have nothing this shop will buy.</EmptyState>;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div className="stack-sm">
       {sellable.map(({ def, owned, unitPrice }) => (
-        <div
+        <ActionCard
           key={def.id}
-          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}
-        >
-          <span>
-            <ItemIcon def={def} size={24} /> {def.name} x{formatNumber(owned)}
-            <span style={{ fontSize: 12, color: "var(--text-muted)" }}> ({formatNumber(unitPrice)} GP each)</span>
-          </span>
-          <span style={{ display: "flex", gap: 4 }}>
-            <button onClick={() => engine.sellToShop(shop.locationId, def.id, 1)}>Sell 1</button>
-            <button onClick={() => engine.sellToShop(shop.locationId, def.id, owned)}>Sell All</button>
-          </span>
-        </div>
+          icon={<ItemIcon def={def} size={24} />}
+          title={`${def.name} x${formatNumber(owned)}`}
+          meta={`${formatNumber(unitPrice)} GP each`}
+          actions={quantityActions("Sell", owned, (q) => engine.sellToShop(shop.locationId, def.id, q), "You don't have that many")}
+        />
       ))}
     </div>
   );
 }
 
-export default function ShopBrowsePanel({ shop, onClose }: { shop: ShopDefinition; onClose: () => void }) {
-  const [openPanelId, setOpenPanelId] = useState<string | null>(null);
-  const [quickMenu, setQuickMenu] = useState<{ itemDefId: string; x: number; y: number } | null>(null);
-  const quickMenuRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!quickMenu) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (quickMenuRef.current && !quickMenuRef.current.contains(e.target as Node)) {
-        setQuickMenu(null);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [quickMenu]);
-
+/** A shop's stock and (if it buys) the player's sellable items. Shown
+ *  inside the shop's card on the Home tab. */
+export default function ShopBrowsePanel({ shop }: { shop: ShopDefinition }) {
   return (
-    <div style={{ border: "1px solid var(--border-subtle)", borderRadius: 6, padding: 10, marginTop: 8 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <strong>{shop.title}</strong>
-        <button onClick={onClose}>Close Shop</button>
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
-        {shop.items.map((shopItem) => {
-          const def = getItemDef(shopItem.itemDefId);
-          if (!def) return null;
-          const priceText = shopItem.price
-            .map((p) => `${formatNumber(p.amount)} ${p.resource}`)
-            .join(", ");
-
-          return (
-            <div key={shopItem.itemDefId}>
-              <div
-                onClick={() => {
-                  setQuickMenu(null);
-                  setOpenPanelId(openPanelId === shopItem.itemDefId ? null : shopItem.itemDefId);
-                }}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setOpenPanelId(null);
-                  setQuickMenu({ itemDefId: shopItem.itemDefId, x: e.clientX, y: e.clientY });
-                }}
-                style={{
-                  border: "1px solid var(--border)",
-                  borderRadius: 6,
-                  padding: 8,
-                  cursor: "pointer",
-                  display: "flex",
-                  justifyContent: "space-between",
-                }}
-              >
-                <span>
-                  <ItemIcon def={def} size={24} /> {def.name}
-                </span>
-                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>{priceText}</span>
-              </div>
-
-              {openPanelId === shopItem.itemDefId && (
-                <div style={{ border: "1px solid var(--border-subtle)", borderRadius: 6, padding: 8, marginTop: 2 }}>
-                  <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 0 }}>{def.description}</p>
-                  <ShopItemBuyActions shop={shop} shopItem={shopItem} />
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {shop.buysItems && (
-        <div style={{ marginTop: 12 }}>
-          <strong style={{ fontSize: 14 }}>Sell</strong>
-          <div style={{ marginTop: 6 }}>
-            <ShopSellList shop={shop} />
-          </div>
+    <div className="stack">
+      <Section title="Buy">
+        <div className="stack-sm">
+          {shop.items.map((shopItem) => (
+            <ShopItemCard key={shopItem.itemDefId} shop={shop} shopItem={shopItem} />
+          ))}
         </div>
+      </Section>
+      {shop.buysItems && (
+        <Section title="Sell">
+          <ShopSellList shop={shop} />
+        </Section>
       )}
-
-      {quickMenu &&
-        (() => {
-          const shopItem = shop.items.find((i) => i.itemDefId === quickMenu.itemDefId);
-          if (!shopItem) return null;
-          return (
-            <div
-              ref={quickMenuRef}
-              style={{
-                position: "fixed",
-                left: quickMenu.x,
-                top: quickMenu.y,
-                background: "var(--surface-raised)",
-                border: "1px solid var(--text-faint)",
-                borderRadius: 4,
-                padding: 4,
-                boxShadow: "0 2px 8px var(--shadow)",
-                zIndex: 1000,
-              }}
-            >
-              <ShopItemBuyActions shop={shop} shopItem={shopItem} />
-            </div>
-          );
-        })()}
     </div>
   );
 }

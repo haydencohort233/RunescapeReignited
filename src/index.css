@@ -551,3 +551,55 @@ input[type="checkbox"] {
   padding: 0 6px;
   line-height: 1.2;
 }
+
+/* ── Combat ───────────────────────────────────────────────────────────── */
+
+.combat-portrait {
+  display: flex;
+  justify-content: center;
+}
+
+.combat-portrait-fallback {
+  width: 96px;
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+}
+
+.splat-anchor {
+  position: relative;
+}
+
+.combat-log {
+  display: flex;
+  flex-direction: column-reverse;
+  max-height: 140px;
+  overflow-y: auto;
+  padding: 4px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  font: 11px/1.5 var(--mono);
+}
+
+.combat-log-row {
+  display: flex;
+  gap: 8px;
+}
+
+.combat-log-row > :first-child {
+  width: 28px;
+  font-weight: 700;
+}
+
+@keyframes hitsplatFloat {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -24px);
+  }
+}
