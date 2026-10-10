@@ -4,6 +4,7 @@ import { useGame } from "./engine/GameEngineContext";
 import NavBar, { type View } from "./components/NavBar";
 import HomeView from "./components/HomeView";
 import MapView from "./components/MapView";
+import QuestsPanel from "./components/QuestsPanel";
 import BuildingsPanel from "./components/BuildingsPanel";
 import SkillsPanel from "./components/SkillsPanel";
 import InventoryPanel from "./components/InventoryPanel";
@@ -54,6 +55,7 @@ function AppContent() {
       />
       {activeView === "home" && <HomeView />}
       {activeView === "map" && <MapView />}
+      {activeView === "quests" && <QuestsPanel />}
       {activeView === "buildings" && <BuildingsPanel />}
       {activeView === "skills" && <SkillsPanel />}
       {activeView === "inventory" && <InventoryPanel />}

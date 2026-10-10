@@ -1,6 +1,7 @@
 export type View =
   | "home"
   | "map"
+  | "quests"
   | "buildings"
   | "skills"
   | "inventory"
@@ -12,6 +13,7 @@ export type View =
 const TABS: { id: View; label: string }[] = [
   { id: "home", label: "Home" },
   { id: "map", label: "Map" },
+  { id: "quests", label: "Quests" },
   { id: "buildings", label: "Buildings" },
   { id: "skills", label: "Skills" },
   { id: "inventory", label: "Inventory" },

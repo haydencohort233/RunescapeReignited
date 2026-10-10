@@ -48,6 +48,45 @@ export interface BuildingDefinition {
 export interface GameContent {
   buildings: BuildingDefinition[];
   items: ItemDefinition[];
+  quests: QuestDefinition[];
+}
+
+/**
+ * One step of a quest. A stage without `consumes` completes on its own as
+ * soon as its objective is met; a stage with `consumes` is a delivery the
+ * player hands over explicitly (advanceQuest), so items are never taken
+ * without them asking.
+ */
+export interface QuestStage {
+  description: string;
+  /** Counters (statisticAtLeast etc.) count from when the stage began. */
+  objective: UnlockCondition;
+  consumes?: RecipeInput[];
+}
+
+export interface QuestDefinition {
+  id: string;
+  name: string;
+  description: string;
+  /** Gates starting the quest. Omit for quests available from the start. */
+  startCondition?: UnlockCondition;
+  stages: QuestStage[];
+  reward?: {
+    gp?: number;
+    items?: { itemDefId: string; quantity: number }[];
+    /** skillId -> XP. */
+    xp?: Record<string, number>;
+    /** Flags set on completion — how a quest unlocks locations, buildings,
+     *  jobs or other quests. */
+    setFlags?: string[];
+  };
+}
+
+/** Saved per started quest. `stage` === stages.length means complete. */
+export interface QuestProgress {
+  stage: number;
+  /** Counter snapshots for the current stage's objective. */
+  baselines: Record<string, number>;
 }
 
 export type ModifierType = "multiplicative" | "additive";
@@ -265,6 +304,8 @@ export interface GameState {
    *  engine clamps to [0, maxHp] whenever it mutates this. */
   currentHp: number;
   jobs: JobBoardState;
+  /** questId -> progress, for quests the player has started. */
+  quests: Record<string, QuestProgress>;
   /** Where the player currently is on the world map — a MapLocation id. */
   currentLocationId: string;
   /** Counters — building purchases, resource spend, travel time, craft
