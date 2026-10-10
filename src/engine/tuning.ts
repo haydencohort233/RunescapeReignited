@@ -11,6 +11,14 @@ export const BUILDING_SELL_REFUND_FRACTION = 0.5;
 /** Shops pay this fraction of an item's value when you sell to them. */
 export const SHOP_SELL_PRICE_FRACTION = 0.4;
 
+/** With "keep fighting" on, the next enemy appears this long after a kill. */
+export const ENEMY_RESPAWN_MS = 2400;
+
+/** Auto-eat bites when HP drops below this fraction of max. Repeat fights
+ *  also stop here when there's no food left, rather than fighting on
+ *  toward a death while the player is away. */
+export const AUTO_EAT_BELOW_HP_FRACTION = 0.5;
+
 /** Eating during a fight pushes your next attack back by this much
  *  (OSRS: 3 ticks). Food is a tradeoff, not a free heal. */
 export const EAT_ATTACK_DELAY_MS = 1800;

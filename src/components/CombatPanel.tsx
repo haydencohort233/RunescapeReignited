@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useGame } from "../engine/GameEngineContext";
 import { getEnemy } from "../content/enemies";
 import { getActiveCombat } from "../engine/activeAction";
+import { ITEM_CATALOG } from "../content/items";
 import { getEquipmentBonuses } from "../content/combatStats";
 import { enemyImagePath } from "../content/assetPaths";
 import HpBar from "./HpBar";
@@ -29,6 +30,8 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
   const { engine, state } = useGame();
   const [, forceTick] = useState(0);
   const [splats, setSplats] = useState<ActiveSplat[]>([]);
+  const [keepFighting, setKeepFighting] = useState(false);
+  const [autoEatItemId, setAutoEatItemId] = useState("");
   const lastLogLengthRef = useRef(0);
   const enemy = getEnemy(enemyId);
 
@@ -93,6 +96,7 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
     : 0;
 
   if (!fightingThisEnemy) {
+    const foods = ITEM_CATALOG.filter((def) => def.healAmount && engine.getOwnedCount(def.id) >= 1);
     return (
       <div style={{ border: "1px solid #ccc", borderRadius: 6, padding: 8 }}>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -100,10 +104,34 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
           {enemy.isBoss && <span style={{ fontSize: 11, color: "#b8860b" }}>Boss</span>}
         </div>
         <p style={{ fontSize: 12, color: "#666", margin: "4px 0" }}>Max HP: {enemy.maxHp}</p>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", fontSize: 12, marginBottom: 6 }}>
+          <label>
+            <input
+              type="checkbox"
+              checked={keepFighting}
+              onChange={(e) => setKeepFighting(e.target.checked)}
+            />{" "}
+            Keep fighting
+          </label>
+          <label>
+            Auto-eat{" "}
+            <select value={autoEatItemId} onChange={(e) => setAutoEatItemId(e.target.value)}>
+              <option value="">None</option>
+              {foods.map((def) => (
+                <option key={def.id} value={def.id}>
+                  {def.name} (x{Math.floor(engine.getOwnedCount(def.id))})
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <button
           onClick={() => {
             const bonuses = getEquipmentBonuses(state);
-            engine.startCombat(enemy, bonuses);
+            engine.startCombat(enemy, bonuses, {
+              autoRepeat: keepFighting,
+              autoEatItemId: autoEatItemId || undefined,
+            });
           }}
         >
           Fight
@@ -129,6 +157,14 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
       `}</style>
 
       <strong>⚔️ Fighting {session.enemyName}</strong>
+      {session.autoRepeat && (
+        <span style={{ fontSize: 12, color: "#666" }}>
+          {" "}
+          — {session.kills} killed this trip
+          {session.autoEatItemId &&
+            `, auto-eating ${ITEM_CATALOG.find((d) => d.id === session.autoEatItemId)?.name ?? session.autoEatItemId}`}
+        </span>
+      )}
 
       <div style={{ display: "flex", justifyContent: "center", margin: "6px 0" }}>
         <GameImage

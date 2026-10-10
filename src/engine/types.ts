@@ -516,6 +516,15 @@ export interface ActiveCombatSession {
   enemyStartedAt: number;
   playerAttacksResolved: number;
   enemyAttacksResolved: number;
+  /** "Keep fighting": after a kill, the same enemy respawns and the fight
+   *  continues — offline too — until death, flee, or running low on HP
+   *  with no food. */
+  autoRepeat: boolean;
+  /** Food eaten automatically when HP drops below AUTO_EAT_BELOW_HP_FRACTION.
+   *  Cleared when it runs out. */
+  autoEatItemId?: string;
+  /** Kills during this session (more than one with autoRepeat). */
+  kills: number;
   /** Last N events (most recent last) — "so I can tell what's going on".
    *  Capped and cleared with the rest of the session when the fight ends;
    *  this is live-fight visibility, not a persistent combat history. */

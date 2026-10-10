@@ -25,6 +25,8 @@ import { isUnlocked, captureBaselines, offsetByBaselines } from "./unlockConditi
 import { getDailyPeriodNumber } from "./time";
 import { formatDuration } from "./format";
 import {
+  AUTO_EAT_BELOW_HP_FRACTION,
+  ENEMY_RESPAWN_MS,
   BUILDING_SELL_REFUND_FRACTION,
   DEFAULT_COST_SCALING_FACTOR,
   EAT_ATTACK_DELAY_MS,
@@ -41,7 +43,7 @@ import {
   getActiveTravel,
 } from "./activeAction";
 
-const SCHEMA_VERSION = 18;
+const SCHEMA_VERSION = 19;
 
 /** OSRS-authentic: Hitpoints starts pre-leveled at 10 (unlike every other
  *  skill, which starts at 1) — this is the XP threshold for level 10. */
@@ -324,6 +326,13 @@ const MIGRATIONS: Record<number, (old: any, now: number) => any> = {
     const { acceptedJobs: _acceptedJobs, ...rest } = old;
     return { ...rest, statistics, jobs: { accepted, lastCompletedPeriod, completedOnce: {} } };
   },
+  // v18 -> v19: combat sessions gained autoRepeat / autoEatItemId / kills.
+  // A fight in progress from before continues as a single fight.
+  18: (old) => {
+    const action = old.activeAction;
+    if (action?.kind !== "combat") return old;
+    return { ...old, activeAction: { autoRepeat: false, kills: 0, ...action } };
+  },
 };
 
 /**
@@ -350,6 +359,10 @@ export class GameEngine {
   readonly content: GameContent;
   private readonly buildingsById: Map<string, BuildingDefinition>;
   private readonly itemsById: Map<string, ItemDefinition>;
+  /** Non-null only while resolveElapsed() is replaying an away period.
+   *  Combat outcomes collect here and go into the one "while you were
+   *  away" summary instead of a toast per kill. */
+  private catchUp: { kills: Record<string, number>; loot: Record<string, number>; eaten: number } | null = null;
 
   constructor(
     content: GameContent,
@@ -1066,6 +1079,7 @@ export class GameEngine {
     }
 
     const wasOffline = elapsedMs > MIN_AWAY_MS_FOR_SUMMARY;
+    this.catchUp = wasOffline ? { kills: {}, loot: {}, eaten: 0 } : null;
     const cappedMs = Math.min(elapsedMs, this.state.offlineCapMs);
     const effectiveNow = from + cappedMs;
 
@@ -1142,7 +1156,8 @@ export class GameEngine {
       // Folded into one summary line instead of one toast per level — this
       // is what actually fixes the spam, whether the burst came from a true
       // offline gap or many rapid ticks in a backgrounded tab.
-      if (levelUps.length > 0 || Object.keys(gains).length > 0) {
+      const fought = this.catchUp && Object.keys(this.catchUp.kills).length > 0;
+      if (levelUps.length > 0 || Object.keys(gains).length > 0 || fought) {
         this.emitOfflineSummary(elapsedMs, gains, levelUps);
       }
     } else {
@@ -1161,6 +1176,7 @@ export class GameEngine {
     for (const modifier of expired) {
       this.notifications.push("status", `${modifier.label} has worn off.`);
     }
+    this.catchUp = null;
   }
 
   private shiftActionAnchors(ms: number): void {
@@ -1196,6 +1212,16 @@ export class GameEngine {
       const gained = levelUp.to - levelUp.from;
       const levelWord = gained === 1 ? "level" : "levels";
       parts.push(`${gained} ${capitalize(levelUp.skillId)} ${levelWord}`);
+    }
+
+    if (this.catchUp) {
+      for (const [enemyName, kills] of Object.entries(this.catchUp.kills)) {
+        parts.push(`${kills} ${enemyName} ${kills === 1 ? "kill" : "kills"}`);
+      }
+      for (const [id, amount] of Object.entries(this.catchUp.loot)) {
+        parts.push(`${amount.toLocaleString()} ${this.nameOf(id)}`);
+      }
+      if (this.catchUp.eaten > 0) parts.push(`(ate ${this.catchUp.eaten} food)`);
     }
 
     if (parts.length === 0) return;
@@ -1324,7 +1350,8 @@ export class GameEngine {
     if (session) session.playerStartedAt += EAT_ATTACK_DELAY_MS;
 
     this.incrementStatistic(`eaten:${itemDefId}`, 1);
-    this.notifications.push("status", `You eat the ${def.name}. It heals ${healed} HP.`);
+    if (this.catchUp) this.catchUp.eaten++;
+    else this.notifications.push("status", `You eat the ${def.name}. It heals ${healed} HP.`);
     return true;
   }
 
@@ -1477,7 +1504,8 @@ export class GameEngine {
       defence: number;
       attackSpeedMs?: number;
       weaponType?: WeaponType;
-    }
+    },
+    opts?: { autoRepeat?: boolean; autoEatItemId?: string }
   ): boolean {
     if (!this.ensureIdle()) return false;
     if (this.getCurrentHp() <= 0) {
@@ -1515,6 +1543,9 @@ export class GameEngine {
       enemyStartedAt: now,
       playerAttacksResolved: 0,
       enemyAttacksResolved: 0,
+      autoRepeat: opts?.autoRepeat ?? false,
+      autoEatItemId: opts?.autoEatItemId,
+      kills: 0,
       log: [],
     };
     this.notifications.push("status", `Engaged ${enemy.name}!`);
@@ -1552,11 +1583,14 @@ export class GameEngine {
   attackNow(): boolean {
     const session = this.combatSession;
     if (!session) return false;
-    this.resolvePlayerAttack(session);
-    if (this.combatSession) {
-      const updated = this.combatSession;
-      updated.playerAttacksResolved += 1;
-      updated.playerStartedAt = this.clock() - updated.playerAttacksResolved * updated.playerAttackSpeedMs;
+    const now = this.clock();
+    const killsBefore = session.kills;
+    this.resolvePlayerAttack(session, now);
+    // A kill with autoRepeat has already re-anchored both timers for the
+    // respawn; don't override that.
+    if (this.combatSession && session.kills === killsBefore) {
+      session.playerAttacksResolved += 1;
+      session.playerStartedAt = now - session.playerAttacksResolved * session.playerAttackSpeedMs;
     }
     return true;
   }
@@ -1576,7 +1610,7 @@ export class GameEngine {
 
   /** One player attack. May end the session (victory) — callers must
    *  re-check this.combatSession afterward. */
-  private resolvePlayerAttack(session: ActiveCombatSession): void {
+  private resolvePlayerAttack(session: ActiveCombatSession, at: number): void {
     const accuracy = { level: this.getSkillLevel("attack"), bonus: session.playerAttackBonus };
     const power = { level: this.getSkillLevel("strength"), bonus: session.playerStrengthBonus };
     const defence = { level: session.enemyDefence, bonus: session.enemyDefenceBonus };
@@ -1595,7 +1629,7 @@ export class GameEngine {
       session.enemyCurrentHp = Math.max(0, session.enemyCurrentHp - damage);
     }
     if (session.enemyCurrentHp <= 0) {
-      this.grantCombatVictory(session);
+      this.grantCombatVictory(session, at);
     }
   }
 
@@ -1613,10 +1647,12 @@ export class GameEngine {
     }
     if (this.getCurrentHp() <= 0) {
       this.endCombatDefeat(session);
+      return;
     }
+    this.maybeAutoEat(session);
   }
 
-  private grantCombatVictory(session: ActiveCombatSession): void {
+  private grantCombatVictory(session: ActiveCombatSession, at: number): void {
     // No combat-style selection UI yet, so XP just splits evenly across the
     // four skills involved — revisit once style selection exists.
     const xpEach = session.xpReward / 4;
@@ -1637,15 +1673,57 @@ export class GameEngine {
             ? drop.quantityMin + Math.floor(Math.random() * (drop.quantityMax - drop.quantityMin + 1))
             : 1;
         this.addItem(drop.id, quantity);
+        if (this.catchUp) this.catchUp.loot[drop.id] = (this.catchUp.loot[drop.id] ?? 0) + quantity;
         // <id> tags render as item icons in RichText; currencies have no
         // item definition, so they're written out plainly.
         lootMessages.push(this.itemsById.has(drop.id) ? `${quantity}x <${drop.id}>` : `${quantity} ${drop.id}`);
       }
     }
 
-    const lootText = lootMessages.length > 0 ? ` You got: ${lootMessages.join(", ")}.` : " No loot this time.";
-    this.notifications.push("reward", `Defeated ${session.enemyName}!${lootText}`);
+    session.kills++;
+    if (this.catchUp) {
+      this.catchUp.kills[session.enemyName] = (this.catchUp.kills[session.enemyName] ?? 0) + 1;
+    } else {
+      const lootText = lootMessages.length > 0 ? ` You got: ${lootMessages.join(", ")}.` : " No loot this time.";
+      const killText = session.autoRepeat ? ` (${session.kills} this trip)` : "";
+      this.notifications.push("reward", `Defeated ${session.enemyName}!${killText}${lootText}`, {
+        replaceKey: "combat-victory",
+      });
+    }
+
+    if (session.autoRepeat && this.canKeepFighting(session)) {
+      // Same enemy respawns; both timers restart after the respawn delay.
+      session.enemyCurrentHp = session.enemyMaxHp;
+      session.playerStartedAt = at + ENEMY_RESPAWN_MS;
+      session.enemyStartedAt = at + ENEMY_RESPAWN_MS;
+      session.playerAttacksResolved = 0;
+      session.enemyAttacksResolved = 0;
+      return;
+    }
+    if (session.autoRepeat) {
+      this.notifications.push("status", `Stopped fighting ${session.enemyName}: HP is low and there's no food left.`, {
+        severity: "warning",
+      });
+    }
     this.state.activeAction = null;
+  }
+
+  /** Repeat fights continue only while HP is healthy or there's food to
+   *  bring it back up — never fight on toward a death unattended. */
+  private canKeepFighting(session: ActiveCombatSession): boolean {
+    const healthy = this.getCurrentHp() >= this.getMaxHp() * AUTO_EAT_BELOW_HP_FRACTION;
+    const hasFood = !!session.autoEatItemId && this.getOwnedCount(session.autoEatItemId) >= 1;
+    return healthy || hasFood;
+  }
+
+  private maybeAutoEat(session: ActiveCombatSession): void {
+    const foodId = session.autoEatItemId;
+    if (!foodId) return;
+    if (this.getCurrentHp() >= this.getMaxHp() * AUTO_EAT_BELOW_HP_FRACTION) return;
+    if (!this.eatItem(foodId)) {
+      session.autoEatItemId = undefined;
+      this.notifications.push("status", `You've run out of ${this.nameOf(foodId)}.`, { severity: "warning" });
+    }
   }
 
   /** Death penalty: lose a percentage of GP and of each other resource
@@ -1711,15 +1789,16 @@ export class GameEngine {
       const nextEventAt = Math.min(playerNextAt, enemyNextAt);
       if (nextEventAt > effectiveNow) break;
 
+      // Count the attack before resolving it: a kill with autoRepeat
+      // resets both counters for the respawn, and must not be undone.
       if (playerNextAt <= enemyNextAt) {
-        this.resolvePlayerAttack(session);
-        session = this.combatSession;
-        if (session) session.playerAttacksResolved += 1;
+        session.playerAttacksResolved += 1;
+        this.resolvePlayerAttack(session, playerNextAt);
       } else {
+        session.enemyAttacksResolved += 1;
         this.resolveEnemyAttack(session);
-        session = this.combatSession;
-        if (session) session.enemyAttacksResolved += 1;
       }
+      session = this.combatSession;
     }
   }
 
