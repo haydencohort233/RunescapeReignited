@@ -58,3 +58,32 @@ describe("timing", () => {
     expect(g.engine.startTravel(getLocation("town")!, getLocation("lumber-camp")!)).toBe(true);
   });
 });
+
+describe("actions started on a stale tick past the offline cap", () => {
+  it("a craft started right after waking from sleep runs normally", () => {
+    const g = makeEngine();
+    g.engine.addItem("wood", 100);
+    g.setNow(g.now() + 2 * HOUR); // asleep, no ticks
+    g.engine.startCraftJob(WOODEN_BOW_RECIPE, 10);
+    g.advance(2 * SECOND);
+    expect(g.engine.getOwnedCount("wooden-bow-u")).toBe(1);
+  });
+
+  it("travel started right after waking arrives on time", () => {
+    const g = makeEngine();
+    g.setNow(g.now() + 2 * HOUR);
+    g.engine.startTravel(getLocation("town")!, getLocation("lumber-camp")!);
+    g.advance(60 * SECOND);
+    expect(g.state().currentLocationId).toBe("lumber-camp");
+  });
+});
+
+describe("production", () => {
+  it("an 'all' modifier doesn't mint stacked items", () => {
+    const g = makeEngine();
+    g.engine.addItem("bones", 5);
+    g.engine.addModifier({ id: "m", source: "buff", target: "all", type: "additive", value: 1, label: "test" });
+    g.advance(10 * SECOND);
+    expect(g.engine.getOwnedCount("bones")).toBe(5);
+  });
+});

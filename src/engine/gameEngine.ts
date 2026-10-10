@@ -113,6 +113,15 @@ export class GameEngine {
     return this.clock();
   }
 
+  /** Resolves any time that has passed since the last tick. Every player
+   *  action that sets a timing anchor or a baseline calls this first: if
+   *  the last tick is stale (a laptop waking from sleep, a throttled tab),
+   *  an action started at the real time and THEN caught up past the offline
+   *  cap would have its anchor shifted into the future and sit frozen. */
+  catchUpToNow(): void {
+    if (this.clock() !== this.state.lastTickTimestamp) this.resolveElapsed();
+  }
+
   // ── The single active action (crafting, gathering, travel, combat) ─────
 
   private get combatSession(): ActiveCombatSession | null {
@@ -380,10 +389,14 @@ export class GameEngine {
     }
 
     const gains: Record<ResourceId, number> = {};
-    const producedResources = new Set([
-      ...Object.keys(this.state.resources),
-      ...this.content.buildings.map((b) => b.resource),
-    ]);
+    // Only things something produces: building outputs, plus anything an
+    // additive modifier targets directly (a "+1 GP/s" buff with no
+    // building). Iterating every stack would also let a future modifier
+    // targeting "all" mint bones and food each second.
+    const producedResources = new Set(this.content.buildings.map((b) => b.resource));
+    for (const m of Object.values(this.state.modifiers)) {
+      if (m.type === "additive" && m.target !== "all" && !m.target.includes(":")) producedResources.add(m.target);
+    }
     for (const resourceId of producedResources) {
       const rate = this.getEffectiveRatePerSecond(resourceId);
       const gained = rate * (cappedMs / 1000);
@@ -469,6 +482,7 @@ export class GameEngine {
       case "combat":
         action.playerStartedAt += ms;
         action.enemyStartedAt += ms;
+        if (action.lastPlayerAttackAt !== undefined) action.lastPlayerAttackAt += ms;
         break;
     }
   }
@@ -826,6 +840,7 @@ export class GameEngine {
   }
 
   incrementStatistic(key: string, amount = 1): void {
+    if (!Number.isFinite(amount)) return;
     this.state.statistics[key] = (this.state.statistics[key] ?? 0) + amount;
   }
 

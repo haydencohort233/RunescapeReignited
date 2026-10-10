@@ -38,6 +38,7 @@ export class CraftingSystem {
    */
   startCraftJob(recipe: CraftingRecipe, quantity: number): boolean {
     if (!isWholeQuantity(quantity)) return false;
+    this.engine.catchUpToNow();
 
     if (recipe.unlockCondition && !isUnlocked(recipe.unlockCondition, this.state)) {
       this.notifications.push("status", `You don't meet the requirements to do this yet.`, {
@@ -150,6 +151,7 @@ export class CraftingSystem {
     recipe: CraftingRecipe,
     opts?: { maxDurationMs?: number; requiresKeepAliveEveryMs?: number }
   ): boolean {
+    this.engine.catchUpToNow();
     if (recipe.unlockCondition && !isUnlocked(recipe.unlockCondition, this.state)) {
       this.notifications.push("status", `You don't meet the requirements to do this yet.`, {
         severity: "warning",
@@ -196,6 +198,7 @@ export class CraftingSystem {
    *  lastTickTimestamp anchor, since this is a live player action, not
    *  something resolved retroactively during offline catch-up. */
   keepGatherSessionAlive(): boolean {
+    this.engine.catchUpToNow();
     const session = this.gatherSession;
     if (!session || session.requiresKeepAliveEveryMs === undefined) return false;
     session.lastKeepAliveAt = this.engine.now();

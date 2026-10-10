@@ -38,6 +38,7 @@ export class JobBoardSystem {
    *  or already completed (see isJobCompleted). Snapshots any counters the
    *  objective reads, so progress counts from now. */
   acceptJob(job: JobDefinition, boardLocationId: string): boolean {
+    this.engine.catchUpToNow(); // baselines must capture up-to-date counters
     if (this.state.currentLocationId !== boardLocationId) {
       this.notifications.push("status", "You need to be at the job board to accept this.", {
         severity: "warning",

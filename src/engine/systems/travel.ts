@@ -43,6 +43,7 @@ export class TravelSystem {
   }
 
   startTravel(from: MapLocation, to: MapLocation, opts?: { msPerDistanceUnit?: number }): boolean {
+    this.engine.catchUpToNow();
     // Duration is computed from `from`, so it has to be where the player is.
     if (from.id !== this.state.currentLocationId) return false;
     if (this.state.currentLocationId === to.id) {
@@ -83,6 +84,7 @@ export class TravelSystem {
    *  unlockCondition (you can't teleport somewhere you haven't unlocked).
    *  Not charge-limited yet — see the teleportTo comment in items.ts. */
   teleportTo(def: ItemDefinition, instanceId: string, destination: MapLocation): boolean {
+    this.engine.catchUpToNow();
     const instance = this.state.inventory[instanceId];
     if (!instance || instance.itemDefId !== def.id || def.teleportTo !== destination.id) return false;
     if (destination.unlockCondition && !isUnlocked(destination.unlockCondition, this.state)) {

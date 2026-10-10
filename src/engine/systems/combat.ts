@@ -53,6 +53,7 @@ export class CombatSystem {
     },
     opts?: { autoRepeat?: boolean; autoEatItemId?: string }
   ): boolean {
+    this.engine.catchUpToNow();
     if (!this.engine.ensureIdle()) return false;
     if (this.engine.getCurrentHp() <= 0) {
       this.notifications.push("status", "You need to heal before fighting.", { severity: "warning" });
@@ -128,6 +129,7 @@ export class CombatSystem {
    *  playerStartedAt keeps the next attack exactly one weapon-speed away
    *  from THIS click, regardless of how many times you've clicked. */
   attackNow(): boolean {
+    this.engine.catchUpToNow();
     const session = this.combatSession;
     if (!session) return false;
     const now = this.engine.now();

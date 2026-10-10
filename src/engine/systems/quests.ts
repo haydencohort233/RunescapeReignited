@@ -34,6 +34,7 @@ export class QuestSystem {
   }
 
   startQuest(questId: string): boolean {
+    this.engine.catchUpToNow(); // baselines must capture up-to-date counters
     const def = this.questsById.get(questId);
     if (!def || !this.canStartQuest(questId)) return false;
     this.state.quests[questId] = { stage: 0, baselines: captureBaselines(def.stages[0].objective, this.state) };
