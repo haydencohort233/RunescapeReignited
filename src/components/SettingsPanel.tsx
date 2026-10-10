@@ -110,7 +110,7 @@ export default function SettingsPanel() {
             key={n}
             onClick={() => {
               const def = ITEM_CATALOG.find((i) => i.id === spawnItemId);
-              if (def) engine.addItem(def.id, n, { stackable: def.stackable, unique: def.unique });
+              if (def) engine.addItem(def.id, n);
             }}
           >
             +{n}

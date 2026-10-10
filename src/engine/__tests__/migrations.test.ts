@@ -37,3 +37,21 @@ describe("v14 producers", () => {
     expect(engine.getEffectiveRatePerSecond("wood")).toBe(1.5);
   });
 });
+
+describe("v14 stacked inventory", () => {
+  it("becomes ledger counts, keeping equipment instances and what's worn", () => {
+    const state = load().getState();
+    expect(state.resources.bones.amount).toBe(3);
+    expect(state.resources["wooden-bow-u"].amount).toBe(5);
+    expect(state.resources.shark.amount).toBe(2);
+    const instances = Object.values(state.inventory);
+    expect(instances.every((i) => !("quantity" in i))).toBe(true);
+    expect(instances.filter((i) => i.itemDefId === "bronze-dagger")).toHaveLength(2);
+    expect(state.inventory[state.equipment.weapon!]?.itemDefId).toBe("bronze-dagger");
+  });
+
+  it("converts the in-progress craft job's output", () => {
+    const action = load().getState().activeAction;
+    expect(action?.kind === "craft" && action.output).toEqual({ resource: "wooden-bow-u", amount: 1 });
+  });
+});

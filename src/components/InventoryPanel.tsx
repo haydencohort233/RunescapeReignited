@@ -2,10 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import { useGame } from "../engine/GameEngineContext";
 import { getItemDef } from "../content/items";
 import { formatNumber } from "../engine/format";
+import type { ItemDefinition } from "../engine/types";
 import { itemImagePath } from "../content/assetPaths";
 import { preloadImages } from "../lib/imagePreloader";
 import ItemActions from "./ItemActions";
 import ItemIcon from "./ItemIcon";
+
+/** One row in the inventory: either a whole stack (wood x40) or one copy
+ *  of a non-stackable item (a specific dagger, which may be worn). */
+interface InventoryEntry {
+  key: string;
+  def: ItemDefinition;
+  instanceId?: string;
+  quantity?: number;
+}
 
 const RARITY_COLOR: Record<string, string> = {
   common: "#333",
@@ -17,9 +27,7 @@ const RARITY_COLOR: Record<string, string> = {
 export default function InventoryPanel() {
   const { engine, state } = useGame();
   const [openPanelId, setOpenPanelId] = useState<string | null>(null);
-  const [quickMenu, setQuickMenu] = useState<{ instanceId: string; x: number; y: number } | null>(
-    null
-  );
+  const [quickMenu, setQuickMenu] = useState<{ key: string; x: number; y: number } | null>(null);
   const quickMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Closes the quick-menu on ANY click outside it — not just clicks inside
@@ -38,19 +46,26 @@ export default function InventoryPanel() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [quickMenu]);
 
-  const items = Object.values(state.inventory);
+  const entries: InventoryEntry[] = [];
+  for (const [id, resource] of Object.entries(state.resources)) {
+    const def = getItemDef(id);
+    const quantity = Math.floor(resource.amount);
+    if (def && quantity >= 1) entries.push({ key: `stack:${id}`, def, quantity });
+  }
+  for (const instance of Object.values(state.inventory)) {
+    const def = getItemDef(instance.itemDefId);
+    // An orphaned instance from removed content is skipped rather than crashing.
+    if (def) entries.push({ key: instance.instanceId, def, instanceId: instance.instanceId });
+  }
 
   // Fire every icon request in parallel as soon as the list is known,
   // rather than letting each <img> trigger its own fetch as it renders —
   // that staggered per-row fetching is what makes a big list pop in a
   // handful at a time. Keyed on the set of item ids so it re-runs when the
   // inventory actually changes, not on every render.
-  const itemDefIds = items.map((i) => i.itemDefId).join(",");
+  const itemDefIds = entries.map((e) => e.def.id).join(",");
   useEffect(() => {
-    const paths = items
-      .map((instance) => getItemDef(instance.itemDefId))
-      .filter((def): def is NonNullable<typeof def> => !!def)
-      .map((def) => itemImagePath(def.name, def.animated, def.assetFolder));
+    const paths = entries.map(({ def }) => itemImagePath(def.name, def.animated, def.assetFolder));
     void preloadImages(paths);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemDefIds]);
@@ -59,25 +74,23 @@ export default function InventoryPanel() {
     <section style={{ maxWidth: 480, position: "relative" }}>
       <h2 style={{ fontSize: 18, marginTop: 0 }}>Inventory</h2>
 
-      {items.length === 0 && <p style={{ fontSize: 13, color: "#888" }}>Nothing here yet.</p>}
+      {entries.length === 0 && <p style={{ fontSize: 13, color: "#888" }}>Nothing here yet.</p>}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {items.map((instance) => {
-          const def = getItemDef(instance.itemDefId);
-          if (!def) return null; // orphaned instance from removed content — skip rather than crash
-          const equipped = engine.isEquipped(instance.instanceId);
+        {entries.map(({ key, def, instanceId, quantity }) => {
+          const equipped = instanceId !== undefined && engine.isEquipped(instanceId);
 
           return (
-            <div key={instance.instanceId}>
+            <div key={key}>
               <div
                 onClick={() => {
                   setQuickMenu(null);
-                  setOpenPanelId(openPanelId === instance.instanceId ? null : instance.instanceId);
+                  setOpenPanelId(openPanelId === key ? null : key);
                 }}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   setOpenPanelId(null);
-                  setQuickMenu({ instanceId: instance.instanceId, x: e.clientX, y: e.clientY });
+                  setQuickMenu({ key, x: e.clientX, y: e.clientY });
                 }}
                 style={{
                   border: "1px solid #ccc",
@@ -91,12 +104,12 @@ export default function InventoryPanel() {
               >
                 <span>
                   <ItemIcon def={def} /> {def.name}
-                  {instance.quantity !== undefined && ` x${formatNumber(instance.quantity)}`}
+                  {quantity !== undefined && ` x${formatNumber(quantity)}`}
                   {equipped && " (equipped)"}
                 </span>
               </div>
 
-              {openPanelId === instance.instanceId && (
+              {openPanelId === key && (
                 <div style={{ border: "1px solid #ddd", borderRadius: 6, padding: 8, marginTop: 2 }}>
                   <p style={{ fontSize: 13, color: "#666", marginTop: 0 }}>
                     {def.description}
@@ -112,7 +125,7 @@ export default function InventoryPanel() {
                   </p>
                   <ItemActions
                     def={def}
-                    instanceId={instance.instanceId}
+                    instanceId={instanceId}
                     equipped={equipped}
                     onAction={() => setOpenPanelId(null)}
                   />
@@ -125,9 +138,8 @@ export default function InventoryPanel() {
 
       {quickMenu &&
         (() => {
-          const instance = state.inventory[quickMenu.instanceId];
-          const def = instance ? getItemDef(instance.itemDefId) : undefined;
-          if (!instance || !def) return null;
+          const entry = entries.find((e) => e.key === quickMenu.key);
+          if (!entry) return null;
           return (
             <div
               ref={quickMenuRef}
@@ -144,9 +156,9 @@ export default function InventoryPanel() {
               }}
             >
               <ItemActions
-                def={def}
-                instanceId={instance.instanceId}
-                equipped={engine.isEquipped(instance.instanceId)}
+                def={entry.def}
+                instanceId={entry.instanceId}
+                equipped={entry.instanceId !== undefined && engine.isEquipped(entry.instanceId)}
                 onAction={() => setQuickMenu(null)}
               />
             </div>

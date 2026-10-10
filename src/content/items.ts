@@ -4,6 +4,61 @@ import type { ItemDefinition } from "../engine/types";
 // approximations (aggregate attack/strength/defence, not the full OSRS
 // stab/slash/crush/magic/ranged breakdown) — fine for now, tune later.
 export const ITEM_CATALOG: ItemDefinition[] = [
+  // ── Materials — produced by buildings and gathering, spent by recipes ──
+  {
+    id: "wood",
+    name: "Wood",
+    description: "Logs from an ordinary tree.",
+    category: "material",
+    rarity: "common",
+    stackable: true,
+    actions: ["drop", "examine"],
+  },
+  {
+    id: "willow-logs",
+    name: "Willow Logs",
+    description: "Logs cut from a willow tree.",
+    category: "material",
+    rarity: "common",
+    stackable: true,
+    actions: ["drop", "examine"],
+  },
+  {
+    id: "coal",
+    name: "Coal",
+    description: "Hey, this is not for colouring books.",
+    category: "material",
+    rarity: "common",
+    stackable: true,
+    actions: ["drop", "examine"],
+  },
+  {
+    id: "raw-fish",
+    name: "Raw Fish",
+    description: "A fresh catch. Needs cooking.",
+    category: "material",
+    rarity: "common",
+    stackable: true,
+    actions: ["drop", "examine"],
+  },
+  {
+    id: "pelt",
+    name: "Pelt",
+    description: "An animal hide, ready for tanning.",
+    category: "material",
+    rarity: "common",
+    stackable: true,
+    actions: ["drop", "examine"],
+  },
+  {
+    id: "flax",
+    name: "Flax",
+    description: "A plant fibre that can be spun into bowstring.",
+    category: "material",
+    rarity: "common",
+    stackable: true,
+    actions: ["drop", "examine"],
+  },
   {
     id: "wooden-bow-u",
     name: "Wooden Bow (u)",

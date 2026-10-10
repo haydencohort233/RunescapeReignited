@@ -26,6 +26,7 @@ import { formatDuration } from "./format";
 import { BUILDING_SELL_REFUND_FRACTION, DEFAULT_COST_SCALING_FACTOR } from "./tuning";
 import { resolveAttack } from "./combatMath";
 import { weightedRandomPick } from "./rng";
+import { countOwned } from "./ledger";
 import {
   describeAction,
   getActiveCombat,
@@ -34,7 +35,7 @@ import {
   getActiveTravel,
 } from "./activeAction";
 
-const SCHEMA_VERSION = 16;
+const SCHEMA_VERSION = 17;
 
 /** OSRS-authentic: Hitpoints starts pre-leveled at 10 (unlike every other
  *  skill, which starts at 1) — this is the XP threshold for level 10. */
@@ -257,6 +258,48 @@ const MIGRATIONS: Record<number, (old: any, now: number) => any> = {
     const { producers: _producers, ...rest } = old;
     return { ...rest, buildings };
   },
+  // v16 -> v17: resources and items merged into one ledger. Stackable items
+  // were single inventory instances carrying a `quantity`; they become plain
+  // counts in `resources`, the same place wood and gp live, so recipes,
+  // shops and jobs can use any of them. Recipe outputs and loot entries
+  // snapshotted into an in-progress action move to the shared shape too.
+  16: (old) => {
+    const resources = { ...(old.resources ?? {}) };
+    const inventory: Record<string, any> = {};
+    const converted = new Set<string>();
+    for (const [instanceId, instance] of Object.entries<any>(old.inventory ?? {})) {
+      if (instance.quantity === undefined) {
+        inventory[instanceId] = instance;
+        continue;
+      }
+      const r = resources[instance.itemDefId] ?? { amount: 0, lifetimeEarned: 0 };
+      resources[instance.itemDefId] = {
+        amount: r.amount + instance.quantity,
+        lifetimeEarned: r.lifetimeEarned + instance.quantity,
+      };
+      converted.add(instanceId);
+    }
+    const equipment: Record<string, string> = {};
+    for (const [slot, instanceId] of Object.entries<string>(old.equipment ?? {})) {
+      if (!converted.has(instanceId)) equipment[slot] = instanceId;
+    }
+
+    const convertOutput = (o: any) =>
+      o?.kind === "item" ? { resource: o.itemDefId, amount: o.quantity } : { resource: o.resource, amount: o.amount };
+    let activeAction = old.activeAction ?? null;
+    if (activeAction && (activeAction.kind === "craft" || activeAction.kind === "gather")) {
+      activeAction = { ...activeAction, output: convertOutput(activeAction.output) };
+    } else if (activeAction?.kind === "combat") {
+      const lootTable = (activeAction.lootTable ?? []).map((e: any) => ({
+        id: e.itemDefId ?? e.resourceId,
+        quantityMin: e.quantityMin,
+        quantityMax: e.quantityMax,
+        weight: e.weight,
+      }));
+      activeAction = { ...activeAction, lootTable };
+    }
+    return { ...old, resources, inventory, equipment, activeAction };
+  },
 };
 
 /**
@@ -282,6 +325,7 @@ export class GameEngine {
    *  existing players on their next load. */
   readonly content: GameContent;
   private readonly buildingsById: Map<string, BuildingDefinition>;
+  private readonly itemsById: Map<string, ItemDefinition>;
 
   constructor(
     content: GameContent,
@@ -289,6 +333,7 @@ export class GameEngine {
   ) {
     this.content = content;
     this.buildingsById = new Map(content.buildings.map((b) => [b.id, b]));
+    this.itemsById = new Map(content.items.map((i) => [i.id, i]));
     this.clock = opts?.clock ?? Date.now;
     this.state = opts?.state ?? createInitialState(this.clock());
     this.notifications = opts?.notifications ?? new NotificationQueue();
@@ -365,8 +410,60 @@ export class GameEngine {
     return this.state;
   }
 
+  /** The raw stacked count (may be fractional for produced resources).
+   *  For "does the player have enough", use getOwnedCount, which also
+   *  counts non-stackable items. */
   getResourceAmount(resource: ResourceId): number {
     return this.state.resources[resource]?.amount ?? 0;
+  }
+
+  /** How many of any id the player owns and could spend — see ledger.ts. */
+  getOwnedCount(id: ResourceId): number {
+    return countOwned(this.state, id);
+  }
+
+  /** Display name for a ledger id — the item's name, or the raw id for
+   *  currencies that have no item definition. */
+  nameOf(id: ResourceId): string {
+    return this.itemsById.get(id)?.name ?? id;
+  }
+
+  /** Ids without an item definition (gp, achievement points) are plain
+   *  counts, so they stack. */
+  private isStackable(id: ResourceId): boolean {
+    return this.itemsById.get(id)?.stackable ?? true;
+  }
+
+  /** Removes everything in `costs` (times `multiplier`). Callers check
+   *  canAfford first; this doesn't re-check. */
+  private payFor(costs: RecipeInput[], multiplier = 1): void {
+    for (const c of costs) this.removeOwned(c.resource, c.amount * multiplier);
+  }
+
+  /** Takes `amount` of an id out of the ledger: from the stack, or by
+   *  deleting unequipped instances. Records `${id}:spent` either way. */
+  private removeOwned(id: ResourceId, amount: number): void {
+    if (amount <= 0) return;
+    if (this.isStackable(id)) {
+      this.spendResource(id, amount);
+      return;
+    }
+    const worn = new Set(Object.values(this.state.equipment));
+    let remaining = amount;
+    for (const instance of Object.values(this.state.inventory)) {
+      if (remaining <= 0) break;
+      if (instance.itemDefId !== id || worn.has(instance.instanceId)) continue;
+      delete this.state.inventory[instance.instanceId];
+      remaining--;
+    }
+    this.incrementStatistic(`${id}:spent`, amount - remaining);
+  }
+
+  /** Returns something the player already had (a cancelled craft's
+   *  materials) without counting it as newly earned. */
+  private giveBack(id: ResourceId, amount: number): void {
+    if (this.isStackable(id)) this.gainResource(id, amount, { countAsEarned: false });
+    else this.addItem(id, amount);
   }
 
   // ── Buildings ────────────────────────────────────────────────────────
@@ -452,20 +549,17 @@ export class GameEngine {
       return false;
     }
 
-    for (const input of cost) {
-      if (this.getResourceAmount(input.resource) < input.amount) {
-        this.notifications.push(
-          "status",
-          `Not enough ${input.resource} to buy ${quantity}x ${def.name}.`,
-          { severity: "warning" }
-        );
-        return false;
-      }
+    const short = cost.find((c) => this.getOwnedCount(c.resource) < c.amount);
+    if (short) {
+      this.notifications.push(
+        "status",
+        `Not enough ${this.nameOf(short.resource)} to buy ${quantity}x ${def.name}.`,
+        { severity: "warning" }
+      );
+      return false;
     }
 
-    for (const input of cost) {
-      this.spendResource(input.resource, input.amount);
-    }
+    this.payFor(cost);
     this.state.buildings[buildingId] = owned + quantity;
     this.incrementStatistic("buildingsBought:total", quantity);
     this.incrementStatistic(`buildingsBought:${buildingId}`, quantity);
@@ -479,7 +573,7 @@ export class GameEngine {
     const def = this.getBuildingDef(buildingId);
     const refund = this.getBuildingSellRefund(buildingId, quantity);
     if (!def || !refund) return false;
-    for (const r of refund) this.gainResource(r.resource, r.amount, { countAsEarned: false });
+    for (const r of refund) this.giveBack(r.resource, r.amount);
     this.state.buildings[buildingId] = this.getBuildingQuantity(buildingId) - quantity;
     this.incrementStatistic("buildingsSold:total", quantity);
     this.notifications.push(
@@ -621,25 +715,17 @@ export class GameEngine {
 
     if (!this.ensureIdle()) return false;
 
-    for (const input of recipe.inputs) {
-      const needed = input.amount * quantity;
-      if (this.getResourceAmount(input.resource) < needed) {
-        this.notifications.push(
-          "status",
-          `Not enough ${input.resource} to craft ${quantity}x ${recipe.name}.`,
-          { severity: "warning" }
-        );
-        return false;
-      }
+    const short = recipe.inputs.find((input) => this.getOwnedCount(input.resource) < input.amount * quantity);
+    if (short) {
+      this.notifications.push(
+        "status",
+        `Not enough ${this.nameOf(short.resource)} to make ${quantity}x ${recipe.name}.`,
+        { severity: "warning" }
+      );
+      return false;
     }
 
-    for (const input of recipe.inputs) {
-      this.spendResource(input.resource, input.amount * quantity);
-    }
-
-    if (recipe.output.kind === "resource") {
-      this.ensureResourceExists(recipe.output.resource);
-    }
+    this.payFor(recipe.inputs, quantity);
 
     this.state.activeAction = {
       kind: "craft",
@@ -673,8 +759,7 @@ export class GameEngine {
     if (!job) return;
     const remaining = job.quantityTotal - job.quantityCompleted;
     for (const input of job.inputsPerItem) {
-      this.ensureResourceExists(input.resource);
-      this.state.resources[input.resource].amount += input.amount * remaining;
+      this.giveBack(input.resource, input.amount * remaining);
     }
     this.state.activeAction = null;
     this.notifications.push("status", `Cancelled crafting ${job.recipeName}. Unused materials refunded.`);
@@ -693,17 +778,7 @@ export class GameEngine {
     const newCompletions = completedByNow - job.quantityCompleted;
     if (newCompletions <= 0) return;
 
-    if (job.output.kind === "resource") {
-      this.ensureResourceExists(job.output.resource);
-      const gained = job.output.amount * newCompletions;
-      this.state.resources[job.output.resource].amount += gained;
-      this.state.resources[job.output.resource].lifetimeEarned += gained;
-    } else {
-      this.addItem(job.output.itemDefId, job.output.quantity * newCompletions, {
-        stackable: job.output.stackable,
-        unique: job.output.unique,
-      });
-    }
+    this.addItem(job.output.resource, job.output.amount * newCompletions);
 
     this.addSkillXp(job.skill, job.xpPerItem * newCompletions);
     this.incrementStatistic(`crafted:${job.recipeId}`, newCompletions);
@@ -814,17 +889,7 @@ export class GameEngine {
     const newCompletions = totalByNow - session.quantityGathered;
 
     if (newCompletions > 0) {
-      if (session.output.kind === "resource") {
-        this.ensureResourceExists(session.output.resource);
-        const gained = session.output.amount * newCompletions;
-        this.state.resources[session.output.resource].amount += gained;
-        this.state.resources[session.output.resource].lifetimeEarned += gained;
-      } else {
-        this.addItem(session.output.itemDefId, session.output.quantity * newCompletions, {
-          stackable: session.output.stackable,
-          unique: session.output.unique,
-        });
-      }
+      this.addItem(session.output.resource, session.output.amount * newCompletions);
       this.addSkillXp(session.skill, session.xpPerItem * newCompletions);
       this.incrementStatistic(`gathered:${session.recipeId}`, newCompletions);
       session.quantityGathered = totalByNow;
@@ -1006,9 +1071,7 @@ export class GameEngine {
     }
 
     for (const [resourceId, gained] of Object.entries(gains)) {
-      this.ensureResourceExists(resourceId);
-      this.state.resources[resourceId].amount += gained;
-      this.state.resources[resourceId].lifetimeEarned += gained;
+      this.gainResource(resourceId, gained);
     }
 
     this.resolveCraftJob(effectiveNow);
@@ -1126,30 +1189,28 @@ export class GameEngine {
 
   // ── Inventory / Equipment ────────────────────────────────────────────
 
-  /** Adds `quantity` of an item. Stackable items collapse into one instance
-   *  (existing stack found and incremented, or a new one created); non-stackable
-   *  items get one instance per unit, same as before. `unique` items refuse to
-   *  add a second copy if one already exists anywhere (inventory or worn). */
-  addItem(itemDefId: string, quantity: number, opts: { stackable: boolean; unique?: boolean }): string[] {
+  /** Adds `quantity` of any ledger id. Stackable ids (and currencies) go
+   *  into the stacked count; non-stackable items get one instance each,
+   *  whose ids are returned. A `unique` item refuses a second copy if one
+   *  is already owned anywhere, worn or not. */
+  addItem(itemDefId: string, quantity: number): string[] {
     if (quantity <= 0) return [];
+    const def = this.itemsById.get(itemDefId);
 
-    if (opts.unique) {
-      const alreadyOwned = Object.values(this.state.inventory).some((i) => i.itemDefId === itemDefId);
+    if (def?.unique) {
+      const alreadyOwned =
+        this.getResourceAmount(itemDefId) > 0 ||
+        Object.values(this.state.inventory).some((i) => i.itemDefId === itemDefId);
       if (alreadyOwned) {
-        this.notifications.push("status", `You can only own one of that item.`, { severity: "warning" });
+        this.notifications.push("status", `You can only own one ${def.name}.`, { severity: "warning" });
         return [];
       }
+      quantity = 1;
     }
 
-    if (opts.stackable) {
-      const existing = Object.values(this.state.inventory).find((i) => i.itemDefId === itemDefId);
-      if (existing) {
-        existing.quantity = (existing.quantity ?? 1) + quantity;
-        return [existing.instanceId];
-      }
-      const instanceId = this.newInstanceId();
-      this.state.inventory[instanceId] = { instanceId, itemDefId, quantity };
-      return [instanceId];
+    if (this.isStackable(itemDefId)) {
+      this.gainResource(itemDefId, quantity);
+      return [];
     }
 
     const ids: string[] = [];
@@ -1175,7 +1236,7 @@ export class GameEngine {
 
   /** Equips an item, unequipping whatever was already in that slot (if anything).
    *  Refuses if the item has an unmet equipRequirement (e.g. an Attack level) —
-   *  same "engine enforces it, not just the UI" pattern as purchaseProducer. */
+   *  same "engine enforces it, not just the UI" pattern as purchaseBuilding. */
   equipItem(def: ItemDefinition, instanceId: string): boolean {
     const instance = this.state.inventory[instanceId];
     if (!instance || instance.itemDefId !== def.id || !def.equipSlot) return false;
@@ -1199,9 +1260,8 @@ export class GameEngine {
     this.notifications.push("status", `Unequipped item.`);
   }
 
-  /** Removes an item entirely — from inventory and, if worn, its equipment slot.
-   *  For a stack, this drops the WHOLE stack (no partial-quantity drop yet —
-   *  a "drop X" quantity prompt is a fine future addition, not built now). */
+  /** Removes one item instance entirely — from inventory and, if worn,
+   *  its equipment slot. Stacks use dropStack. */
   dropItem(def: ItemDefinition, instanceId: string): void {
     if (!this.state.inventory[instanceId]) return;
     for (const [slot, id] of Object.entries(this.state.equipment)) {
@@ -1211,17 +1271,21 @@ export class GameEngine {
     this.notifications.push("status", `Dropped ${def.name}.`);
   }
 
-  /** Stub — no hunger/HP system exists yet, so eating just consumes one unit.
-   *  Wire in real effects here once those systems exist. */
-  consumeItem(def: ItemDefinition, instanceId: string): void {
-    const instance = this.state.inventory[instanceId];
-    if (!instance) return;
-    if (instance.quantity !== undefined && instance.quantity > 1) {
-      instance.quantity -= 1;
-    } else {
-      delete this.state.inventory[instanceId];
-    }
-    this.notifications.push("status", `You eat the ${def.name}.`);
+  /** Drops a whole stack (no partial-quantity drop yet — a "drop X"
+   *  prompt is a fine future addition). Not counted as spending. */
+  dropStack(itemDefId: string): void {
+    const amount = Math.floor(this.getResourceAmount(itemDefId));
+    if (amount <= 0) return;
+    this.state.resources[itemDefId].amount -= amount;
+    this.notifications.push("status", `Dropped ${amount.toLocaleString()}x ${this.nameOf(itemDefId)}.`);
+  }
+
+  /** Stub — eating just consumes one unit for now. Wire in real effects
+   *  (healing) here. */
+  consumeItem(itemDefId: string): void {
+    if (this.getOwnedCount(itemDefId) < 1) return;
+    this.removeOwned(itemDefId, 1);
+    this.notifications.push("status", `You eat the ${this.nameOf(itemDefId)}.`);
   }
 
   // ── Shops ────────────────────────────────────────────────────────────
@@ -1234,7 +1298,7 @@ export class GameEngine {
     let max = Infinity;
     for (const cost of price) {
       if (cost.amount <= 0) continue;
-      const available = this.getResourceAmount(cost.resource);
+      const available = this.getOwnedCount(cost.resource);
       max = Math.min(max, Math.floor(available / cost.amount));
     }
     return Number.isFinite(max) ? Math.max(0, max) : 0;
@@ -1242,17 +1306,17 @@ export class GameEngine {
 
   /** Buys `quantity` of an item from a shop. Enforces that the player is
    *  actually AT the shop's location (not just a UI-hidden check) — same
-   *  "engine enforces it, not just the UI" pattern as purchaseProducer and
+   *  "engine enforces it, not just the UI" pattern as purchaseBuilding and
    *  equipItem. `price` is a RecipeInput[] (almost always just GP today,
    *  but works unchanged for a resource-priced item or, later, trading). */
   buyFromShop(
     shopLocationId: string,
     itemDefId: string,
     price: RecipeInput[],
-    quantity: number,
-    opts: { stackable: boolean; itemName: string }
+    quantity: number
   ): boolean {
     if (quantity <= 0) return false;
+    const itemName = this.nameOf(itemDefId);
 
     if (this.state.currentLocationId !== shopLocationId) {
       this.notifications.push("status", "You need to be at the shop to buy from it.", {
@@ -1261,23 +1325,20 @@ export class GameEngine {
       return false;
     }
 
-    for (const cost of price) {
-      if (this.getResourceAmount(cost.resource) < cost.amount * quantity) {
-        this.notifications.push(
-          "status",
-          `Not enough ${cost.resource} to buy ${quantity}x ${opts.itemName}.`,
-          { severity: "warning" }
-        );
-        return false;
-      }
+    const short = price.find((c) => this.getOwnedCount(c.resource) < c.amount * quantity);
+    if (short) {
+      this.notifications.push(
+        "status",
+        `Not enough ${this.nameOf(short.resource)} to buy ${quantity}x ${itemName}.`,
+        { severity: "warning" }
+      );
+      return false;
     }
 
-    for (const cost of price) {
-      this.spendResource(cost.resource, cost.amount * quantity);
-    }
-    this.addItem(itemDefId, quantity, { stackable: opts.stackable });
+    this.payFor(price, quantity);
+    this.addItem(itemDefId, quantity);
     this.incrementStatistic(`shopPurchases:${itemDefId}`, quantity);
-    this.notifications.push("status", `Bought ${quantity}x ${opts.itemName}.`);
+    this.notifications.push("status", `Bought ${quantity}x ${itemName}.`);
     return true;
   }
 
@@ -1333,13 +1394,10 @@ export class GameEngine {
 
   // ── Combat ───────────────────────────────────────────────────────────
 
-  /** Starts a fight. `equipmentBonus` is computed by the caller (the UI/
-   *  content layer, which has access to ItemDefinition data the engine
-   *  doesn't) by summing stats across currently-equipped items, PLUS the
-   *  equipped weapon's speed/type specifically — same "caller resolves
-   *  content, engine takes primitives" pattern as purchaseProducer/
-   *  buyFromShop. Refuses if another action is active, or current HP is 0
-   *  (heal first). */
+  /** Starts a fight. `equipmentBonus` is computed by the caller (see
+   *  content/combatStats.ts) by summing stats across currently-equipped
+   *  items, PLUS the equipped weapon's speed/type specifically. Refuses if
+   *  another action is active, or current HP is 0 (heal first). */
   startCombat(
     enemy: EnemyDefinition,
     equipmentBonus: {
@@ -1502,20 +1560,15 @@ export class GameEngine {
     const lootMessages: string[] = [];
     if (session.lootTable.length > 0) {
       const drop = weightedRandomPick(session.lootTable.map((entry) => ({ item: entry, weight: entry.weight })));
-      if (drop.itemDefId || drop.resourceId) {
+      if (drop.id) {
         const quantity =
           drop.quantityMin !== undefined && drop.quantityMax !== undefined
             ? drop.quantityMin + Math.floor(Math.random() * (drop.quantityMax - drop.quantityMin + 1))
             : 1;
-        if (drop.itemDefId) {
-          this.addItem(drop.itemDefId, quantity, { stackable: drop.stackable ?? true });
-          lootMessages.push(`${quantity}x <${drop.itemDefId}>`);
-        } else if (drop.resourceId) {
-          this.ensureResourceExists(drop.resourceId);
-          this.state.resources[drop.resourceId].amount += quantity;
-          this.state.resources[drop.resourceId].lifetimeEarned += quantity;
-          lootMessages.push(`${quantity} ${drop.resourceId}`);
-        }
+        this.addItem(drop.id, quantity);
+        // <id> tags render as item icons in RichText; currencies have no
+        // item definition, so they're written out plainly.
+        lootMessages.push(this.itemsById.has(drop.id) ? `${quantity}x <${drop.id}>` : `${quantity} ${drop.id}`);
       }
     }
 
@@ -1730,7 +1783,7 @@ export class GameEngine {
     }
     if (achievement.reward?.items) {
       for (const item of achievement.reward.items) {
-        this.addItem(item.itemDefId, item.quantity, { stackable: item.stackable });
+        this.addItem(item.itemDefId, item.quantity);
       }
     }
 
@@ -1818,7 +1871,7 @@ export class GameEngine {
 
     if (job.consumesOnTurnIn) {
       for (const cost of job.consumesOnTurnIn) {
-        if (this.getResourceAmount(cost.resource) < cost.amount) {
+        if (this.getOwnedCount(cost.resource) < cost.amount) {
           // Objective and consumption requirements should normally agree,
           // but content could theoretically diverge — fail safe rather
           // than deduct into the negative.
@@ -1828,9 +1881,7 @@ export class GameEngine {
           return false;
         }
       }
-      for (const cost of job.consumesOnTurnIn) {
-        this.spendResource(cost.resource, cost.amount);
-      }
+      this.payFor(job.consumesOnTurnIn);
     }
 
     if (job.reward?.gp) {
@@ -1849,7 +1900,7 @@ export class GameEngine {
       // Deliberately NOT modifier-scaled — a fixed item count is a fixed
       // item count, scaling item rewards would be a dupe/balance risk.
       for (const item of job.reward.items) {
-        this.addItem(item.itemDefId, item.quantity, { stackable: item.stackable });
+        this.addItem(item.itemDefId, item.quantity);
       }
     }
     if (job.reward?.setFlags) {

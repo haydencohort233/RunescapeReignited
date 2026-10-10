@@ -5,8 +5,8 @@ export type { LootEntry, EnemyDefinition };
  *  or a little GP, and a real chance of nothing. Every table should
  *  usually include a "nothing" weight; this one does. */
 export const DEFAULT_LOOT_TABLE: LootEntry[] = [
-  { resourceId: "gp", quantityMin: 1, quantityMax: 5, weight: 30 },
-  { itemDefId: "bones", quantityMin: 1, quantityMax: 1, weight: 20, stackable: true },
+  { id: "gp", quantityMin: 1, quantityMax: 5, weight: 30 },
+  { id: "bones", quantityMin: 1, quantityMax: 1, weight: 20 },
   { weight: 50 }, // nothing
 ];
 
@@ -25,8 +25,8 @@ export const ENEMY_CATALOG: EnemyDefinition[] = [
     defenceBonus: 0,
     xpReward: 20,
     lootTable: [
-      { resourceId: "gp", quantityMin: 1, quantityMax: 10, weight: 40 },
-      { itemDefId: "bones", quantityMin: 1, quantityMax: 1, weight: 30, stackable: true },
+      { id: "gp", quantityMin: 1, quantityMax: 10, weight: 40 },
+      { id: "bones", quantityMin: 1, quantityMax: 1, weight: 30 },
       { weight: 30 },
     ],
   },
@@ -44,9 +44,9 @@ export const ENEMY_CATALOG: EnemyDefinition[] = [
     defenceBonus: 5,
     xpReward: 45,
     lootTable: [
-      { resourceId: "gp", quantityMin: 10, quantityMax: 40, weight: 40 },
-      { itemDefId: "bronze-dagger", quantityMin: 1, quantityMax: 1, weight: 5, stackable: false },
-      { itemDefId: "bones", quantityMin: 1, quantityMax: 1, weight: 25, stackable: true },
+      { id: "gp", quantityMin: 10, quantityMax: 40, weight: 40 },
+      { id: "bronze-dagger", quantityMin: 1, quantityMax: 1, weight: 5 },
+      { id: "bones", quantityMin: 1, quantityMax: 1, weight: 25 },
       { weight: 30 },
     ],
   },
@@ -66,10 +66,10 @@ export const ENEMY_CATALOG: EnemyDefinition[] = [
     xpReward: 400,
     canFlee: false,
     lootTable: [
-      { resourceId: "gp", quantityMin: 100, quantityMax: 300, weight: 40 },
-      { itemDefId: "dragon-scimitar", quantityMin: 1, quantityMax: 1, weight: 2, stackable: false },
-      { itemDefId: "amulet-of-glory", quantityMin: 1, quantityMax: 1, weight: 8, stackable: false },
-      { itemDefId: "bones", quantityMin: 2, quantityMax: 4, weight: 30, stackable: true },
+      { id: "gp", quantityMin: 100, quantityMax: 300, weight: 40 },
+      { id: "dragon-scimitar", quantityMin: 1, quantityMax: 1, weight: 2 },
+      { id: "amulet-of-glory", quantityMin: 1, quantityMax: 1, weight: 8 },
+      { id: "bones", quantityMin: 2, quantityMax: 4, weight: 30 },
       { weight: 20 },
     ],
   },

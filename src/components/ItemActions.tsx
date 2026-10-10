@@ -13,7 +13,8 @@ export default function ItemActions({
   onAction,
 }: {
   def: ItemDefinition;
-  instanceId: string;
+  /** Set for a non-stackable item (one specific copy); omitted for a stack. */
+  instanceId?: string;
   equipped: boolean;
   /** Actions to hide regardless of what the item definition declares — e.g.
    *  the Equipment tab hides "drop" since OSRS requires unequipping first. */
@@ -23,9 +24,9 @@ export default function ItemActions({
   const { engine } = useGame();
 
   const handlers: Partial<Record<ItemActionId, () => void>> = {
-    equip: () => engine.equipItem(def, instanceId),
+    equip: () => instanceId && engine.equipItem(def, instanceId),
     unequip: () => def.equipSlot && engine.unequipSlot(def.equipSlot),
-    drop: () => engine.dropItem(def, instanceId),
+    drop: () => (instanceId ? engine.dropItem(def, instanceId) : engine.dropStack(def.id)),
     examine: () => {
       const statEntries = Object.entries(def.stats ?? {});
       const statText =
@@ -34,11 +35,11 @@ export default function ItemActions({
           : "";
       engine.notifications.push("status", `${def.description}${statText}`, { durationMs: null });
     },
-    eat: () => engine.consumeItem(def, instanceId),
+    eat: () => engine.consumeItem(def.id),
     craft: () => engine.notifications.push("status", "Nothing to craft with this yet.", { severity: "warning" }),
     teleport: () => {
       const destination = def.teleportTo ? getLocation(def.teleportTo) : undefined;
-      if (destination) engine.teleportTo(def, instanceId, destination);
+      if (destination && instanceId) engine.teleportTo(def, instanceId, destination);
     },
   };
 

@@ -3,9 +3,7 @@ import { getItemDef } from "./items";
 
 /** Sums attack/strength/defence stats across everything currently
  *  equipped — this is what a caller passes into engine.startCombat()'s
- *  equipmentBonus parameter, since the engine itself is content-agnostic
- *  and can't look up ItemDefinition data on its own (same pattern as
- *  purchaseProducer/buyFromShop taking resolved content, not ids). */
+ *  equipmentBonus parameter. */
 export function getEquipmentBonuses(state: GameState): {
   attack: number;
   strength: number;

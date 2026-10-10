@@ -11,7 +11,7 @@ export const WOODEN_BOW_RECIPE: CraftingRecipe = {
   xpPerItem: 5,
   timePerItemMs: 2000,
   inputs: [{ resource: "wood", amount: 1 }],
-  output: { kind: "item", itemDefId: "wooden-bow-u", quantity: 1, stackable: true },
+  output: { resource: "wooden-bow-u", amount: 1 },
 };
 
 export const PICK_FLAX_RECIPE: CraftingRecipe = {
@@ -21,7 +21,7 @@ export const PICK_FLAX_RECIPE: CraftingRecipe = {
   xpPerItem: 2,
   timePerItemMs: 1500,
   inputs: [],
-  output: { kind: "resource", resource: "flax", amount: 1 },
+  output: { resource: "flax", amount: 1 },
 };
 
 export const CHOP_NORMAL_TREE_RECIPE: CraftingRecipe = {
@@ -31,7 +31,7 @@ export const CHOP_NORMAL_TREE_RECIPE: CraftingRecipe = {
   xpPerItem: 3,
   timePerItemMs: 3000,
   inputs: [],
-  output: { kind: "resource", resource: "wood", amount: 1 },
+  output: { resource: "wood", amount: 1 },
 };
 
 export const CHOP_WILLOW_TREE_RECIPE: CraftingRecipe = {
@@ -41,7 +41,7 @@ export const CHOP_WILLOW_TREE_RECIPE: CraftingRecipe = {
   xpPerItem: 15, // meaningfully higher than Normal Tree's 3 — better XP for the harder requirement
   timePerItemMs: 4000,
   inputs: [],
-  output: { kind: "resource", resource: "willow-logs", amount: 1 },
+  output: { resource: "willow-logs", amount: 1 },
   unlockCondition: { kind: "skillLevel", skill: "woodcutting", atLeast: 30 },
 };
 

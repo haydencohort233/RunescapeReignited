@@ -1,5 +1,6 @@
 import type { GameState, UnlockCondition } from "./types";
 import { levelForXp } from "./xpCurve";
+import { countOwned } from "./ledger";
 
 /**
  * Evaluates an UnlockCondition against a GameState snapshot. Pure function —
@@ -17,8 +18,7 @@ export function isUnlocked(condition: UnlockCondition, state: GameState): boolea
       return (state.flags[condition.flag] ?? false) === expected;
     }
     case "resourceAtLeast": {
-      const amount = state.resources[condition.resource]?.amount ?? 0;
-      return amount >= condition.amount;
+      return countOwned(state, condition.resource) >= condition.amount;
     }
     case "resourceLifetimeAtLeast": {
       const lifetime = state.resources[condition.resource]?.lifetimeEarned ?? 0;
@@ -83,7 +83,7 @@ export function describeUnmetCondition(condition: UnlockCondition, state: GameSt
 export function describeConditionProgress(condition: UnlockCondition, state: GameState): string | null {
   switch (condition.kind) {
     case "resourceAtLeast": {
-      const have = Math.floor(state.resources[condition.resource]?.amount ?? 0);
+      const have = Math.floor(countOwned(state, condition.resource));
       return `${have.toLocaleString()}/${condition.amount.toLocaleString()} ${capitalize(condition.resource)}`;
     }
     case "resourceLifetimeAtLeast": {

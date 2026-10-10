@@ -105,9 +105,10 @@ export interface ItemDefinition {
   image?: string;
   category: "weapon" | "armor" | "consumable" | "material" | "misc";
   rarity?: ItemRarity;
-  /** Most non-equipment items stack into a single inventory slot (a running
-   *  count) — equipment stays one-instance-per-copy since only equipment
-   *  needs per-copy state (durability, which specific one is worn). */
+  /** Stackable items are a plain count in the ledger (GameState.resources),
+   *  same as currencies. Non-stackable items (equipment) get one instance
+   *  per copy, since only they need per-copy state (durability, which
+   *  specific one is worn). */
   stackable: boolean;
   /** If true, only one copy can ever exist at once — addItem refuses to
    *  create/stack a second one. For one-of-a-kind items you don't want
@@ -152,26 +153,16 @@ export interface ItemDefinition {
 }
 
 /**
- * One actual copy (or, for a stackable item, the ONE stack entry) of an item
- * the player owns. itemDefId points into ItemDefinition content.
+ * One copy of a non-stackable item (equipment) the player owns — each copy
+ * is tracked separately because it can be worn or carry durability.
+ * Stackable items are plain counts in GameState.resources instead; see
+ * engine/ledger.ts.
  */
 export interface ItemInstance {
   instanceId: string;
   itemDefId: string;
-  /** Present only for stackable items — the running count in that single slot. */
-  quantity?: number;
   durability?: number; // present only if the definition has maxDurability
 }
-
-/** What a crafting recipe produces — either a fungible resource (existing
- *  behavior) or item instances (new). Kept as a discriminated union so
- *  resolveCraftJob can branch on it without recipes needing two shapes.
- *  stackable/unique are denormalized from the ItemDefinition at
- *  content-authoring time (same pattern ActiveCraftJob already uses) so the
- *  engine never needs a content-catalog lookup to resolve a job. */
-export type RecipeOutput =
-  | { kind: "resource"; resource: ResourceId; amount: number }
-  | { kind: "item"; itemDefId: string; quantity: number; stackable: boolean; unique?: boolean };
 
 /**
  * Static content definition for a world-map location — lives in
@@ -254,8 +245,8 @@ export interface GameState {
   /** Arbitrary boolean flags — quest completion, one-time events, discovery
    *  states. The generic substrate that UnlockCondition checks read from. */
   flags: Record<string, boolean>;
-  /** Individually-tracked items the player owns — see ItemInstance for why
-   *  these aren't just another resource count. */
+  /** Non-stackable items the player owns, one entry per copy. Stackable
+   *  items live in `resources` — see engine/ledger.ts. */
   inventory: Record<string, ItemInstance>;
   /** slot -> the instanceId currently worn there. Absent key = nothing worn. */
   equipment: Partial<Record<EquipSlot, string>>;
@@ -305,6 +296,9 @@ export interface SkillState {
   xp: number;
 }
 
+/** An amount of anything in the ledger: a currency (gp), a stackable item
+ *  (wood, bones), or a non-stackable item (bronze-dagger). Used for costs,
+ *  recipe inputs and outputs, deliveries and prices alike. */
 export interface RecipeInput {
   resource: ResourceId;
   amount: number;
@@ -340,7 +334,7 @@ export interface AchievementDefinition {
   reward?: {
     gp?: number;
     achievementPoints?: number;
-    items?: { itemDefId: string; quantity: number; stackable: boolean }[];
+    items?: { itemDefId: string; quantity: number }[];
   };
 }
 
@@ -373,7 +367,7 @@ export interface JobDefinition {
     /** Modifier-scalable via "jobReward:achievementPoints" / "jobReward:all" / "all". */
     achievementPoints?: number;
     /** NEVER modifier-scaled — a fixed count is a fixed count. */
-    items?: { itemDefId: string; quantity: number; stackable: boolean }[];
+    items?: { itemDefId: string; quantity: number }[];
     /** Sets these flags on completion — the quest-chaining hook described above. */
     setFlags?: string[];
   };
@@ -394,7 +388,7 @@ export interface CraftingRecipe {
   xpPerItem: number;
   timePerItemMs: number;
   inputs: RecipeInput[];
-  output: RecipeOutput;
+  output: RecipeInput;
   /** Gates STARTING this recipe (batch craft or gather session) — e.g.
    *  Woodcutting level 30 for Willow Trees. Enforced by the engine itself
    *  in startCraftJob/startGatherSession, same "engine enforces it, not
@@ -414,7 +408,7 @@ export interface ActiveCraftJob {
   skill: string;
   xpPerItem: number;
   timePerItemMs: number;
-  output: RecipeOutput;
+  output: RecipeInput;
   /** What was actually deducted at start — used to compute a refund if cancelled early. */
   inputsPerItem: RecipeInput[];
   startedAt: number;
@@ -438,7 +432,7 @@ export interface ActiveGatherSession {
   skill: string;
   xpPerItem: number;
   timePerItemMs: number;
-  output: RecipeOutput;
+  output: RecipeInput;
   startedAt: number;
   /** Running total granted so far this session. */
   quantityGathered: number;
@@ -526,14 +520,12 @@ export interface CombatLogEntry {
 }
 
 export interface LootEntry {
-  /** Exactly one of these should be set. Omit both for a "nothing" roll —
-   *  a valid, intentional outcome in a table, not an error case. */
-  itemDefId?: string;
-  resourceId?: string;
+  /** Any ledger id — an item or a currency. Omit for a "nothing" roll — a
+   *  valid, intentional outcome in a table, not an error case. */
+  id?: string;
   quantityMin?: number;
   quantityMax?: number;
   weight: number;
-  stackable?: boolean; // only relevant when itemDefId is set
 }
 
 export interface EnemyDefinition {

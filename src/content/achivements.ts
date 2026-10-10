@@ -39,7 +39,7 @@ export const ACHIEVEMENT_CATALOG: AchievementDefinition[] = [
     name: "Master Builder",
     description: "Purchase 10 buildings in total.",
     condition: { kind: "statisticAtLeast", statistic: "buildingsBought:total", atLeast: 10 },
-    reward: { achievementPoints: 25, items: [{ itemDefId: "shark", quantity: 5, stackable: true }] },
+    reward: { achievementPoints: 25, items: [{ itemDefId: "shark", quantity: 5 }] },
   },
   {
     id: "explorer",

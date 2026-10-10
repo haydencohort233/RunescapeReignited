@@ -12,10 +12,7 @@ function ShopItemBuyActions({ shop, shopItem }: { shop: ShopDefinition; shopItem
 
   const buy = (quantity: number) => {
     if (quantity <= 0) return;
-    engine.buyFromShop(shop.locationId, def.id, shopItem.price, quantity, {
-      stackable: def.stackable,
-      itemName: def.name,
-    });
+    engine.buyFromShop(shop.locationId, def.id, shopItem.price, quantity);
   };
 
   const maxAffordable = engine.getMaxAffordableQuantity(shopItem.price);
