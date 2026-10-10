@@ -13,9 +13,9 @@ export default function BuildingsPanel() {
       <h2 style={{ fontSize: 18, marginTop: 0 }}>Buildings</h2>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {BUILDING_CATALOG.map((def) => {
-          const producer = state.producers[def.id];
-          const owned = producer?.quantity ?? 0;
-          const unlocked = engine.isProducerUnlocked(def.id);
+          if (!def.baseCost) return null; // not a purchasable building (e.g. base income)
+          const owned = engine.getBuildingQuantity(def.id);
+          const unlocked = engine.isBuildingUnlocked(def.id);
           const lockedReason = def.unlockCondition
             ? describeUnmetCondition(def.unlockCondition, state)
             : null;
@@ -37,8 +37,13 @@ export default function BuildingsPanel() {
             );
           }
 
-          const cost1 = engine.getProducerPurchaseCost(def.id, 1);
-          const cost5 = engine.getProducerPurchaseCost(def.id, 5);
+          const cost1 = engine.getBuildingPurchaseCost(def.id, 1);
+          const cost5 = engine.getBuildingPurchaseCost(def.id, 5);
+          const refund1 = engine.getBuildingSellRefund(def.id, 1);
+          const atLimit = def.maxOwned !== undefined && owned >= def.maxOwned;
+          const fitsFive = def.maxOwned === undefined || owned + 5 <= def.maxOwned;
+          const formatCost = (cost: { resource: string; amount: number }[] | null) =>
+            cost?.map((c) => `${formatNumber(c.amount)} ${c.resource}`).join(", ");
 
           return (
             <div key={def.id} style={{ border: "1px solid #ccc", borderRadius: 6, padding: 10 }}>
@@ -53,15 +58,20 @@ export default function BuildingsPanel() {
                   {def.name}
                 </strong>
                 <span style={{ fontSize: 13, color: "#555" }}>
-                  Owned: {owned} ({(def.baseRatePerSecond * owned).toFixed(2)} {def.resource}/s)
+                  Owned: {owned}
+                  {def.maxOwned !== undefined && `/${def.maxOwned}`} ({(def.baseRatePerSecond * owned).toFixed(2)}{" "}
+                  {def.resource}/s)
                 </span>
               </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-                <button onClick={() => engine.purchaseProducer(def.id, 1)}>
-                  Buy 1 ({cost1?.map((c) => `${formatNumber(c.amount)} ${c.resource}`).join(", ")})
+              <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                <button onClick={() => engine.purchaseBuilding(def.id, 1)} disabled={atLimit}>
+                  Buy 1 ({formatCost(cost1)})
                 </button>
-                <button onClick={() => engine.purchaseProducer(def.id, 5)}>
-                  Buy 5 ({cost5?.map((c) => `${formatNumber(c.amount)} ${c.resource}`).join(", ")})
+                <button onClick={() => engine.purchaseBuilding(def.id, 5)} disabled={!fitsFive}>
+                  Buy 5 ({formatCost(cost5)})
+                </button>
+                <button onClick={() => engine.sellBuilding(def.id, 1)} disabled={owned === 0}>
+                  Sell 1{refund1 && ` (+${formatCost(refund1)})`}
                 </button>
               </div>
             </div>

@@ -12,33 +12,50 @@ export interface ResourceState {
 }
 
 /**
- * A producer generates a resource over time. Buildings are producers.
- * baseRatePerSecond is BEFORE modifiers are applied.
+ * Static content definition for a building — lives in content/buildings.ts,
+ * never in GameState. The save only records how many of each the player
+ * owns (GameState.buildings), so changing a rate or cost here reaches
+ * existing saves on their next load.
  */
-export interface Producer {
+export interface BuildingDefinition {
   id: string;
   name: string;
+  /** What this building produces. */
   resource: ResourceId;
+  /** Per unit owned, BEFORE modifiers are applied. */
   baseRatePerSecond: number;
-  /** How many of this producer the player owns (buildings can be bought multiple times). */
-  quantity: number;
-  /** Cost of the NEXT purchase, before scaling is applied for quantity already owned.
-   *  Omit for producers that aren't player-purchasable (e.g. a quest-granted building). */
+  /** Cost of the first unit. Omit for buildings that aren't
+   *  player-purchasable (e.g. a quest-granted building, or base income).
+   *  Buildings without a baseCost can't be sold either. */
   baseCost?: RecipeInput[];
-  /** Multiplier applied per unit already owned — e.g. 1.15 means the Nth purchase
-   *  costs baseCost * 1.15^N. Defaults to 1.15 (a common idle-game curve) if omitted. */
+  /** Multiplier applied per unit already owned — e.g. 1.15 means the Nth
+   *  purchase costs baseCost * 1.15^N. Defaults to DEFAULT_COST_SCALING_FACTOR
+   *  in engine/tuning.ts if omitted. */
   costScalingFactor?: number;
-  /** Gates whether this producer can be purchased/discovered yet. Omit for
-   *  producers available from the start. Enforced by the engine itself
-   *  (purchaseProducer checks it), not just the UI. */
+  /** Gates whether this building can be purchased/discovered yet. Omit for
+   *  buildings available from the start. Enforced by the engine itself
+   *  (purchaseBuilding checks it), not just the UI. */
   unlockCondition?: UnlockCondition;
+  /** Hard cap on how many one player can own. Omit for no limit. */
+  maxOwned?: number;
+  /** Owned from the start of a new game (or granted to an older save the
+   *  first time it loads with this building in content). */
+  startingQuantity?: number;
+}
+
+/** Everything static the engine needs to look up at runtime. Passed in at
+ *  construction; the engine has no import-level dependency on content/. */
+export interface GameContent {
+  buildings: BuildingDefinition[];
+  items: ItemDefinition[];
 }
 
 export type ModifierType = "multiplicative" | "additive";
 
 /**
- * A modifier alters the effective rate of a resource or producer.
- * target: a ResourceId, a Producer id, or the special value "all".
+ * A modifier alters a numeric value — a resource's production rate, XP
+ * gains, travel speed, and so on. target: a ResourceId, a namespaced key
+ * like "xp:woodcutting", or the special value "all".
  * Multiplicative modifiers are combined by multiplying; additive by summing,
  * then applied as (base + additiveSum) * multiplicativeProduct.
  */
@@ -230,7 +247,8 @@ export const DEFAULT_NOTIFICATION_DURATIONS: Record<NotificationType, number | n
 
 export interface GameState {
   resources: Record<ResourceId, ResourceState>;
-  producers: Record<string, Producer>;
+  /** buildingId -> how many the player owns. Stats live in content. */
+  buildings: Record<string, number>;
   modifiers: Record<string, Modifier>;
   skills: Record<string, SkillState>;
   /** Arbitrary boolean flags — quest completion, one-time events, discovery
@@ -302,7 +320,7 @@ export type UnlockCondition =
   | { kind: "flag"; flag: string; equals?: boolean } // equals defaults to true
   | { kind: "resourceAtLeast"; resource: ResourceId; amount: number }
   | { kind: "resourceLifetimeAtLeast"; resource: ResourceId; amount: number } // milestone — never re-locks
-  | { kind: "producerOwned"; producerId: string; atLeast: number }
+  | { kind: "buildingOwned"; buildingId: string; atLeast: number }
   | { kind: "statisticAtLeast"; statistic: string; atLeast: number } // see GameState.statistics
   | { kind: "all"; conditions: UnlockCondition[] }
   | { kind: "any"; conditions: UnlockCondition[] };
@@ -380,7 +398,7 @@ export interface CraftingRecipe {
   /** Gates STARTING this recipe (batch craft or gather session) — e.g.
    *  Woodcutting level 30 for Willow Trees. Enforced by the engine itself
    *  in startCraftJob/startGatherSession, same "engine enforces it, not
-   *  just the UI" pattern as equipRequirement/purchaseProducer. */
+   *  just the UI" pattern as equipRequirement/purchaseBuilding. */
   unlockCondition?: UnlockCondition;
 }
 

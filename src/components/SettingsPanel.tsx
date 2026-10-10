@@ -3,9 +3,10 @@ import { useGame } from "../engine/GameEngineContext";
 import { ITEM_CATALOG } from "../content/items";
 import { SKILL_CATALOG } from "../content/skills";
 import { MAX_LEVEL } from "../engine/xpCurve";
+import { BUILDING_CATALOG } from "../content/buildings";
 
 export default function SettingsPanel() {
-  const { engine, state, autosaveMs, actions } = useGame();
+  const { engine, autosaveMs, actions } = useGame();
   const importInputRef = useRef<HTMLInputElement>(null);
   const [spawnItemId, setSpawnItemId] = useState(ITEM_CATALOG[0].id);
   const [levelInputs, setLevelInputs] = useState<Record<string, number>>({});
@@ -61,20 +62,19 @@ export default function SettingsPanel() {
 
       <h3 style={{ fontSize: 15 }}>Dev Tools</h3>
       <p style={{ fontSize: 12, color: "#888", marginTop: -4 }}>
-        Bypasses unlock conditions and cost checks won't stop you — this list is generated from
-        whatever producers are currently registered, so it automatically covers new buildings as
-        they're added to the content catalog.
+        Bypasses unlock conditions, but still costs resources. Generated from the building
+        catalog, so new buildings show up here automatically.
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {Object.values(state.producers).map((producer) => (
-          <div key={producer.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        {BUILDING_CATALOG.filter((b) => b.baseCost).map((building) => (
+          <div key={building.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <span style={{ minWidth: 120 }}>
-              {producer.name} (x{producer.quantity})
+              {building.name} (x{engine.getBuildingQuantity(building.id)})
             </span>
             {[1, 5, 25].map((n) => (
               <button
                 key={n}
-                onClick={() => engine.purchaseProducer(producer.id, n, { bypassUnlock: true })}
+                onClick={() => engine.purchaseBuilding(building.id, n, { bypassUnlock: true })}
               >
                 +{n}
               </button>

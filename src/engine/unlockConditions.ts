@@ -24,8 +24,8 @@ export function isUnlocked(condition: UnlockCondition, state: GameState): boolea
       const lifetime = state.resources[condition.resource]?.lifetimeEarned ?? 0;
       return lifetime >= condition.amount;
     }
-    case "producerOwned": {
-      const quantity = state.producers[condition.producerId]?.quantity ?? 0;
+    case "buildingOwned": {
+      const quantity = state.buildings[condition.buildingId] ?? 0;
       return quantity >= condition.atLeast;
     }
     case "statisticAtLeast": {
@@ -57,8 +57,8 @@ export function describeUnmetCondition(condition: UnlockCondition, state: GameSt
       return `Requires ${condition.amount.toLocaleString()} ${condition.resource}`;
     case "resourceLifetimeAtLeast":
       return `Requires ${condition.amount.toLocaleString()} ${condition.resource} earned (lifetime)`;
-    case "producerOwned":
-      return `Requires ${condition.atLeast}x ${condition.producerId}`;
+    case "buildingOwned":
+      return `Requires ${condition.atLeast}x ${condition.buildingId}`;
     case "statisticAtLeast":
       return `Requires ${condition.statistic}: ${condition.atLeast.toLocaleString()}`;
     case "all": {
@@ -98,9 +98,9 @@ export function describeConditionProgress(condition: UnlockCondition, state: Gam
       const have = state.statistics[condition.statistic] ?? 0;
       return `${have.toLocaleString()}/${condition.atLeast.toLocaleString()} ${condition.statistic}`;
     }
-    case "producerOwned": {
-      const have = state.producers[condition.producerId]?.quantity ?? 0;
-      return `${have}/${condition.atLeast} ${condition.producerId}`;
+    case "buildingOwned": {
+      const have = state.buildings[condition.buildingId] ?? 0;
+      return `${have}/${condition.atLeast} ${condition.buildingId}`;
     }
     case "flag":
     case "all":

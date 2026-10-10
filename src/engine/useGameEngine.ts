@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { GameEngine, createInitialState } from "./gameEngine";
+import { GameEngine } from "./gameEngine";
 import { loadGame, saveGame, createAutoSaver, exportSaveToFile, importSaveFromFileText } from "./save";
-import { registerStartingContent } from "../content/bootstrap";
+import { GAME_CONTENT } from "../content";
 import { ACHIEVEMENT_CATALOG } from "../content/achivements";
 import type { GameNotification, GameState } from "./types";
 
@@ -21,11 +21,8 @@ const DEFAULT_AUTOSAVE_MS = 10_000;
  */
 export function useGameEngine() {
   const [engine, setEngine] = useState<GameEngine>(() => {
-    const loaded = loadGame();
-    const instance = loaded ?? new GameEngine(createInitialState());
-    registerStartingContent(instance); // must run before resolveElapsed so newly-added
-    // catalog content (or content already owned in the loaded save) is in place
-    // before we compute what happened while away.
+    const loaded = loadGame(GAME_CONTENT);
+    const instance = loaded ?? new GameEngine(GAME_CONTENT);
     instance.resolveElapsed();
     instance.checkAchievements(ACHIEVEMENT_CATALOG); // catch anything already met (e.g. from an imported save)
     return instance;
@@ -78,9 +75,7 @@ export function useGameEngine() {
     importSave: async (file: File) => {
       try {
         const text = await file.text();
-        const imported = importSaveFromFileText(text);
-        registerStartingContent(imported); // same reason as the initial load — ensures
-        // catalog content exists even if the imported save predates it.
+        const imported = importSaveFromFileText(text, GAME_CONTENT);
         imported.checkAchievements(ACHIEVEMENT_CATALOG);
         setEngine(imported); // swaps the whole engine — effects re-subscribe automatically
         saveGame(imported); // persist immediately so a refresh doesn't lose the import
@@ -95,9 +90,6 @@ export function useGameEngine() {
 
     resetAll: () => {
       engine.resetAll();
-      registerStartingContent(engine); // resetAll() wipes back to createInitialState(),
-      // which has no producers — reinstate the starting catalog immediately
-      // rather than leaving the player with literally nothing to click.
       saveGame(engine);
       refreshState();
     },

@@ -1,5 +1,6 @@
 import { GameEngine } from "./gameEngine";
 import { NotificationQueue } from "./notificationQueue";
+import type { GameContent } from "./types";
 
 const SAVE_KEY = "idlegame:save";
 
@@ -20,11 +21,11 @@ export function saveGame(engine: GameEngine): boolean {
   }
 }
 
-export function loadGame(notifications?: NotificationQueue): GameEngine | null {
+export function loadGame(content: GameContent, notifications?: NotificationQueue): GameEngine | null {
   try {
     const json = window.localStorage.getItem(SAVE_KEY);
     if (!json) return null;
-    return GameEngine.deserialize(json, notifications);
+    return GameEngine.deserialize(json, content, { notifications });
   } catch (err) {
     if (notifications) {
       notifications.push(
@@ -99,7 +100,11 @@ export function exportSaveToFile(engine: GameEngine): void {
  * notification (kept as a throw here, not a notification push, since this
  * runs before we necessarily have an engine instance to attach a queue to).
  */
-export function importSaveFromFileText(text: string, notifications?: NotificationQueue): GameEngine {
+export function importSaveFromFileText(
+  text: string,
+  content: GameContent,
+  notifications?: NotificationQueue
+): GameEngine {
   let payload: SaveFile;
   try {
     payload = JSON.parse(text);
@@ -110,5 +115,5 @@ export function importSaveFromFileText(text: string, notifications?: Notificatio
     throw new Error("That file doesn't look like a save from this game.");
   }
   // This will throw its own error if payload.data itself isn't valid GameState JSON.
-  return GameEngine.deserialize(payload.data, notifications);
+  return GameEngine.deserialize(payload.data, content, { notifications });
 }

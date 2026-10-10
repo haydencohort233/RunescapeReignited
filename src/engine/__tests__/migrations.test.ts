@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { GameEngine } from "../gameEngine";
+import { GAME_CONTENT } from "../../content";
 // Serialized by the unmodified v14 engine: bought producers, stacked
 // items, an equipped dagger, an active craft job and an accepted job.
 import V14 from "../__fixtures__/save-v14.json?raw";
 
 function load(json: string = V14) {
   const parsed = JSON.parse(json);
-  return GameEngine.deserialize(json, undefined, { clock: () => parsed.lastTickTimestamp });
+  return GameEngine.deserialize(json, GAME_CONTENT, { clock: () => parsed.lastTickTimestamp });
 }
 
 describe("loading a v14 save", () => {
@@ -24,5 +25,15 @@ describe("loading a v14 save", () => {
     expect(engine.getState().activeAction?.kind).toBe("combat");
     // 10 bows queued at 1 wood each, none finished: all 10 wood come back.
     expect(engine.getResourceAmount("wood")).toBe(parsed.resources.wood.amount + 10);
+  });
+});
+
+describe("v14 producers", () => {
+  it("become owned counts, with stats read from content", () => {
+    const engine = load();
+    const state = engine.getState();
+    expect(state).not.toHaveProperty("producers");
+    expect(state.buildings).toMatchObject({ "base-gp": 1, lumbermill: 3 });
+    expect(engine.getEffectiveRatePerSecond("wood")).toBe(1.5);
   });
 });

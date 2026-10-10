@@ -1,6 +1,7 @@
 import type {
   GameState,
-  Producer,
+  GameContent,
+  BuildingDefinition,
   Modifier,
   ResourceId,
   CraftingRecipe,
@@ -22,6 +23,7 @@ import { levelForXp, xpForLevel, MAX_LEVEL, calculateCombatLevel } from "./xpCur
 import { isUnlocked } from "./unlockConditions";
 import { getDailyPeriodNumber } from "./time";
 import { formatDuration } from "./format";
+import { BUILDING_SELL_REFUND_FRACTION, DEFAULT_COST_SCALING_FACTOR } from "./tuning";
 import { resolveAttack } from "./combatMath";
 import { weightedRandomPick } from "./rng";
 import {
@@ -32,7 +34,7 @@ import {
   getActiveTravel,
 } from "./activeAction";
 
-const SCHEMA_VERSION = 15;
+const SCHEMA_VERSION = 16;
 
 /** OSRS-authentic: Hitpoints starts pre-leveled at 10 (unlike every other
  *  skill, which starts at 1) — this is the XP threshold for level 10. */
@@ -86,15 +88,13 @@ export const DEFAULT_GATHER_MAX_DURATION_MS = 8 * 60 * 60 * 1000; // 8 hours
  *  it correctly either way. */
 const MIN_AWAY_MS_FOR_SUMMARY = 60 * 1000; // 1 minute
 
-/** Default cost-scaling multiplier for producers that don't specify their own. */
-const DEFAULT_COST_SCALING_FACTOR = 1.15;
 
 export function createInitialState(now: number = Date.now()): GameState {
   return {
     resources: {
       gp: { amount: 0, lifetimeEarned: 0 },
     },
-    producers: {},
+    buildings: {},
     modifiers: {},
     skills: { hitpoints: { xp: STARTING_HITPOINTS_XP } },
     // The starting location doesn't count as a "discovery" when you travel
@@ -246,6 +246,17 @@ const MIGRATIONS: Record<number, (old: any, now: number) => any> = {
     for (const [, field] of candidates) delete next[field];
     return next;
   },
+  // v15 -> v16: building stats (rate, cost, unlocks) stopped being saved —
+  // they're read from content so rebalancing reaches existing saves. Only
+  // the owned count per building is kept.
+  15: (old) => {
+    const buildings: Record<string, number> = {};
+    for (const [id, producer] of Object.entries(old.producers ?? {})) {
+      buildings[id] = (producer as { quantity?: number }).quantity ?? 0;
+    }
+    const { producers: _producers, ...rest } = old;
+    return { ...rest, buildings };
+  },
 };
 
 /**
@@ -266,15 +277,33 @@ export class GameEngine {
    *  drive time deterministically; every timestamp the engine stores or
    *  compares comes from here, never from Date.now() directly. */
   private readonly clock: () => number;
+  /** Static game data (building stats, item definitions). Never saved —
+   *  the save holds only player progress, so rebalancing content reaches
+   *  existing players on their next load. */
+  readonly content: GameContent;
+  private readonly buildingsById: Map<string, BuildingDefinition>;
 
   constructor(
-    initialState?: GameState,
-    notifications?: NotificationQueue,
-    opts?: { clock?: () => number }
+    content: GameContent,
+    opts?: { state?: GameState; notifications?: NotificationQueue; clock?: () => number }
   ) {
+    this.content = content;
+    this.buildingsById = new Map(content.buildings.map((b) => [b.id, b]));
     this.clock = opts?.clock ?? Date.now;
-    this.state = initialState ?? createInitialState(this.clock());
-    this.notifications = notifications ?? new NotificationQueue();
+    this.state = opts?.state ?? createInitialState(this.clock());
+    this.notifications = opts?.notifications ?? new NotificationQueue();
+    this.grantStartingBuildings();
+  }
+
+  /** Seeds startingQuantity for any building the save has never had an
+   *  entry for (a new game, or a building added to content after this save
+   *  was made). An explicit 0 — e.g. one the player sold — is left alone. */
+  private grantStartingBuildings(): void {
+    for (const def of this.content.buildings) {
+      if (this.state.buildings[def.id] === undefined && def.startingQuantity) {
+        this.state.buildings[def.id] = def.startingQuantity;
+      }
+    }
   }
 
   now(): number {
@@ -340,60 +369,84 @@ export class GameEngine {
     return this.state.resources[resource]?.amount ?? 0;
   }
 
-  // ── Producers ────────────────────────────────────────────────────────
+  // ── Buildings ────────────────────────────────────────────────────────
 
-  registerProducer(producer: Producer): void {
-    this.state.producers[producer.id] = producer;
-    this.ensureResourceExists(producer.resource);
+  getBuildingDef(buildingId: string): BuildingDefinition | undefined {
+    return this.buildingsById.get(buildingId);
   }
 
-  setProducerQuantity(producerId: string, quantity: number): void {
-    const producer = this.state.producers[producerId];
-    if (!producer) return;
-    producer.quantity = Math.max(0, quantity);
+  getBuildingQuantity(buildingId: string): number {
+    return this.state.buildings[buildingId] ?? 0;
   }
 
-  /** Cost to buy `quantity` more of a producer, given how many are already owned.
-   *  Returns null if the producer has no baseCost (not player-purchasable). */
-  getProducerPurchaseCost(producerId: string, quantity: number): RecipeInput[] | null {
-    const producer = this.state.producers[producerId];
-    if (!producer || !producer.baseCost) return null;
-    const scaling = producer.costScalingFactor ?? DEFAULT_COST_SCALING_FACTOR;
-
-    // Sum of a geometric series: baseCost * scaling^owned for each unit bought,
-    // owned going from current quantity to current quantity + quantity - 1.
-    return producer.baseCost.map((input) => {
+  /** Total cost of `quantity` units starting from `ownedBefore` already
+   *  owned. Shared by buying (from the current count up) and selling (the
+   *  last N bought). */
+  private getBuildingCostRange(def: BuildingDefinition, ownedBefore: number, quantity: number): RecipeInput[] {
+    const scaling = def.costScalingFactor ?? DEFAULT_COST_SCALING_FACTOR;
+    // Sum of a geometric series: baseCost * scaling^owned for each unit.
+    return (def.baseCost ?? []).map((input) => {
       let total = 0;
       for (let i = 0; i < quantity; i++) {
-        total += input.amount * Math.pow(scaling, producer.quantity + i);
+        total += input.amount * Math.pow(scaling, ownedBefore + i);
       }
       return { resource: input.resource, amount: Math.ceil(total) };
     });
   }
 
-  /** Whether a producer's unlockCondition (if any) is currently satisfied. */
-  isProducerUnlocked(producerId: string): boolean {
-    const producer = this.state.producers[producerId];
-    if (!producer) return false;
-    if (!producer.unlockCondition) return true;
-    return isUnlocked(producer.unlockCondition, this.state);
+  /** Cost to buy `quantity` more of a building, given how many are already owned.
+   *  Returns null if the building has no baseCost (not player-purchasable). */
+  getBuildingPurchaseCost(buildingId: string, quantity: number): RecipeInput[] | null {
+    const def = this.getBuildingDef(buildingId);
+    if (!def || !def.baseCost) return null;
+    return this.getBuildingCostRange(def, this.getBuildingQuantity(buildingId), quantity);
   }
 
-  /** Buys `quantity` more of a producer at the scaled cost, if affordable and unlocked.
-   *  `bypassUnlock` is for dev/cheat tooling only — normal player-facing purchase
-   *  flows should never pass it. */
-  purchaseProducer(producerId: string, quantity = 1, opts?: { bypassUnlock?: boolean }): boolean {
-    const producer = this.state.producers[producerId];
-    if (!producer) return false;
+  /** What selling the last `quantity` units would refund — a fraction of
+   *  what those exact units cost. Null if the building can't be sold. */
+  getBuildingSellRefund(buildingId: string, quantity: number): RecipeInput[] | null {
+    const def = this.getBuildingDef(buildingId);
+    if (!def || !def.baseCost) return null;
+    const owned = this.getBuildingQuantity(buildingId);
+    if (quantity <= 0 || quantity > owned) return null;
+    return this.getBuildingCostRange(def, owned - quantity, quantity).map((c) => ({
+      resource: c.resource,
+      amount: Math.floor(c.amount * BUILDING_SELL_REFUND_FRACTION),
+    }));
+  }
 
-    if (!opts?.bypassUnlock && !this.isProducerUnlocked(producerId)) {
-      this.notifications.push("status", `${producer.name} isn't available yet.`, {
+  /** Whether a building's unlockCondition (if any) is currently satisfied. */
+  isBuildingUnlocked(buildingId: string): boolean {
+    const def = this.getBuildingDef(buildingId);
+    if (!def) return false;
+    if (!def.unlockCondition) return true;
+    return isUnlocked(def.unlockCondition, this.state);
+  }
+
+  /** Buys `quantity` more of a building at the scaled cost, if affordable,
+   *  unlocked, and under its maxOwned limit. `bypassUnlock` is for
+   *  dev/cheat tooling only — normal player-facing purchase flows should
+   *  never pass it. */
+  purchaseBuilding(buildingId: string, quantity = 1, opts?: { bypassUnlock?: boolean }): boolean {
+    const def = this.getBuildingDef(buildingId);
+    if (!def || quantity <= 0) return false;
+
+    if (!opts?.bypassUnlock && !this.isBuildingUnlocked(buildingId)) {
+      this.notifications.push("status", `${def.name} isn't available yet.`, {
         severity: "warning",
       });
       return false;
     }
 
-    const cost = this.getProducerPurchaseCost(producerId, quantity);
+    const owned = this.getBuildingQuantity(buildingId);
+    if (def.maxOwned !== undefined && owned + quantity > def.maxOwned) {
+      this.notifications.push("status", `You can only own ${def.maxOwned}x ${def.name}.`, {
+        severity: "warning",
+      });
+      return false;
+    }
+
+    const cost = this.getBuildingPurchaseCost(buildingId, quantity);
     if (!cost) {
       // No baseCost defined — treat as free/not purchasable via this path.
       return false;
@@ -403,7 +456,7 @@ export class GameEngine {
       if (this.getResourceAmount(input.resource) < input.amount) {
         this.notifications.push(
           "status",
-          `Not enough ${input.resource} to buy ${quantity}x ${producer.name}.`,
+          `Not enough ${input.resource} to buy ${quantity}x ${def.name}.`,
           { severity: "warning" }
         );
         return false;
@@ -413,10 +466,26 @@ export class GameEngine {
     for (const input of cost) {
       this.spendResource(input.resource, input.amount);
     }
-    producer.quantity += quantity;
+    this.state.buildings[buildingId] = owned + quantity;
     this.incrementStatistic("buildingsBought:total", quantity);
-    this.incrementStatistic(`buildingsBought:${producerId}`, quantity);
-    this.notifications.push("status", `Purchased ${quantity}x ${producer.name}.`);
+    this.incrementStatistic(`buildingsBought:${buildingId}`, quantity);
+    this.notifications.push("status", `Purchased ${quantity}x ${def.name}.`);
+    return true;
+  }
+
+  /** Sells the last `quantity` units for BUILDING_SELL_REFUND_FRACTION of
+   *  what they cost, which also brings the next purchase price back down. */
+  sellBuilding(buildingId: string, quantity = 1): boolean {
+    const def = this.getBuildingDef(buildingId);
+    const refund = this.getBuildingSellRefund(buildingId, quantity);
+    if (!def || !refund) return false;
+    for (const r of refund) this.gainResource(r.resource, r.amount, { countAsEarned: false });
+    this.state.buildings[buildingId] = this.getBuildingQuantity(buildingId) - quantity;
+    this.incrementStatistic("buildingsSold:total", quantity);
+    this.notifications.push(
+      "status",
+      `Sold ${quantity}x ${def.name} for ${refund.map((r) => `${r.amount} ${r.resource}`).join(", ")}.`
+    );
     return true;
   }
 
@@ -489,9 +558,9 @@ export class GameEngine {
    */
   getEffectiveRatePerSecond(resource: ResourceId): number {
     let base = 0;
-    for (const producer of Object.values(this.state.producers)) {
-      if (producer.resource === resource) {
-        base += producer.baseRatePerSecond * producer.quantity;
+    for (const def of this.content.buildings) {
+      if (def.resource === resource) {
+        base += def.baseRatePerSecond * this.getBuildingQuantity(def.id);
       }
     }
     return this.getModifiedValue(resource, base);
@@ -926,7 +995,11 @@ export class GameEngine {
     }
 
     const gains: Record<ResourceId, number> = {};
-    for (const resourceId of Object.keys(this.state.resources)) {
+    const producedResources = new Set([
+      ...Object.keys(this.state.resources),
+      ...this.content.buildings.map((b) => b.resource),
+    ]);
+    for (const resourceId of producedResources) {
       const rate = this.getEffectiveRatePerSecond(resourceId);
       const gained = rate * (cappedMs / 1000);
       if (gained > 0) gains[resourceId] = gained;
@@ -1543,6 +1616,7 @@ export class GameEngine {
   /** Full wipe — new game. Keeps offlineCapMs at the default. */
   resetAll(): void {
     this.state = createInitialState(this.clock());
+    this.grantStartingBuildings();
     this.notifications.clear();
     this.notifications.push("status", "Save data cleared — starting fresh.");
   }
@@ -1560,6 +1634,16 @@ export class GameEngine {
    *  Known simplification: a cancelled crafting job's refund does NOT
    *  reverse this stat — a minor overcount on cancel, not worth the extra
    *  bookkeeping for an edge case. */
+  /** Adds to a resource. `countAsEarned: false` is for refunds, which give
+   *  back what was already yours rather than counting toward lifetime
+   *  milestones like "earned 100 GP". */
+  private gainResource(resourceId: ResourceId, amount: number, opts?: { countAsEarned?: boolean }): void {
+    if (amount <= 0) return;
+    this.ensureResourceExists(resourceId);
+    this.state.resources[resourceId].amount += amount;
+    if (opts?.countAsEarned !== false) this.state.resources[resourceId].lifetimeEarned += amount;
+  }
+
   private spendResource(resourceId: ResourceId, amount: number): void {
     this.ensureResourceExists(resourceId);
     this.state.resources[resourceId].amount -= amount;
@@ -1829,8 +1913,8 @@ export class GameEngine {
 
   static deserialize(
     json: string,
-    notifications?: NotificationQueue,
-    opts?: { clock?: () => number }
+    content: GameContent,
+    opts?: { notifications?: NotificationQueue; clock?: () => number }
   ): GameEngine {
     const clock = opts?.clock ?? Date.now;
     let parsed: any = JSON.parse(json);
@@ -1849,7 +1933,7 @@ export class GameEngine {
     // without ever throwing an error.
     const withDefaults: GameState = {
       resources: { ...createInitialState().resources, ...(parsed.resources ?? {}) },
-      producers: parsed.producers ?? {},
+      buildings: parsed.buildings ?? {},
       modifiers: parsed.modifiers ?? {},
       skills: (() => {
         const skills = parsed.skills ?? {};
@@ -1870,7 +1954,7 @@ export class GameEngine {
         typeof parsed.offlineCapMs === "number" ? parsed.offlineCapMs : DEFAULT_OFFLINE_CAP_MS,
       version: SCHEMA_VERSION,
     };
-    return new GameEngine(withDefaults, notifications, { clock });
+    return new GameEngine(content, { state: withDefaults, notifications: opts?.notifications, clock });
   }
 }
 

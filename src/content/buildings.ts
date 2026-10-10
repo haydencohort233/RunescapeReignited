@@ -1,17 +1,27 @@
-import type { Producer } from "../engine/types";
+import type { BuildingDefinition } from "../engine/types";
 
-// Static content definitions. Each starts at quantity 0 (nobody owns one by
-// default) — owning one, and therefore any production from it, only happens
-// once the player actually buys it. unlockCondition (if present) gates
-// whether it can be bought/discovered at all yet; omit it for buildings
-// available from the very start (still costs money, just not gated).
-export const BUILDING_CATALOG: Producer[] = [
+// Static content definitions. Nobody owns one by default unless it sets
+// startingQuantity — production only happens once the player buys one.
+// unlockCondition (if present) gates whether it can be bought/discovered at
+// all yet; omit it for buildings available from the very start (still costs
+// money, just not gated). Saves store only owned counts, so edits here reach
+// existing players.
+export const BUILDING_CATALOG: BuildingDefinition[] = [
+  {
+    id: "base-gp",
+    name: "Base Income",
+    resource: "gp",
+    baseRatePerSecond: 1,
+    // No baseCost — not purchased or sellable, just always-on. Set
+    // startingQuantity to 0 if GP should start at 0 until the player
+    // triggers something.
+    startingQuantity: 1,
+  },
   {
     id: "lumbermill",
     name: "Lumbermill",
     resource: "wood",
     baseRatePerSecond: 0.5,
-    quantity: 0,
     baseCost: [{ resource: "gp", amount: 10 }],
     costScalingFactor: 1.15,
     // No unlockCondition — available from the start, just costs GP.
@@ -21,7 +31,6 @@ export const BUILDING_CATALOG: Producer[] = [
     name: "Quarry",
     resource: "coal",
     baseRatePerSecond: 0.3,
-    quantity: 0,
     baseCost: [{ resource: "gp", amount: 50 }],
     costScalingFactor: 1.15,
     // Milestone reveal: once the player has EVER earned 100 gp (not "currently
@@ -34,7 +43,6 @@ export const BUILDING_CATALOG: Producer[] = [
     name: "Fishing Hut",
     resource: "raw-fish",
     baseRatePerSecond: 0.4,
-    quantity: 0,
     baseCost: [{ resource: "gp", amount: 30 }],
     costScalingFactor: 1.15,
     // Map-driven unlock: discovering Lake Shore for the first time sets this
@@ -47,7 +55,6 @@ export const BUILDING_CATALOG: Producer[] = [
     name: "Hunter's Camp",
     resource: "pelt",
     baseRatePerSecond: 0.2,
-    quantity: 0,
     baseCost: [{ resource: "gp", amount: 40 }],
     costScalingFactor: 1.15,
     // Same pattern, second location — proves this isn't a one-off special
