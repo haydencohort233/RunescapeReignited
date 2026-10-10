@@ -1,64 +1,41 @@
 import type {
-  GameState,
-  GameContent,
-  BuildingDefinition,
-  Modifier,
   ResourceId,
-  CraftingRecipe,
-  RecipeInput,
+  BuildingDefinition,
+  GameContent,
+  Modifier,
+  WeaponType,
   ItemDefinition,
   ItemInstance,
   MapLocation,
+  GameState,
+  RecipeInput,
+  UnlockCondition,
   AchievementDefinition,
   JobDefinition,
-  EnemyDefinition,
-  WeaponType,
-  UnlockCondition,
-  QuestDefinition,
-  ActiveCraftJob,
-  ActiveGatherSession,
-  ActiveTravel,
+  CraftingRecipe,
   ActiveCombatSession,
+  EnemyDefinition,
 } from "./types";
 import { NotificationQueue } from "./notificationQueue";
 import { levelForXp, xpForLevel, MAX_LEVEL, calculateCombatLevel } from "./xpCurve";
-import { isUnlocked, captureBaselines, offsetByBaselines } from "./unlockConditions";
-import { getDailyPeriodNumber } from "./time";
-import { formatDuration } from "./format";
-import {
-  AUTO_EAT_BELOW_HP_FRACTION,
-  BASE_HP_REGEN_PER_SECOND,
-  BUILDING_SELL_REFUND_FRACTION,
-  DEFAULT_COST_SCALING_FACTOR,
-  DEFAULT_DEATH_GP_LOSS_PERCENT,
-  DEFAULT_DEATH_RESOURCE_LOSS_PERCENT,
-  DEFAULT_ENEMY_ATTACK_SPEED_MS,
-  DEFAULT_GATHER_MAX_DURATION_MS,
-  DEFAULT_MS_PER_DISTANCE_UNIT,
-  EAT_ATTACK_DELAY_MS,
-  ENEMY_RESPAWN_MS,
-  SHOP_SELL_PRICE_FRACTION,
-  UNARMED_ATTACK_SPEED_MS,
-  WEAKNESS_DAMAGE_MULTIPLIER,
-} from "./tuning";
-import { STARTING_LOCATION_ID, createInitialState } from "./state";
+import { isUnlocked } from "./unlockConditions";
+import { formatDuration, capitalize } from "./format";
+import { SHOP_SELL_PRICE_FRACTION, EAT_ATTACK_DELAY_MS, BASE_HP_REGEN_PER_SECOND } from "./tuning";
+import { createInitialState } from "./state";
 import { migrateSave } from "./migrations";
+import { countOwned } from "./ledger";
+import { describeAction, getActiveCombat } from "./activeAction";
+import { BuildingSystem } from "./systems/buildings";
+import { CraftingSystem } from "./systems/crafting";
+import { TravelSystem } from "./systems/travel";
+import { CombatSystem } from "./systems/combat";
+import { JobBoardSystem } from "./systems/jobs";
+import { QuestSystem } from "./systems/quests";
 
 /** Below this, a gap is just a tab-switch/screen-lock, not a real "away"
  *  session — don't narrate it, even though the simulation still resolves
  *  it correctly either way. */
 const MIN_AWAY_MS_FOR_SUMMARY = 60 * 1000; // 1 minute
-
-import { resolveAttack } from "./combatMath";
-import { weightedRandomPick } from "./rng";
-import { countOwned } from "./ledger";
-import {
-  describeAction,
-  getActiveCombat,
-  getActiveCraftJob,
-  getActiveGatherSession,
-  getActiveTravel,
-} from "./activeAction";
 
 /**
  * GameEngine owns the authoritative simulation. It has NO React dependency —
@@ -70,6 +47,12 @@ import {
  * on load, and it now resolves production, crafting-job completions, and
  * modifier expiry against the SAME capped time window, so they all agree
  * about "how much time actually counted" during a long absence.
+ *
+ * Each game system (buildings, crafting, travel, combat, jobs, quests)
+ * lives in engine/systems/ and is reached through the forwarding methods
+ * near the bottom of this class. Shared helpers the systems call
+ * (gainResource, payFor, incrementStatistic, ...) are non-private for that
+ * reason; UI code should stick to the player-facing methods.
  */
 export class GameEngine {
   private state: GameState;
@@ -82,22 +65,30 @@ export class GameEngine {
    *  the save holds only player progress, so rebalancing content reaches
    *  existing players on their next load. */
   readonly content: GameContent;
-  private readonly buildingsById: Map<string, BuildingDefinition>;
-  private readonly itemsById: Map<string, ItemDefinition>;
-  private readonly questsById: Map<string, QuestDefinition>;
+  readonly itemsById: Map<string, ItemDefinition>;
+  private readonly buildingSystem: BuildingSystem;
+  private readonly craftingSystem: CraftingSystem;
+  private readonly travelSystem: TravelSystem;
+  private readonly combatSystem: CombatSystem;
+  private readonly jobBoardSystem: JobBoardSystem;
+  private readonly questSystem: QuestSystem;
   /** Non-null only while resolveElapsed() is replaying an away period.
    *  Combat outcomes collect here and go into the one "while you were
    *  away" summary instead of a toast per kill. */
-  private catchUp: { kills: Record<string, number>; loot: Record<string, number>; eaten: number } | null = null;
+  catchUp: { kills: Record<string, number>; loot: Record<string, number>; eaten: number } | null = null;
 
   constructor(
     content: GameContent,
     opts?: { state?: GameState; notifications?: NotificationQueue; clock?: () => number }
   ) {
     this.content = content;
-    this.buildingsById = new Map(content.buildings.map((b) => [b.id, b]));
     this.itemsById = new Map(content.items.map((i) => [i.id, i]));
-    this.questsById = new Map(content.quests.map((q) => [q.id, q]));
+    this.buildingSystem = new BuildingSystem(this);
+    this.craftingSystem = new CraftingSystem(this);
+    this.travelSystem = new TravelSystem(this);
+    this.combatSystem = new CombatSystem(this);
+    this.jobBoardSystem = new JobBoardSystem(this);
+    this.questSystem = new QuestSystem(this);
     this.clock = opts?.clock ?? Date.now;
     this.state = opts?.state ?? createInitialState(this.clock());
     this.notifications = opts?.notifications ?? new NotificationQueue();
@@ -121,18 +112,6 @@ export class GameEngine {
 
   // ── The single active action (crafting, gathering, travel, combat) ─────
 
-  private get craftJob(): ActiveCraftJob | null {
-    return getActiveCraftJob(this.state);
-  }
-
-  private get gatherSession(): ActiveGatherSession | null {
-    return getActiveGatherSession(this.state);
-  }
-
-  private get travel(): ActiveTravel | null {
-    return getActiveTravel(this.state);
-  }
-
   private get combatSession(): ActiveCombatSession | null {
     return getActiveCombat(this.state);
   }
@@ -140,7 +119,7 @@ export class GameEngine {
   /** Every start* method gates on this, so "one thing at a time" is
    *  enforced in exactly one place — adding a new action kind can't
    *  forget to check the others. */
-  private ensureIdle(): boolean {
+  ensureIdle(): boolean {
     const action = this.state.activeAction;
     if (!action) return true;
     this.notifications.push("status", `You're busy ${describeAction(action)} — stop that first.`, {
@@ -200,7 +179,7 @@ export class GameEngine {
 
   /** Removes everything in `costs` (times `multiplier`). Callers check
    *  canAfford first; this doesn't re-check. */
-  private payFor(costs: RecipeInput[], multiplier = 1): void {
+  payFor(costs: RecipeInput[], multiplier = 1): void {
     for (const c of costs) this.removeOwned(c.resource, c.amount * multiplier);
   }
 
@@ -225,127 +204,20 @@ export class GameEngine {
 
   /** Returns something the player already had (a cancelled craft's
    *  materials) without counting it as newly earned. */
-  private giveBack(id: ResourceId, amount: number): void {
+  giveBack(id: ResourceId, amount: number): void {
     if (this.isStackable(id)) this.gainResource(id, amount, { countAsEarned: false });
     else this.addItem(id, amount);
   }
 
   // ── Buildings ────────────────────────────────────────────────────────
 
-  getBuildingDef(buildingId: string): BuildingDefinition | undefined {
-    return this.buildingsById.get(buildingId);
-  }
 
-  getBuildingQuantity(buildingId: string): number {
-    return this.state.buildings[buildingId] ?? 0;
-  }
 
-  /** Total cost of `quantity` units starting from `ownedBefore` already
-   *  owned. Shared by buying (from the current count up) and selling (the
-   *  last N bought). */
-  private getBuildingCostRange(def: BuildingDefinition, ownedBefore: number, quantity: number): RecipeInput[] {
-    const scaling = def.costScalingFactor ?? DEFAULT_COST_SCALING_FACTOR;
-    // Sum of a geometric series: baseCost * scaling^owned for each unit.
-    return (def.baseCost ?? []).map((input) => {
-      let total = 0;
-      for (let i = 0; i < quantity; i++) {
-        total += input.amount * Math.pow(scaling, ownedBefore + i);
-      }
-      return { resource: input.resource, amount: Math.ceil(total) };
-    });
-  }
 
-  /** Cost to buy `quantity` more of a building, given how many are already owned.
-   *  Returns null if the building has no baseCost (not player-purchasable). */
-  getBuildingPurchaseCost(buildingId: string, quantity: number): RecipeInput[] | null {
-    const def = this.getBuildingDef(buildingId);
-    if (!def || !def.baseCost) return null;
-    return this.getBuildingCostRange(def, this.getBuildingQuantity(buildingId), quantity);
-  }
 
-  /** What selling the last `quantity` units would refund — a fraction of
-   *  what those exact units cost. Null if the building can't be sold. */
-  getBuildingSellRefund(buildingId: string, quantity: number): RecipeInput[] | null {
-    const def = this.getBuildingDef(buildingId);
-    if (!def || !def.baseCost) return null;
-    const owned = this.getBuildingQuantity(buildingId);
-    if (quantity <= 0 || quantity > owned) return null;
-    return this.getBuildingCostRange(def, owned - quantity, quantity).map((c) => ({
-      resource: c.resource,
-      amount: Math.floor(c.amount * BUILDING_SELL_REFUND_FRACTION),
-    }));
-  }
 
-  /** Whether a building's unlockCondition (if any) is currently satisfied. */
-  isBuildingUnlocked(buildingId: string): boolean {
-    const def = this.getBuildingDef(buildingId);
-    if (!def) return false;
-    if (!def.unlockCondition) return true;
-    return isUnlocked(def.unlockCondition, this.state);
-  }
 
-  /** Buys `quantity` more of a building at the scaled cost, if affordable,
-   *  unlocked, and under its maxOwned limit. `bypassUnlock` is for
-   *  dev/cheat tooling only — normal player-facing purchase flows should
-   *  never pass it. */
-  purchaseBuilding(buildingId: string, quantity = 1, opts?: { bypassUnlock?: boolean }): boolean {
-    const def = this.getBuildingDef(buildingId);
-    if (!def || quantity <= 0) return false;
 
-    if (!opts?.bypassUnlock && !this.isBuildingUnlocked(buildingId)) {
-      this.notifications.push("status", `${def.name} isn't available yet.`, {
-        severity: "warning",
-      });
-      return false;
-    }
-
-    const owned = this.getBuildingQuantity(buildingId);
-    if (def.maxOwned !== undefined && owned + quantity > def.maxOwned) {
-      this.notifications.push("status", `You can only own ${def.maxOwned}x ${def.name}.`, {
-        severity: "warning",
-      });
-      return false;
-    }
-
-    const cost = this.getBuildingPurchaseCost(buildingId, quantity);
-    if (!cost) {
-      // No baseCost defined — treat as free/not purchasable via this path.
-      return false;
-    }
-
-    const short = cost.find((c) => this.getOwnedCount(c.resource) < c.amount);
-    if (short) {
-      this.notifications.push(
-        "status",
-        `Not enough ${this.nameOf(short.resource)} to buy ${quantity}x ${def.name}.`,
-        { severity: "warning" }
-      );
-      return false;
-    }
-
-    this.payFor(cost);
-    this.state.buildings[buildingId] = owned + quantity;
-    this.incrementStatistic("buildingsBought:total", quantity);
-    this.incrementStatistic(`buildingsBought:${buildingId}`, quantity);
-    this.notifications.push("status", `Purchased ${quantity}x ${def.name}.`);
-    return true;
-  }
-
-  /** Sells the last `quantity` units for BUILDING_SELL_REFUND_FRACTION of
-   *  what they cost, which also brings the next purchase price back down. */
-  sellBuilding(buildingId: string, quantity = 1): boolean {
-    const def = this.getBuildingDef(buildingId);
-    const refund = this.getBuildingSellRefund(buildingId, quantity);
-    if (!def || !refund) return false;
-    for (const r of refund) this.giveBack(r.resource, r.amount);
-    this.state.buildings[buildingId] = this.getBuildingQuantity(buildingId) - quantity;
-    this.incrementStatistic("buildingsSold:total", quantity);
-    this.notifications.push(
-      "status",
-      `Sold ${quantity}x ${def.name} for ${refund.map((r) => `${r.amount} ${r.resource}`).join(", ")}.`
-    );
-    return true;
-  }
 
   // ── Modifiers (buffs/debuffs from items or events) ─────────────────────
 
@@ -461,326 +333,23 @@ export class GameEngine {
 
   // ── Crafting jobs (time-based, gated by skill/materials) ───────────────
 
-  /**
-   * Starts a crafting job for `quantity` items. Materials for the FULL
-   * quantity are deducted immediately (RuneScape-style: you commit the
-   * batch up front). Only one job runs at a time in v1 — starting a new
-   * one while another is active is rejected.
-   */
-  startCraftJob(recipe: CraftingRecipe, quantity: number): boolean {
-    if (quantity <= 0) return false;
 
-    if (recipe.unlockCondition && !isUnlocked(recipe.unlockCondition, this.state)) {
-      this.notifications.push("status", `You don't meet the requirements to do this yet.`, {
-        severity: "warning",
-      });
-      return false;
-    }
 
-    if (!this.ensureIdle()) return false;
-
-    const short = recipe.inputs.find((input) => this.getOwnedCount(input.resource) < input.amount * quantity);
-    if (short) {
-      this.notifications.push(
-        "status",
-        `Not enough ${this.nameOf(short.resource)} to make ${quantity}x ${recipe.name}.`,
-        { severity: "warning" }
-      );
-      return false;
-    }
-
-    this.payFor(recipe.inputs, quantity);
-
-    this.state.activeAction = {
-      kind: "craft",
-      recipeId: recipe.id,
-      recipeName: recipe.name,
-      skill: recipe.skill,
-      xpPerItem: recipe.xpPerItem,
-      timePerItemMs: recipe.timePerItemMs,
-      output: recipe.output,
-      inputsPerItem: recipe.inputs,
-      startedAt: this.state.lastTickTimestamp,
-      quantityTotal: quantity,
-      quantityCompleted: 0,
-    };
-
-    const totalSeconds = Math.round((recipe.timePerItemMs * quantity) / 1000);
-    this.notifications.push(
-      "status",
-      `Started crafting ${quantity}x ${recipe.name} (~${totalSeconds}s)`
-    );
-    return true;
-  }
-
-  /**
-   * Cancels the active job. Refunds materials for whatever wasn't completed
-   * yet (proportional to quantityTotal - quantityCompleted), since those
-   * items were never actually produced.
-   */
-  cancelCraftJob(): void {
-    const job = this.craftJob;
-    if (!job) return;
-    const remaining = job.quantityTotal - job.quantityCompleted;
-    for (const input of job.inputsPerItem) {
-      this.giveBack(input.resource, input.amount * remaining);
-    }
-    this.state.activeAction = null;
-    this.notifications.push("status", `Cancelled crafting ${job.recipeName}. Unused materials refunded.`);
-  }
-
-  /** Resolve craft-job completions up to `effectiveNow`. Internal — called from resolveElapsed(). */
-  private resolveCraftJob(effectiveNow: number): void {
-    const job = this.craftJob;
-    if (!job) return;
-
-    const elapsedSinceStart = effectiveNow - job.startedAt;
-    const completedByNow = Math.min(
-      job.quantityTotal,
-      Math.floor(elapsedSinceStart / job.timePerItemMs)
-    );
-    const newCompletions = completedByNow - job.quantityCompleted;
-    if (newCompletions <= 0) return;
-
-    this.addItem(job.output.resource, job.output.amount * newCompletions);
-
-    this.addSkillXp(job.skill, job.xpPerItem * newCompletions);
-    this.incrementStatistic(`crafted:${job.recipeId}`, newCompletions);
-
-    job.quantityCompleted = completedByNow;
-
-    // One toast per job, updated in place as it progresses — a 30-item
-    // batch used to leave 30 separate toasts behind.
-    const replaceKey = "craft-progress";
-    if (job.quantityCompleted >= job.quantityTotal) {
-      this.notifications.push(
-        "production",
-        `Made x${job.quantityTotal} ${job.recipeName} (+${job.xpPerItem * job.quantityTotal} ${capitalize(job.skill)} XP)`,
-        { replaceKey }
-      );
-      this.state.activeAction = null;
-    } else {
-      this.notifications.push(
-        "production",
-        `Made ${job.quantityCompleted}/${job.quantityTotal} ${job.recipeName} so far (+${job.xpPerItem * job.quantityCompleted} ${capitalize(job.skill)} XP)`,
-        { replaceKey }
-      );
-    }
-  }
 
   // ── Gathering sessions (Woodcutting etc. — open-ended, time-capped) ────
 
-  /** Starts an open-ended gathering session. Mutually exclusive with
-   *  crafting (same "one action at a time" rule) and with another gather
-   *  session. `recipe.inputs` should normally be empty for a gathering
-   *  recipe, but nothing enforces that — a "gather" that consumes
-   *  something isn't nonsensical, just unusual. */
-  startGatherSession(
-    amenityId: string,
-    recipe: CraftingRecipe,
-    opts?: { maxDurationMs?: number; requiresKeepAliveEveryMs?: number }
-  ): boolean {
-    if (recipe.unlockCondition && !isUnlocked(recipe.unlockCondition, this.state)) {
-      this.notifications.push("status", `You don't meet the requirements to do this yet.`, {
-        severity: "warning",
-      });
-      return false;
-    }
 
-    if (!this.ensureIdle()) return false;
 
-    const now = this.state.lastTickTimestamp;
-    this.state.activeAction = {
-      kind: "gather",
-      amenityId,
-      recipeId: recipe.id,
-      recipeName: recipe.name,
-      skill: recipe.skill,
-      xpPerItem: recipe.xpPerItem,
-      timePerItemMs: recipe.timePerItemMs,
-      output: recipe.output,
-      startedAt: now,
-      quantityGathered: 0,
-      maxDurationMs: opts?.maxDurationMs ?? DEFAULT_GATHER_MAX_DURATION_MS,
-      requiresKeepAliveEveryMs: opts?.requiresKeepAliveEveryMs,
-      lastKeepAliveAt: opts?.requiresKeepAliveEveryMs ? now : undefined,
-    };
-    this.notifications.push("status", `Started gathering ${recipe.name}.`);
-    return true;
-  }
 
-  /** Stops the current session early (player choice, not a cap being hit). */
-  stopGatherSession(): void {
-    const session = this.gatherSession;
-    if (!session) return;
-    this.state.activeAction = null;
-    this.notifications.push(
-      "status",
-      `Stopped gathering ${session.recipeName}. Gathered ${session.quantityGathered.toLocaleString()} total.`
-    );
-  }
-
-  /** Resets the keep-alive clock — call this from a "tend to it" UI action.
-   *  Returns false if there's no session, or the session doesn't require
-   *  keep-alives (nothing to reset). Uses the engine clock rather than the
-   *  lastTickTimestamp anchor, since this is a live player action, not
-   *  something resolved retroactively during offline catch-up. */
-  keepGatherSessionAlive(): boolean {
-    const session = this.gatherSession;
-    if (!session || session.requiresKeepAliveEveryMs === undefined) return false;
-    session.lastKeepAliveAt = this.clock();
-    return true;
-  }
-
-  /** Resolve gathering progress up to `effectiveNow`. Internal — called from
-   *  resolveElapsed(). Mirrors resolveCraftJob's "completedByNow = floor(elapsed
-   *  / timePerItem)" approach, except the cap is a TIME cutoff (whichever is
-   *  sooner: maxDurationMs, or a missed keep-alive) instead of a fixed quantity. */
-  private resolveGatherSession(effectiveNow: number): void {
-    const session = this.gatherSession;
-    if (!session) return;
-
-    let cutoff = session.startedAt + session.maxDurationMs;
-    let endedFromInactivity = false;
-    if (session.requiresKeepAliveEveryMs !== undefined && session.lastKeepAliveAt !== undefined) {
-      const keepAliveCutoff = session.lastKeepAliveAt + session.requiresKeepAliveEveryMs;
-      if (keepAliveCutoff < cutoff) {
-        cutoff = keepAliveCutoff;
-        endedFromInactivity = true;
-      }
-    }
-
-    const cappedNow = Math.min(effectiveNow, cutoff);
-    const totalByNow = Math.max(
-      0,
-      Math.floor((cappedNow - session.startedAt) / session.timePerItemMs)
-    );
-    const newCompletions = totalByNow - session.quantityGathered;
-
-    if (newCompletions > 0) {
-      this.addItem(session.output.resource, session.output.amount * newCompletions);
-      this.addSkillXp(session.skill, session.xpPerItem * newCompletions);
-      this.incrementStatistic(`gathered:${session.recipeId}`, newCompletions);
-      session.quantityGathered = totalByNow;
-    }
-
-    if (cappedNow >= cutoff) {
-      const reason = endedFromInactivity ? "needed attention" : "reached its time limit";
-      this.notifications.push(
-        "status",
-        `Your ${session.recipeName} gathering session ended (${reason}). Gathered ${session.quantityGathered.toLocaleString()} total.`
-      );
-      this.state.activeAction = null;
-    }
-  }
 
   // ── World map travel ─────────────────────────────────────────────────
 
-  /** Product of all active multiplicative "travelSpeed"-targeted modifiers,
-   *  combined with a simple Agility-derived bonus (capped at 50% faster at
-   *  level 100 — tune this formula freely, it's isolated here on purpose). */
-  getTravelSpeedMultiplier(): number {
-    const modifierMultiplier = this.getModifiedValue("travelSpeed", 1);
-    const agilityLevel = this.getSkillLevel("agility");
-    const agilityBonus = 1 - Math.min(0.5, agilityLevel * 0.005);
-    return modifierMultiplier * agilityBonus;
-  }
 
-  /** Pure calculation, no state mutation — used both by startTravel and by
-   *  the UI to preview a trip's duration before committing to it. */
-  getTravelDurationEstimate(from: MapLocation, to: MapLocation, opts?: { msPerDistanceUnit?: number }): number {
-    const distance = Math.hypot(to.x - from.x, to.y - from.y);
-    const baseDurationMs = distance * (opts?.msPerDistanceUnit ?? DEFAULT_MS_PER_DISTANCE_UNIT);
-    return Math.max(1000, Math.round(baseDurationMs * this.getTravelSpeedMultiplier()));
-  }
 
-  startTravel(from: MapLocation, to: MapLocation, opts?: { msPerDistanceUnit?: number }): boolean {
-    if (this.state.currentLocationId === to.id) {
-      this.notifications.push("status", `You're already at ${to.name}.`, { severity: "warning" });
-      return false;
-    }
-    if (to.unlockCondition && !isUnlocked(to.unlockCondition, this.state)) {
-      this.notifications.push("status", `You can't travel to ${to.name} yet.`, { severity: "warning" });
-      return false;
-    }
-    if (!this.ensureIdle()) return false;
 
-    const durationMs = this.getTravelDurationEstimate(from, to, opts);
 
-    this.state.activeAction = {
-      kind: "travel",
-      destinationLocationId: to.id,
-      destinationName: to.name,
-      startedAt: this.state.lastTickTimestamp,
-      durationMs,
-      onArriveSetFlag: to.onArriveSetFlag,
-    };
-    this.notifications.push("status", `Traveling to ${to.name} (~${Math.round(durationMs / 1000)}s).`);
-    return true;
-  }
 
-  /** Cancels an in-progress trip. Simplification: you stay at your ORIGIN,
-   *  not somewhere partway there — no partial-position tracking (yet). */
-  cancelTravel(): void {
-    const travel = this.travel;
-    if (!travel) return;
-    this.state.activeAction = null;
-    this.notifications.push("status", `Travel to ${travel.destinationName} cancelled.`);
-  }
 
-  /** Instantly moves the player to `destination`, bypassing normal travel
-   *  time — e.g. an Amulet of Glory. Still respects the destination's
-   *  unlockCondition (you can't teleport somewhere you haven't unlocked).
-   *  Not charge-limited yet — see the teleportTo comment in items.ts. */
-  teleportTo(def: ItemDefinition, instanceId: string, destination: MapLocation): boolean {
-    if (!this.state.inventory[instanceId]) return false;
-    if (destination.unlockCondition && !isUnlocked(destination.unlockCondition, this.state)) {
-      this.notifications.push("status", `You can't teleport to ${destination.name} yet.`, {
-        severity: "warning",
-      });
-      return false;
-    }
-    // Teleporting interrupts whatever you were doing, same as OSRS — but it
-    // can't be used to escape a fight you aren't allowed to flee.
-    if (this.state.activeAction && !this.stopActiveAction()) return false;
-    this.state.currentLocationId = destination.id;
-    this.arriveAt(destination.id, destination.name, destination.onArriveSetFlag);
-    this.notifications.push("status", `You teleport to ${destination.name} using ${def.name}.`);
-    return true;
-  }
-
-  /** Resolve travel completion up to `effectiveNow`. Internal — called from resolveElapsed(). */
-  private resolveTravel(effectiveNow: number): void {
-    const travel = this.travel;
-    if (!travel) return;
-    if (effectiveNow >= travel.startedAt + travel.durationMs) {
-      this.state.currentLocationId = travel.destinationLocationId;
-      this.state.activeAction = null;
-      this.incrementStatistic("totalTravelTimeMs", travel.durationMs);
-      this.arriveAt(travel.destinationLocationId, travel.destinationName, travel.onArriveSetFlag);
-      this.notifications.push("status", `Arrived at ${travel.destinationName}.`);
-    }
-  }
-
-  /** Shared arrival logic for both normal travel and teleport. Tracks
-   *  per-location visit counts always, but only fires the "you discover..."
-   *  notification and any onArriveSetFlag the FIRST time — repeat visits
-   *  are silent on that front (still increment traveledTo, still notify
-   *  "Arrived at..." from the caller). This is what makes a flag-gated
-   *  building's unlock moment actually visible instead of a silent
-   *  background state change. */
-  private arriveAt(locationId: string, locationName: string, onArriveSetFlag?: string): void {
-    this.incrementStatistic(`traveledTo:${locationId}`);
-
-    const visitedFlag = `visited:${locationId}`;
-    const isFirstVisit = !this.getFlag(visitedFlag);
-    if (!isFirstVisit) return;
-
-    this.setFlag(visitedFlag, true);
-    this.incrementStatistic("locationsDiscovered");
-    if (onArriveSetFlag) this.setFlag(onArriveSetFlag, true);
-    this.notifications.push("quest", `You discover ${locationName} for the first time!`);
-  }
 
   // ── Time resolution — the one true path for advancing the simulation ──
 
@@ -844,9 +413,9 @@ export class GameEngine {
       this.gainResource(resourceId, gained);
     }
 
-    this.resolveCraftJob(effectiveNow);
-    this.resolveTravel(effectiveNow);
-    this.resolveGatherSession(effectiveNow);
+    this.craftingSystem.resolveCraftJob(effectiveNow);
+    this.travelSystem.resolveTravel(effectiveNow);
+    this.craftingSystem.resolveGatherSession(effectiveNow);
     // Captured BEFORE resolveCombatSession runs — if a fight was active at
     // the start of this tick's window, no regen credit for ANY of that
     // window, even if the fight ends partway through it (e.g. defeat).
@@ -854,10 +423,10 @@ export class GameEngine {
     // resolves) would wrongly grant regen for the whole window once the
     // session clears, even though most of it was spent fighting.
     const wasInCombatThisTick = this.combatSession !== null;
-    this.resolveCombatSession(effectiveNow);
+    this.combatSystem.resolveCombatSession(effectiveNow);
     if (!wasInCombatThisTick) this.resolveHpRegen(cappedMs);
-    this.resolveJobExpiry(now);
-    this.checkQuests();
+    this.jobBoardSystem.resolveJobExpiry(now);
+    this.questSystem.checkQuests();
     this.syncDerivedStatistics();
 
     // Time beyond the offline cap never happened as far as the simulation
@@ -1187,7 +756,7 @@ export class GameEngine {
     this.state.currentHp = Math.min(this.getMaxHp(), this.getCurrentHp() + amount);
   }
 
-  private damageHp(amount: number): void {
+  damageHp(amount: number): void {
     if (amount <= 0) return;
     this.state.currentHp = Math.max(0, this.getCurrentHp() - amount);
   }
@@ -1220,315 +789,18 @@ export class GameEngine {
 
   // ── Combat ───────────────────────────────────────────────────────────
 
-  /** Starts a fight. `equipmentBonus` is computed by the caller (see
-   *  content/combatStats.ts) by summing stats across currently-equipped
-   *  items, PLUS the equipped weapon's speed/type specifically. Refuses if
-   *  another action is active, or current HP is 0 (heal first). */
-  startCombat(
-    enemy: EnemyDefinition,
-    equipmentBonus: {
-      attack: number;
-      strength: number;
-      defence: number;
-      attackSpeedMs?: number;
-      weaponType?: WeaponType;
-    },
-    opts?: { autoRepeat?: boolean; autoEatItemId?: string }
-  ): boolean {
-    if (!this.ensureIdle()) return false;
-    if (this.getCurrentHp() <= 0) {
-      this.notifications.push("status", "You need to heal before fighting.", { severity: "warning" });
-      return false;
-    }
 
-    const now = this.state.lastTickTimestamp;
-    this.state.activeAction = {
-      kind: "combat",
-      enemyId: enemy.id,
-      enemyName: enemy.name,
-      enemyMaxHp: enemy.maxHp,
-      enemyCurrentHp: enemy.maxHp,
-      enemyAttack: enemy.attack,
-      enemyStrength: enemy.strength,
-      enemyDefence: enemy.defence,
-      enemyAttackBonus: enemy.attackBonus,
-      enemyStrengthBonus: enemy.strengthBonus,
-      enemyDefenceBonus: enemy.defenceBonus,
-      enemyWeakness: enemy.weakness,
-      canFlee: enemy.canFlee ?? true,
-      xpReward: enemy.xpReward,
-      lootTable: enemy.lootTable ?? [],
-      deathPenaltyGpLossPercent: enemy.deathPenalty?.gpLossPercent ?? DEFAULT_DEATH_GP_LOSS_PERCENT,
-      deathPenaltyResourceLossPercent:
-        enemy.deathPenalty?.resourceLossPercent ?? DEFAULT_DEATH_RESOURCE_LOSS_PERCENT,
-      playerAttackBonus: equipmentBonus.attack,
-      playerStrengthBonus: equipmentBonus.strength,
-      playerDefenceBonus: equipmentBonus.defence,
-      playerWeaponType: equipmentBonus.weaponType,
-      playerAttackSpeedMs: equipmentBonus.attackSpeedMs ?? UNARMED_ATTACK_SPEED_MS,
-      enemyAttackSpeedMs: enemy.attackSpeedMs ?? DEFAULT_ENEMY_ATTACK_SPEED_MS,
-      playerStartedAt: now,
-      enemyStartedAt: now,
-      playerAttacksResolved: 0,
-      enemyAttacksResolved: 0,
-      autoRepeat: opts?.autoRepeat ?? false,
-      autoEatItemId: opts?.autoEatItemId,
-      kills: 0,
-      log: [],
-    };
-    this.notifications.push("status", `Engaged ${enemy.name}!`);
-    return true;
-  }
 
-  /** Leaves the fight with no reward and no penalty — only if the enemy
-   *  allows it (bosses typically don't). */
-  fleeCombat(): boolean {
-    const session = this.combatSession;
-    if (!session) return false;
-    if (!session.canFlee) {
-      this.notifications.push("status", `You can't flee from ${session.enemyName}.`, {
-        severity: "warning",
-      });
-      return false;
-    }
-    this.state.activeAction = null;
-    this.notifications.push("status", `Fled from ${session.enemyName}.`);
-    return true;
-  }
 
-  /** Interactive override — immediately resolves the player's next attack
-   *  instead of waiting for their own weapon timer, for anyone who'd
-   *  rather click than watch. Only affects the PLAYER's independent
-   *  timer — the enemy's attack schedule is untouched, since forcing your
-   *  own swing early doesn't make sense as also forcing theirs.
-   *
-   *  Re-anchoring uses the same "recompute the anchor from scratch" fix as
-   *  before (see the historical note in git blame / prior version): naively
-   *  incrementing playerStartedAt would compound on repeated clicks. Solving
-   *  `playerStartedAt + playerAttacksResolved * speed == now` for
-   *  playerStartedAt keeps the next attack exactly one weapon-speed away
-   *  from THIS click, regardless of how many times you've clicked. */
-  attackNow(): boolean {
-    const session = this.combatSession;
-    if (!session) return false;
-    const now = this.clock();
-    const killsBefore = session.kills;
-    this.resolvePlayerAttack(session, now);
-    // A kill with autoRepeat has already re-anchored both timers for the
-    // respawn; don't override that.
-    if (this.combatSession && session.kills === killsBefore) {
-      session.playerAttacksResolved += 1;
-      session.playerStartedAt = now - session.playerAttacksResolved * session.playerAttackSpeedMs;
-    }
-    return true;
-  }
 
-  private static readonly COMBAT_LOG_LIMIT = 20;
 
-  private pushCombatLog(
-    session: ActiveCombatSession,
-    attacker: "player" | "enemy",
-    hit: boolean,
-    damage: number
-  ): void {
-    const outcome: "miss" | "block" | "hit" = !hit ? "miss" : damage <= 0 ? "block" : "hit";
-    session.log.push({ timestamp: this.clock(), attacker, outcome, damage });
-    if (session.log.length > GameEngine.COMBAT_LOG_LIMIT) session.log.shift();
-  }
 
-  /** One player attack. May end the session (victory) — callers must
-   *  re-check this.combatSession afterward. */
-  private resolvePlayerAttack(session: ActiveCombatSession, at: number): void {
-    const accuracy = { level: this.getSkillLevel("attack"), bonus: session.playerAttackBonus };
-    const power = { level: this.getSkillLevel("strength"), bonus: session.playerStrengthBonus };
-    const defence = { level: session.enemyDefence, bonus: session.enemyDefenceBonus };
 
-    const outcome = resolveAttack(accuracy, power, defence);
-    let damage = outcome.damage;
-    // Weapon-type-vs-weakness bonus: matching a stab/slash/crush weapon to
-    // the enemy's weakness scales damage up, not accuracy — an accurate
-    // hit with the "wrong" weapon still lands, it just does less.
-    if (outcome.hit && session.playerWeaponType && session.playerWeaponType === session.enemyWeakness) {
-      damage = Math.ceil(damage * WEAKNESS_DAMAGE_MULTIPLIER);
-    }
 
-    this.pushCombatLog(session, "player", outcome.hit, damage);
-    if (outcome.hit) {
-      session.enemyCurrentHp = Math.max(0, session.enemyCurrentHp - damage);
-    }
-    if (session.enemyCurrentHp <= 0) {
-      this.grantCombatVictory(session, at);
-    }
-  }
 
-  /** One enemy attack. May end the session (defeat) — callers must
-   *  re-check this.combatSession afterward. */
-  private resolveEnemyAttack(session: ActiveCombatSession): void {
-    const accuracy = { level: session.enemyAttack, bonus: session.enemyAttackBonus };
-    const power = { level: session.enemyStrength, bonus: session.enemyStrengthBonus };
-    const defence = { level: this.getSkillLevel("defence"), bonus: session.playerDefenceBonus };
 
-    const outcome = resolveAttack(accuracy, power, defence);
-    this.pushCombatLog(session, "enemy", outcome.hit, outcome.damage);
-    if (outcome.hit) {
-      this.damageHp(outcome.damage);
-    }
-    if (this.getCurrentHp() <= 0) {
-      this.endCombatDefeat(session);
-      return;
-    }
-    this.maybeAutoEat(session);
-  }
 
-  private grantCombatVictory(session: ActiveCombatSession, at: number): void {
-    // No combat-style selection UI yet, so XP just splits evenly across the
-    // four skills involved — revisit once style selection exists.
-    const xpEach = session.xpReward / 4;
-    this.addSkillXp("attack", xpEach);
-    this.addSkillXp("strength", xpEach);
-    this.addSkillXp("defence", xpEach);
-    this.addSkillXp("hitpoints", xpEach);
 
-    this.incrementStatistic(`kills:${session.enemyId}`, 1);
-    this.incrementStatistic("kills:total", 1);
-
-    const lootMessages: string[] = [];
-    if (session.lootTable.length > 0) {
-      const drop = weightedRandomPick(session.lootTable.map((entry) => ({ item: entry, weight: entry.weight })));
-      if (drop.id) {
-        const quantity =
-          drop.quantityMin !== undefined && drop.quantityMax !== undefined
-            ? drop.quantityMin + Math.floor(Math.random() * (drop.quantityMax - drop.quantityMin + 1))
-            : 1;
-        this.addItem(drop.id, quantity);
-        if (this.catchUp) this.catchUp.loot[drop.id] = (this.catchUp.loot[drop.id] ?? 0) + quantity;
-        // <id> tags render as item icons in RichText; currencies have no
-        // item definition, so they're written out plainly.
-        lootMessages.push(this.itemsById.has(drop.id) ? `${quantity}x <${drop.id}>` : `${quantity} ${drop.id}`);
-      }
-    }
-
-    session.kills++;
-    if (this.catchUp) {
-      this.catchUp.kills[session.enemyName] = (this.catchUp.kills[session.enemyName] ?? 0) + 1;
-    } else {
-      const lootText = lootMessages.length > 0 ? ` You got: ${lootMessages.join(", ")}.` : " No loot this time.";
-      const killText = session.autoRepeat ? ` (${session.kills} this trip)` : "";
-      this.notifications.push("reward", `Defeated ${session.enemyName}!${killText}${lootText}`, {
-        replaceKey: "combat-victory",
-      });
-    }
-
-    if (session.autoRepeat && this.canKeepFighting(session)) {
-      // Same enemy respawns; both timers restart after the respawn delay.
-      session.enemyCurrentHp = session.enemyMaxHp;
-      session.playerStartedAt = at + ENEMY_RESPAWN_MS;
-      session.enemyStartedAt = at + ENEMY_RESPAWN_MS;
-      session.playerAttacksResolved = 0;
-      session.enemyAttacksResolved = 0;
-      return;
-    }
-    if (session.autoRepeat) {
-      this.notifications.push("status", `Stopped fighting ${session.enemyName}: HP is low and there's no food left.`, {
-        severity: "warning",
-      });
-    }
-    this.state.activeAction = null;
-  }
-
-  /** Repeat fights continue only while HP is healthy or there's food to
-   *  bring it back up — never fight on toward a death unattended. */
-  private canKeepFighting(session: ActiveCombatSession): boolean {
-    const healthy = this.getCurrentHp() >= this.getMaxHp() * AUTO_EAT_BELOW_HP_FRACTION;
-    const hasFood = !!session.autoEatItemId && this.getOwnedCount(session.autoEatItemId) >= 1;
-    return healthy || hasFood;
-  }
-
-  private maybeAutoEat(session: ActiveCombatSession): void {
-    const foodId = session.autoEatItemId;
-    if (!foodId) return;
-    if (this.getCurrentHp() >= this.getMaxHp() * AUTO_EAT_BELOW_HP_FRACTION) return;
-    if (!this.eatItem(foodId)) {
-      session.autoEatItemId = undefined;
-      this.notifications.push("status", `You've run out of ${this.nameOf(foodId)}.`, { severity: "warning" });
-    }
-  }
-
-  /** Death penalty: lose a percentage of GP and of each other resource
-   *  (capped implicitly since it's a percentage of what you actually
-   *  have — never goes negative, never loses more than you're carrying),
-   *  then wake up back at the starting location. No item loss (yet) —
-   *  content can already ask for harsher percentages via
-   *  EnemyDefinition.deathPenalty for a future dungeon/boss, but "lose a
-   *  specific item on death" isn't built, only flagged as a natural
-   *  extension of the same override pattern once something needs it. */
-  private applyDeathPenalty(session: ActiveCombatSession): void {
-    const gp = this.getResourceAmount("gp");
-    const gpLost = Math.floor(gp * session.deathPenaltyGpLossPercent);
-    if (gpLost > 0) this.spendResource("gp", gpLost);
-
-    const resourceLosses: string[] = [];
-    for (const resourceId of Object.keys(this.state.resources)) {
-      if (resourceId === "gp" || resourceId === "achievement-points") continue;
-      const amount = this.getResourceAmount(resourceId);
-      const lost = Math.floor(amount * session.deathPenaltyResourceLossPercent);
-      if (lost > 0) {
-        this.spendResource(resourceId, lost);
-        resourceLosses.push(`${lost} ${resourceId}`);
-      }
-    }
-
-    this.state.currentLocationId = STARTING_LOCATION_ID;
-
-    const lossParts = [gpLost > 0 ? `${gpLost} GP` : null, ...resourceLosses].filter(
-      (part): part is string => part !== null
-    );
-    const lossText = lossParts.length > 0 ? ` You lost ${lossParts.join(", ")}.` : "";
-    this.notifications.push(
-      "status",
-      `Defeated by ${session.enemyName}. Woke up back in town.${lossText}`,
-      { severity: "error" }
-    );
-  }
-
-  private endCombatDefeat(session: ActiveCombatSession): void {
-    this.state.currentHp = 1;
-    this.applyDeathPenalty(session);
-    this.state.activeAction = null;
-  }
-
-  /** Resolve combat up to `effectiveNow`. Player and enemy attack on
-   *  independent timers, so this can't just be "floor(elapsed/interval)"
-   *  once like crafting/gathering — instead it's a small interleaved
-   *  priority queue: at each step, whichever side's next attack is due
-   *  soonest goes first, repeated until neither side has an attack due
-   *  yet (or the fight ends). This is what makes a fast weapon actually
-   *  land more attacks than a slow enemy, and vice versa, instead of both
-   *  sides trading blows in lockstep. */
-  private resolveCombatSession(effectiveNow: number): void {
-    let session = this.combatSession;
-    if (!session) return;
-
-    while (session) {
-      const playerNextAt =
-        session.playerStartedAt + (session.playerAttacksResolved + 1) * session.playerAttackSpeedMs;
-      const enemyNextAt =
-        session.enemyStartedAt + (session.enemyAttacksResolved + 1) * session.enemyAttackSpeedMs;
-      const nextEventAt = Math.min(playerNextAt, enemyNextAt);
-      if (nextEventAt > effectiveNow) break;
-
-      // Count the attack before resolving it: a kill with autoRepeat
-      // resets both counters for the respawn, and must not be undone.
-      if (playerNextAt <= enemyNextAt) {
-        session.playerAttacksResolved += 1;
-        this.resolvePlayerAttack(session, playerNextAt);
-      } else {
-        session.enemyAttacksResolved += 1;
-        this.resolveEnemyAttack(session);
-      }
-      session = this.combatSession;
-    }
-  }
 
   // ── Save-data management (settings tab) ─────────────────────────────────
 
@@ -1568,20 +840,20 @@ export class GameEngine {
   /** Adds to a resource. `countAsEarned: false` is for refunds, which give
    *  back what was already yours rather than counting toward lifetime
    *  milestones like "earned 100 GP". */
-  private gainResource(resourceId: ResourceId, amount: number, opts?: { countAsEarned?: boolean }): void {
+  gainResource(resourceId: ResourceId, amount: number, opts?: { countAsEarned?: boolean }): void {
     if (amount <= 0) return;
     this.ensureResourceExists(resourceId);
     this.state.resources[resourceId].amount += amount;
     if (opts?.countAsEarned !== false) this.state.resources[resourceId].lifetimeEarned += amount;
   }
 
-  private spendResource(resourceId: ResourceId, amount: number): void {
+  spendResource(resourceId: ResourceId, amount: number): void {
     this.ensureResourceExists(resourceId);
     this.state.resources[resourceId].amount -= amount;
     this.incrementStatistic(`${resourceId}:spent`, amount);
   }
 
-  private incrementStatistic(key: string, amount = 1): void {
+  incrementStatistic(key: string, amount = 1): void {
     this.state.statistics[key] = (this.state.statistics[key] ?? 0) + amount;
   }
 
@@ -1672,260 +944,187 @@ export class GameEngine {
 
   // ── Job board ────────────────────────────────────────────────────────
 
-  isJobAccepted(jobId: string): boolean {
-    return !!this.state.jobs.accepted[jobId];
-  }
 
-  /** Whether the job is done and not currently offerable — see
-   *  JobDefinition.frequency. Daily completion is checked by comparing the
-   *  stored period to today's, so it flips back on its own at UTC midnight
-   *  with no scheduled reset process. */
-  isJobCompleted(job: JobDefinition): boolean {
-    const frequency = job.frequency ?? "daily";
-    if (frequency === "repeatable") return false;
-    if (frequency === "once") return !!this.state.jobs.completedOnce[job.id];
-    return this.state.jobs.lastCompletedPeriod[job.id] === getDailyPeriodNumber(this.clock());
-  }
 
-  /** Accepts a job, at its board's location. Refuses if already accepted,
-   *  or already completed (see isJobCompleted). Snapshots any counters the
-   *  objective reads, so progress counts from now. */
-  acceptJob(job: JobDefinition, boardLocationId: string): boolean {
-    if (this.state.currentLocationId !== boardLocationId) {
-      this.notifications.push("status", "You need to be at the job board to accept this.", {
-        severity: "warning",
-      });
-      return false;
-    }
-    if (this.isJobCompleted(job)) {
-      this.notifications.push("status", `You've already completed "${job.title}".`, {
-        severity: "warning",
-      });
-      return false;
-    }
-    if (this.isJobAccepted(job.id)) {
-      this.notifications.push("status", `You've already accepted "${job.title}".`, {
-        severity: "warning",
-      });
-      return false;
-    }
-    this.state.jobs.accepted[job.id] = {
-      acceptedAt: this.state.lastTickTimestamp,
-      acceptedPeriod: getDailyPeriodNumber(this.clock()),
-      baselines: captureBaselines(job.objective, this.state),
-    };
-    this.notifications.push("status", `Accepted job: ${job.title}.`);
-    return true;
-  }
 
-  /** The job's objective as it applies right now: for an accepted job,
-   *  counters are measured from when it was accepted. */
-  getJobObjective(job: JobDefinition): UnlockCondition {
-    const accepted = this.state.jobs.accepted[job.id];
-    return accepted ? offsetByBaselines(job.objective, accepted.baselines) : job.objective;
-  }
 
-  /** Whether a job's objective is currently met — same check used to gate
-   *  the turn-in button in the UI and to enforce it here. */
-  isJobObjectiveMet(job: JobDefinition): boolean {
-    return isUnlocked(this.getJobObjective(job), this.state);
-  }
 
-  /** Turns in an accepted job: consumes deliveries (if any), grants the
-   *  reward (GP/achievement points modifier-scaled, items and flags never
-   *  scaled), and records completion per the job's frequency. Must be at
-   *  the board's location — same enforcement as accepting. */
-  turnInJob(job: JobDefinition, boardLocationId: string): boolean {
-    if (this.state.currentLocationId !== boardLocationId) {
-      this.notifications.push("status", "You need to be at the job board to turn this in.", {
-        severity: "warning",
-      });
-      return false;
-    }
-    if (!this.isJobAccepted(job.id)) return false;
-    if (!this.isJobObjectiveMet(job)) {
-      this.notifications.push("status", `You haven't finished "${job.title}" yet.`, {
-        severity: "warning",
-      });
-      return false;
-    }
 
-    if (job.consumesOnTurnIn) {
-      for (const cost of job.consumesOnTurnIn) {
-        if (this.getOwnedCount(cost.resource) < cost.amount) {
-          // Objective and consumption requirements should normally agree,
-          // but content could theoretically diverge — fail safe rather
-          // than deduct into the negative.
-          this.notifications.push("status", `You don't have enough to turn this in.`, {
-            severity: "warning",
-          });
-          return false;
-        }
-      }
-      this.payFor(job.consumesOnTurnIn);
-    }
 
-    if (job.reward?.gp) {
-      this.gainResource("gp", this.getModifiedValue("jobReward:gp", job.reward.gp));
-    }
-    if (job.reward?.achievementPoints) {
-      this.gainResource(
-        "achievement-points",
-        this.getModifiedValue("jobReward:achievementPoints", job.reward.achievementPoints)
-      );
-    }
-    if (job.reward?.items) {
-      // Deliberately NOT modifier-scaled — a fixed item count is a fixed
-      // item count, scaling item rewards would be a dupe/balance risk.
-      for (const item of job.reward.items) {
-        this.addItem(item.itemDefId, item.quantity);
-      }
-    }
-    if (job.reward?.setFlags) {
-      // The quest-chaining hook: a job's completion can unlock a building,
-      // a location, or another job the exact same way any other flag does.
-      for (const flag of job.reward.setFlags) this.setFlag(flag, true);
-    }
-
-    delete this.state.jobs.accepted[job.id];
-    this.incrementStatistic(`jobCompletions:${job.id}`, 1);
-    this.incrementStatistic("jobCompletions:total", 1);
-    const frequency = job.frequency ?? "daily";
-    if (frequency === "daily") {
-      this.state.jobs.lastCompletedPeriod[job.id] = getDailyPeriodNumber(this.clock());
-    } else if (frequency === "once") {
-      this.state.jobs.completedOnce[job.id] = true;
-    }
-
-    this.notifications.push("reward", `Turned in "${job.title}".`);
-    return true;
-  }
-
-  /** Dev tool — immediately unlocks every daily job, without waiting for
-   *  the actual UTC reset. "once" jobs stay done; nothing in progress is
-   *  un-accepted. */
-  devForceJobBoardReset(): void {
-    this.state.jobs.lastCompletedPeriod = {};
-    this.notifications.push("status", "Dev: job board reset forced.", { severity: "warning" });
-  }
-
-  /** Cancels any accepted-but-unfinished job whose acceptance period no
-   *  longer matches today — the shift reset, so the job posting is gone,
-   *  same flavor as it being picked up by someone else. Uses the REAL
-   *  current day (the raw `now` resolveElapsed received, not the
-   *  offline-capped effectiveNow) since job resets are wall-clock-based,
-   *  same as isJobCompleted/getActiveJobIds elsewhere. */
-  private resolveJobExpiry(now: number): void {
-    const currentPeriod = getDailyPeriodNumber(now);
-    let expiredCount = 0;
-    for (const [jobId, record] of Object.entries(this.state.jobs.accepted)) {
-      if (record.acceptedPeriod !== currentPeriod) {
-        delete this.state.jobs.accepted[jobId];
-        expiredCount++;
-      }
-    }
-    if (expiredCount > 0) {
-      this.notifications.push(
-        "status",
-        expiredCount === 1
-          ? "An accepted job expired when the board reset."
-          : `${expiredCount} accepted jobs expired when the board reset.`,
-        { severity: "warning" }
-      );
-    }
-  }
 
   // ── Quests ───────────────────────────────────────────────────────────
 
+
+
+
+
+
+
+
+
+  // ── Serialization ──────────────────────────────────────────────────────
+
+  // ── Systems ──────────────────────────────────────────────────────────
+  // Each game system lives in engine/systems/. The methods below keep
+  // the engine's public API in one place and forward to them.
+
+  // BuildingSystem (systems/buildings.ts)
+
+  getBuildingDef(buildingId: string): BuildingDefinition | undefined {
+    return this.buildingSystem.getBuildingDef(buildingId);
+  }
+
+  getBuildingQuantity(buildingId: string): number {
+    return this.buildingSystem.getBuildingQuantity(buildingId);
+  }
+
+  getBuildingPurchaseCost(buildingId: string, quantity: number): RecipeInput[] | null {
+    return this.buildingSystem.getBuildingPurchaseCost(buildingId, quantity);
+  }
+
+  getBuildingSellRefund(buildingId: string, quantity: number): RecipeInput[] | null {
+    return this.buildingSystem.getBuildingSellRefund(buildingId, quantity);
+  }
+
+  isBuildingUnlocked(buildingId: string): boolean {
+    return this.buildingSystem.isBuildingUnlocked(buildingId);
+  }
+
+  purchaseBuilding(buildingId: string, quantity = 1, opts?: { bypassUnlock?: boolean }): boolean {
+    return this.buildingSystem.purchaseBuilding(buildingId, quantity, opts);
+  }
+
+  sellBuilding(buildingId: string, quantity = 1): boolean {
+    return this.buildingSystem.sellBuilding(buildingId, quantity);
+  }
+
+  // CraftingSystem (systems/crafting.ts)
+
+  startCraftJob(recipe: CraftingRecipe, quantity: number): boolean {
+    return this.craftingSystem.startCraftJob(recipe, quantity);
+  }
+
+  cancelCraftJob(): void {
+    this.craftingSystem.cancelCraftJob();
+  }
+
+  startGatherSession(
+    amenityId: string,
+    recipe: CraftingRecipe,
+    opts?: { maxDurationMs?: number; requiresKeepAliveEveryMs?: number }
+  ): boolean {
+    return this.craftingSystem.startGatherSession(amenityId, recipe, opts);
+  }
+
+  stopGatherSession(): void {
+    this.craftingSystem.stopGatherSession();
+  }
+
+  keepGatherSessionAlive(): boolean {
+    return this.craftingSystem.keepGatherSessionAlive();
+  }
+
+  // TravelSystem (systems/travel.ts)
+
+  getTravelSpeedMultiplier(): number {
+    return this.travelSystem.getTravelSpeedMultiplier();
+  }
+
+  getTravelDurationEstimate(from: MapLocation, to: MapLocation, opts?: { msPerDistanceUnit?: number }): number {
+    return this.travelSystem.getTravelDurationEstimate(from, to, opts);
+  }
+
+  startTravel(from: MapLocation, to: MapLocation, opts?: { msPerDistanceUnit?: number }): boolean {
+    return this.travelSystem.startTravel(from, to, opts);
+  }
+
+  cancelTravel(): void {
+    this.travelSystem.cancelTravel();
+  }
+
+  teleportTo(def: ItemDefinition, instanceId: string, destination: MapLocation): boolean {
+    return this.travelSystem.teleportTo(def, instanceId, destination);
+  }
+
+  // CombatSystem (systems/combat.ts)
+
+  startCombat(
+    enemy: EnemyDefinition,
+    equipmentBonus: {
+      attack: number;
+      strength: number;
+      defence: number;
+      attackSpeedMs?: number;
+      weaponType?: WeaponType;
+    },
+    opts?: { autoRepeat?: boolean; autoEatItemId?: string }
+  ): boolean {
+    return this.combatSystem.startCombat(enemy, equipmentBonus, opts);
+  }
+
+  fleeCombat(): boolean {
+    return this.combatSystem.fleeCombat();
+  }
+
+  attackNow(): boolean {
+    return this.combatSystem.attackNow();
+  }
+
+  // JobBoardSystem (systems/jobs.ts)
+
+  isJobAccepted(jobId: string): boolean {
+    return this.jobBoardSystem.isJobAccepted(jobId);
+  }
+
+  isJobCompleted(job: JobDefinition): boolean {
+    return this.jobBoardSystem.isJobCompleted(job);
+  }
+
+  acceptJob(job: JobDefinition, boardLocationId: string): boolean {
+    return this.jobBoardSystem.acceptJob(job, boardLocationId);
+  }
+
+  getJobObjective(job: JobDefinition): UnlockCondition {
+    return this.jobBoardSystem.getJobObjective(job);
+  }
+
+  isJobObjectiveMet(job: JobDefinition): boolean {
+    return this.jobBoardSystem.isJobObjectiveMet(job);
+  }
+
+  turnInJob(job: JobDefinition, boardLocationId: string): boolean {
+    return this.jobBoardSystem.turnInJob(job, boardLocationId);
+  }
+
+  devForceJobBoardReset(): void {
+    this.jobBoardSystem.devForceJobBoardReset();
+  }
+
+  // QuestSystem (systems/quests.ts)
+
   getQuestStatus(questId: string): "not-started" | "in-progress" | "completed" {
-    const progress = this.state.quests[questId];
-    const def = this.questsById.get(questId);
-    if (!progress || !def) return "not-started";
-    return progress.stage >= def.stages.length ? "completed" : "in-progress";
+    return this.questSystem.getQuestStatus(questId);
   }
 
   canStartQuest(questId: string): boolean {
-    const def = this.questsById.get(questId);
-    if (!def || this.state.quests[questId]) return false;
-    return !def.startCondition || isUnlocked(def.startCondition, this.state);
+    return this.questSystem.canStartQuest(questId);
   }
 
   startQuest(questId: string): boolean {
-    const def = this.questsById.get(questId);
-    if (!def || !this.canStartQuest(questId)) return false;
-    this.state.quests[questId] = { stage: 0, baselines: captureBaselines(def.stages[0].objective, this.state) };
-    this.notifications.push("quest", `Quest started: ${def.name}. ${def.stages[0].description}`);
-    this.checkQuests(); // a first stage might already be met
-    return true;
+    return this.questSystem.startQuest(questId);
   }
 
-  /** The current stage's objective, with counters measured from when the
-   *  stage began. Null if the quest isn't in progress. */
   getQuestObjective(questId: string): UnlockCondition | null {
-    const def = this.questsById.get(questId);
-    const progress = this.state.quests[questId];
-    if (!def || !progress || progress.stage >= def.stages.length) return null;
-    return offsetByBaselines(def.stages[progress.stage].objective, progress.baselines);
+    return this.questSystem.getQuestObjective(questId);
   }
 
   isQuestStageMet(questId: string): boolean {
-    const objective = this.getQuestObjective(questId);
-    return !!objective && isUnlocked(objective, this.state);
+    return this.questSystem.isQuestStageMet(questId);
   }
 
-  /** Hands over the current stage's delivery and moves on. Only for
-   *  stages with `consumes`; others advance by themselves (checkQuests). */
   advanceQuest(questId: string): boolean {
-    const def = this.questsById.get(questId);
-    const progress = this.state.quests[questId];
-    if (!def || !progress || !this.isQuestStageMet(questId)) return false;
-    const stage = def.stages[progress.stage];
-    const consumes = stage.consumes ?? [];
-    if (consumes.some((c) => this.getOwnedCount(c.resource) < c.amount)) {
-      this.notifications.push("status", "You don't have everything to hand over yet.", { severity: "warning" });
-      return false;
-    }
-    this.payFor(consumes);
-    this.completeQuestStage(def);
-    this.checkQuests();
-    return true;
+    return this.questSystem.advanceQuest(questId);
   }
-
-  /** Advances every in-progress quest whose current stage is met and
-   *  doesn't need a hand-over. Runs once per tick. */
-  private checkQuests(): void {
-    for (const [questId, progress] of Object.entries(this.state.quests)) {
-      const def = this.questsById.get(questId);
-      if (!def) continue;
-      while (progress.stage < def.stages.length) {
-        const stage = def.stages[progress.stage];
-        if (stage.consumes?.length || !this.isQuestStageMet(questId)) break;
-        this.completeQuestStage(def);
-      }
-    }
-  }
-
-  private completeQuestStage(def: QuestDefinition): void {
-    const progress = this.state.quests[def.id];
-    progress.stage++;
-    const next = def.stages[progress.stage];
-    if (next) {
-      progress.baselines = captureBaselines(next.objective, this.state);
-      this.notifications.push("quest", `${def.name}: ${next.description}`);
-      return;
-    }
-
-    progress.baselines = {};
-    const reward = def.reward;
-    if (reward?.gp) this.gainResource("gp", reward.gp);
-    for (const item of reward?.items ?? []) this.addItem(item.itemDefId, item.quantity);
-    for (const [skillId, xp] of Object.entries(reward?.xp ?? {})) this.addSkillXp(skillId, xp);
-    for (const flag of reward?.setFlags ?? []) this.setFlag(flag, true);
-    this.incrementStatistic("questsCompleted", 1);
-    this.notifications.push("quest", `Quest complete: ${def.name}!`);
-  }
-
-  // ── Serialization ──────────────────────────────────────────────────────
 
   serialize(): string {
     return JSON.stringify(this.state);
@@ -1941,8 +1140,4 @@ export class GameEngine {
     const state = migrateSave(JSON.parse(json), clock());
     return new GameEngine(content, { state, notifications: opts?.notifications, clock });
   }
-}
-
-function capitalize(s: string): string {
-  return s.length === 0 ? s : s[0].toUpperCase() + s.slice(1);
 }
