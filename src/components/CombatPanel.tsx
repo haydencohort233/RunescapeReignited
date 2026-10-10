@@ -27,7 +27,7 @@ const SPLAT_COLOR: Record<ActiveSplat["outcome"], string> = {
  *  reflects state.activeCombatSession and offers the optional interactive
  *  "Attack Now" override plus Flee. */
 export default function CombatPanel({ enemyId }: { enemyId: string }) {
-  const { engine, state } = useGame();
+  const { engine, state, actions } = useGame();
   const [, forceTick] = useState(0);
   const [splats, setSplats] = useState<ActiveSplat[]>([]);
   const [keepFighting, setKeepFighting] = useState(false);
@@ -223,7 +223,14 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
       </p>
 
       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-        <button onClick={() => engine.attackNow()}>Attack Now</button>
+        <button
+          onClick={() => {
+            engine.attackNow();
+            actions.refresh();
+          }}
+        >
+          Attack Now
+        </button>
         {session.canFlee && <button onClick={() => engine.fleeCombat()}>Flee</button>}
       </div>
 

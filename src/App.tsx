@@ -26,7 +26,7 @@ import {
  *  can't, since it's the component that mounts the provider. */
 function AppContent() {
   const [activeView, setActiveView] = useState<View>("home");
-  const { engine } = useGame();
+  const { engine, suspended } = useGame();
 
   // Shared UI chrome (HP bar layers, hitsplat icons) is needed the moment
   // combat starts, so request it at app startup rather than mid-fight.
@@ -44,6 +44,16 @@ function AppContent() {
   const hasUnclaimedAchievement = ACHIEVEMENT_CATALOG.some(
     (a) => engine.isAchievementEarned(a.id) && !engine.isAchievementClaimed(a.id)
   );
+
+  if (suspended) {
+    return (
+      <div style={{ fontFamily: "system-ui", padding: 24, maxWidth: 520, margin: "0 auto" }}>
+        <h1>Idle Engine</h1>
+        <p>The game was opened in another tab, so this one has paused to keep your progress from being overwritten.</p>
+        <button onClick={() => window.location.reload()}>Play here instead</button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ fontFamily: "system-ui", padding: 24, maxWidth: 520, margin: "0 auto" }}>

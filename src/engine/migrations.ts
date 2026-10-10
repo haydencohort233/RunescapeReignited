@@ -1,7 +1,7 @@
 import type { GameState } from "./types";
 import { getDailyPeriodNumber } from "./time";
 import { DEFAULT_OFFLINE_CAP_MS } from "./tuning";
-import { SCHEMA_VERSION, STARTING_HITPOINTS_XP, STARTING_LOCATION_ID, createInitialState } from "./state";
+import { SCHEMA_VERSION, STARTING_HITPOINTS_XP, STARTING_LOCATION_ID } from "./state";
 
 /**
  * Migration chain: each entry transforms the state shape from version N to
@@ -222,6 +222,12 @@ const MIGRATIONS: Record<number, (old: any, now: number) => any> = {
  *  runs each migration from the save's version onward, then backfills
  *  anything still missing. */
 export function migrateSave(parsed: any, now: number): GameState {
+  // Anything without the basic shape of a save is refused outright — an
+  // imported "[]" or "{}" would otherwise quietly become a brand-new game
+  // and overwrite real progress on the next autosave.
+  if (!isRecord(parsed) || !isRecord(parsed.resources) || !isRecord(parsed.skills)) {
+    throw new Error("That doesn't look like a save from this game.");
+  }
   const fromVersion = typeof parsed.version === "number" ? parsed.version : 0;
   for (let v = fromVersion; v < SCHEMA_VERSION; v++) {
     const migrate = MIGRATIONS[v];
@@ -235,32 +241,103 @@ export function migrateSave(parsed: any, now: number): GameState {
   // evaluates to NaN — which then poisons every downstream calculation
   // without ever throwing an error.
   const withDefaults: GameState = {
-    resources: { ...createInitialState().resources, ...(parsed.resources ?? {}) },
-    buildings: parsed.buildings ?? {},
-    modifiers: parsed.modifiers ?? {},
+    resources: sanitizeResources(parsed.resources),
+    buildings: sanitizeCounts(parsed.buildings),
+    modifiers: isRecord(parsed.modifiers) ? parsed.modifiers : {},
     skills: (() => {
-      const skills = parsed.skills ?? {};
-      const hpXp = skills.hitpoints?.xp ?? 0;
-      return { ...skills, hitpoints: { xp: Math.max(hpXp, STARTING_HITPOINTS_XP) } };
+      const skills: GameState["skills"] = {};
+      for (const [id, skill] of Object.entries(isRecord(parsed.skills) ? parsed.skills : {})) {
+        skills[id] = { xp: finiteOr((skill as { xp?: unknown })?.xp, 0, 0) };
+      }
+      skills.hitpoints = { xp: Math.max(skills.hitpoints?.xp ?? 0, STARTING_HITPOINTS_XP) };
+      return skills;
     })(),
-    flags: parsed.flags ?? {},
-    inventory: parsed.inventory ?? {},
-    equipment: parsed.equipment ?? {},
-    activeAction: parsed.activeAction ?? null,
-    currentLocationId: parsed.currentLocationId ?? STARTING_LOCATION_ID,
-    currentHp: typeof parsed.currentHp === "number" ? parsed.currentHp : 10,
+    flags: isRecord(parsed.flags) ? parsed.flags : {},
+    inventory: isRecord(parsed.inventory) ? parsed.inventory : {},
+    equipment: {},
+    activeAction: sanitizeAction(parsed.activeAction),
+    currentLocationId: typeof parsed.currentLocationId === "string" ? parsed.currentLocationId : STARTING_LOCATION_ID,
+    currentHp: finiteOr(parsed.currentHp, 10, 0),
     jobs: {
-      accepted: parsed.jobs?.accepted ?? {},
-      lastCompletedPeriod: parsed.jobs?.lastCompletedPeriod ?? {},
-      completedOnce: parsed.jobs?.completedOnce ?? {},
+      accepted: isRecord(parsed.jobs?.accepted) ? parsed.jobs.accepted : {},
+      lastCompletedPeriod: isRecord(parsed.jobs?.lastCompletedPeriod) ? parsed.jobs.lastCompletedPeriod : {},
+      completedOnce: isRecord(parsed.jobs?.completedOnce) ? parsed.jobs.completedOnce : {},
     },
-    quests: parsed.quests ?? {},
-    statistics: parsed.statistics ?? {},
-    lastTickTimestamp:
-      typeof parsed.lastTickTimestamp === "number" ? parsed.lastTickTimestamp : now,
-    offlineCapMs:
-      typeof parsed.offlineCapMs === "number" ? parsed.offlineCapMs : DEFAULT_OFFLINE_CAP_MS,
+    quests: isRecord(parsed.quests) ? parsed.quests : {},
+    statistics: sanitizeCounts(parsed.statistics, { integers: false }),
+    lastTickTimestamp: finiteOr(parsed.lastTickTimestamp, now),
+    offlineCapMs: finiteOr(parsed.offlineCapMs, DEFAULT_OFFLINE_CAP_MS, 0),
     version: SCHEMA_VERSION,
   };
+  // Equipment may only point at instances that still exist.
+  for (const [slot, instanceId] of Object.entries(isRecord(parsed.equipment) ? parsed.equipment : {})) {
+    if (typeof instanceId === "string" && withDefaults.inventory[instanceId]) {
+      (withDefaults.equipment as Record<string, string>)[slot] = instanceId;
+    }
+  }
   return withDefaults;
+}
+
+// ── Sanitizing ─────────────────────────────────────────────────────────
+// A save is untrusted input: it may be hand-edited, imported from an older
+// build, or carry a null where a NaN was serialized. Anything malformed is
+// replaced with a safe default rather than allowed to poison the game.
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function finiteOr(value: unknown, fallback: number, min = Number.NEGATIVE_INFINITY): number {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(min, value) : fallback;
+}
+
+function sanitizeResources(raw: unknown): GameState["resources"] {
+  const resources: GameState["resources"] = { gp: { amount: 0, lifetimeEarned: 0 } };
+  for (const [id, entry] of Object.entries(isRecord(raw) ? raw : {})) {
+    if (!isRecord(entry)) continue;
+    resources[id] = {
+      amount: finiteOr(entry.amount, 0, 0),
+      lifetimeEarned: finiteOr(entry.lifetimeEarned, 0, 0),
+    };
+  }
+  return resources;
+}
+
+function sanitizeCounts(raw: unknown, opts = { integers: true }): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const [id, value] of Object.entries(isRecord(raw) ? raw : {})) {
+    if (typeof value !== "number" || !Number.isFinite(value)) continue;
+    counts[id] = opts.integers ? Math.max(0, Math.floor(value)) : value;
+  }
+  return counts;
+}
+
+/** Drops an in-progress action whose timing fields are missing or invalid
+ *  — resolving one would divide by zero or never finish. */
+function sanitizeAction(raw: unknown): GameState["activeAction"] {
+  if (!isRecord(raw)) return null;
+  const positive = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v > 0;
+  const finite = (v: unknown) => typeof v === "number" && Number.isFinite(v);
+  switch (raw.kind) {
+    case "craft":
+      return positive(raw.timePerItemMs) && finite(raw.startedAt) && positive(raw.quantityTotal)
+        ? (raw as GameState["activeAction"])
+        : null;
+    case "gather":
+      return positive(raw.timePerItemMs) && finite(raw.startedAt) && positive(raw.maxDurationMs)
+        ? (raw as GameState["activeAction"])
+        : null;
+    case "travel":
+      return finite(raw.startedAt) && finite(raw.durationMs) ? (raw as GameState["activeAction"]) : null;
+    case "combat":
+      return positive(raw.playerAttackSpeedMs) &&
+        positive(raw.enemyAttackSpeedMs) &&
+        finite(raw.playerStartedAt) &&
+        finite(raw.enemyStartedAt) &&
+        Array.isArray(raw.log)
+        ? (raw as GameState["activeAction"])
+        : null;
+    default:
+      return null;
+  }
 }

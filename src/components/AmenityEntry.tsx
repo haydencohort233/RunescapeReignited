@@ -29,7 +29,7 @@ export const AMENITY_ICON: Record<Amenity["kind"], string> = {
  *  a placeholder action). Adding a new kind later means adding one more
  *  case here, not restructuring this file. */
 export default function AmenityEntry({ amenity }: { amenity: Amenity }) {
-  const { engine, state } = useGame();
+  const { engine, state, actions } = useGame();
   const [browsingShop, setBrowsingShop] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [quickMenuPos, setQuickMenuPos] = useState<{ x: number; y: number } | null>(null);
@@ -267,7 +267,13 @@ export default function AmenityEntry({ amenity }: { amenity: Amenity }) {
           {thisNodeIsActive ? (
             <>
               {requiresKeepAliveEveryMs !== undefined && (
-                <button onClick={() => engine.keepGatherSessionAlive()} style={{ textAlign: "left" }}>
+                <button
+                  onClick={() => {
+                    engine.keepGatherSessionAlive();
+                    actions.refresh();
+                  }}
+                  style={{ textAlign: "left" }}
+                >
                   Tend to it
                 </button>
               )}

@@ -22,15 +22,30 @@ export function saveGame(engine: GameEngine): boolean {
 }
 
 export function loadGame(content: GameContent, notifications?: NotificationQueue): GameEngine | null {
+  let json: string | null = null;
   try {
-    const json = window.localStorage.getItem(SAVE_KEY);
+    json = window.localStorage.getItem(SAVE_KEY);
     if (!json) return null;
     return GameEngine.deserialize(json, content, { notifications });
   } catch (err) {
+    // Keep the unreadable save under a separate key before the fresh game's
+    // first autosave overwrites it, so it can still be recovered by hand.
+    const backupKey = `${SAVE_KEY}:corrupt:${Date.now()}`;
+    let backedUp = false;
+    if (json) {
+      try {
+        window.localStorage.setItem(backupKey, json);
+        backedUp = true;
+      } catch {
+        // Storage full — nothing more we can do here.
+      }
+    }
     if (notifications) {
       notifications.push(
         "error",
-        "Your save looked corrupted, so we started a fresh game. Sorry about that.",
+        backedUp
+          ? `Your save couldn't be read, so a fresh game started. The old save was kept in browser storage as "${backupKey}".`
+          : "Your save couldn't be read, so a fresh game started.",
         { severity: "error" }
       );
       notifications.push("debug", `Load failed: ${(err as Error).message}`, {
@@ -56,8 +71,10 @@ export function createAutoSaver(engine: GameEngine, intervalMs = 10_000) {
     if (document.visibilityState === "hidden") saveGame(engine);
   };
   document.addEventListener("visibilitychange", onVisibilityChange);
+  // pagehide fires where beforeunload doesn't (mobile browsers, bfcache).
   const onBeforeUnload = () => saveGame(engine);
   window.addEventListener("beforeunload", onBeforeUnload);
+  window.addEventListener("pagehide", onBeforeUnload);
 
   return {
     setIntervalMs(newIntervalMs: number) {
@@ -68,6 +85,7 @@ export function createAutoSaver(engine: GameEngine, intervalMs = 10_000) {
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("beforeunload", onBeforeUnload);
+      window.removeEventListener("pagehide", onBeforeUnload);
     },
   };
 }
@@ -91,7 +109,8 @@ export function exportSaveToFile(engine: GameEngine): void {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // Revoking synchronously can cancel the download in some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /**

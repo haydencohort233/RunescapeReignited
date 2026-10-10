@@ -20,7 +20,15 @@ describe("loading a v14 save", () => {
 
   it("keeps one action and refunds a craft job that was running alongside a fight", () => {
     const parsed = JSON.parse(V14);
-    parsed.activeCombatSession = { enemyId: "goblin", enemyName: "Goblin", log: [] };
+    parsed.activeCombatSession = {
+      enemyId: "goblin",
+      enemyName: "Goblin",
+      playerAttackSpeedMs: 4000,
+      enemyAttackSpeedMs: 3000,
+      playerStartedAt: parsed.lastTickTimestamp,
+      enemyStartedAt: parsed.lastTickTimestamp,
+      log: [],
+    };
     const engine = load(JSON.stringify(parsed));
     expect(engine.getState().activeAction?.kind).toBe("combat");
     // 10 bows queued at 1 wood each, none finished: all 10 wood come back.
@@ -64,5 +72,33 @@ describe("v14 job board", () => {
     expect(state.jobs.lastCompletedPeriod["deliver-wood"]).toBeTypeOf("number");
     expect(Object.keys(state.statistics).some((k) => k.startsWith("jobCompletedPeriod:"))).toBe(false);
     expect(state.statistics["kills:goblin"]).toBe(12);
+  });
+});
+
+describe("untrusted save data", () => {
+  it("replaces malformed values with safe defaults instead of crashing or keeping NaN", () => {
+    const parsed = JSON.parse(V14);
+    parsed.resources.gp.amount = null; // what NaN becomes after JSON.stringify
+    parsed.resources.wood = "lots";
+    parsed.skills.attack = { xp: -50 };
+    parsed.currentHp = "full";
+    parsed.statistics["kills:goblin"] = null;
+    parsed.equipment.head = "missing-instance";
+    parsed.activeCraftJob = { ...parsed.activeCraftJob, timePerItemMs: 0 };
+    const state = load(JSON.stringify(parsed)).getState();
+    expect(state.resources.gp.amount).toBe(0);
+    expect(state.resources.wood).toBeUndefined();
+    expect(state.skills.attack.xp).toBe(0);
+    expect(state.currentHp).toBe(10);
+    expect(state.statistics["kills:goblin"]).toBeUndefined();
+    expect(state.equipment.head).toBeUndefined();
+    expect(state.equipment.weapon).toBeDefined();
+    expect(state.activeAction).toBeNull();
+  });
+
+  it("rejects JSON that isn't a save at all", () => {
+    expect(() => GameEngine.deserialize("null", GAME_CONTENT)).toThrow();
+    expect(() => GameEngine.deserialize("[1,2]", GAME_CONTENT)).toThrow();
+    expect(() => GameEngine.deserialize("{}", GAME_CONTENT)).toThrow();
   });
 });
