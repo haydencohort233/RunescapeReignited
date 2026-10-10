@@ -20,34 +20,25 @@ export default function GameImage({
   fallback: ReactNode;
   style?: CSSProperties;
 }) {
-  const [loaded, setLoaded] = useState(() => (src ? isImageLoaded(src) : false));
-  const [failed, setFailed] = useState(() => (src ? didImageFail(src) : true));
+  // Status is read from the shared preload cache on every render, keyed by
+  // the CURRENT src. Holding it in component state went stale when src
+  // changed (an enemy's hurt art, a map pin's selected state): one failed
+  // image kept the fallback showing even after a later src loaded.
+  const status = !src ? "failed" : isImageLoaded(src) ? "loaded" : didImageFail(src) ? "failed" : "pending";
+  const [, rerender] = useState(0);
 
   useEffect(() => {
-    if (!src) {
-      setFailed(true);
-      return;
-    }
-    if (isImageLoaded(src)) {
-      setLoaded(true);
-      return;
-    }
-    if (didImageFail(src)) {
-      setFailed(true);
-      return;
-    }
+    if (!src || status !== "pending") return;
     let cancelled = false;
-    preloadImage(src).then((ok) => {
-      if (cancelled) return;
-      if (ok) setLoaded(true);
-      else setFailed(true);
+    preloadImage(src).then(() => {
+      if (!cancelled) rerender((n) => n + 1);
     });
     return () => {
       cancelled = true;
     };
-  }, [src]);
+  }, [src, status]);
 
-  if (!src || failed) return <>{fallback}</>;
+  if (status !== "loaded") return <>{fallback}</>;
 
   return (
     <div
@@ -59,7 +50,6 @@ export default function GameImage({
         ...style,
       }}
     >
-      {!loaded && <div style={{ position: "absolute", inset: 0 }}>{fallback}</div>}
       <img
         src={src}
         alt={alt}
@@ -75,10 +65,7 @@ export default function GameImage({
           display: "block",
           margin: "0 auto",
           imageRendering: "pixelated", // keeps small sprites crisp when upscaled
-          opacity: loaded ? 1 : 0,
         }}
-        onLoad={() => setLoaded(true)}
-        onError={() => setFailed(true)}
       />
     </div>
   );

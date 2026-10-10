@@ -38,8 +38,12 @@ function ShopItemBuyActions({ shop, shopItem }: { shop: ShopDefinition; shopItem
 /** Everything the player could sell here: owned (and not worn) items
  *  that have a value. */
 function ShopSellList({ shop }: { shop: ShopDefinition }) {
-  const { engine } = useGame();
-  const sellable = ITEM_CATALOG.map((def) => ({
+  const { engine, state } = useGame();
+  // Only count what's actually owned; calling getOwnedCount for every item
+  // in the catalog would scan the inventory once per catalog entry.
+  const ownedIds = new Set(Object.values(state.inventory).map((i) => i.itemDefId));
+  for (const [id, r] of Object.entries(state.resources)) if (r.amount >= 1) ownedIds.add(id);
+  const sellable = ITEM_CATALOG.filter((def) => ownedIds.has(def.id)).map((def) => ({
     def,
     owned: Math.floor(engine.getOwnedCount(def.id)),
     unitPrice: engine.getShopSellPrice(def.id),

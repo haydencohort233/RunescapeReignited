@@ -19,16 +19,6 @@ const DISPLAY_SIZE = 400;
 export default function MapView() {
   const { engine, state } = useGame();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [, forceTick] = useState(0);
-
-  // Re-render every second so the "arriving in Xs" countdown stays live —
-  // the engine's own 1s tick already drives state updates elsewhere, but
-  // this view has no other state changing that would trigger a re-render.
-  useEffect(() => {
-    const id = window.setInterval(() => forceTick((n) => n + 1), 1000);
-    return () => window.clearInterval(id);
-  }, []);
-
   // Map background + every location icon, requested together up front.
   useEffect(() => {
     void preloadImages([worldMapPath(), ...MAP_LOCATIONS.map((l) => locationIconPath(l.name))]);

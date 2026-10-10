@@ -28,18 +28,12 @@ const SPLAT_COLOR: Record<ActiveSplat["outcome"], string> = {
  *  "Attack Now" override plus Flee. */
 export default function CombatPanel({ enemyId }: { enemyId: string }) {
   const { engine, state, actions } = useGame();
-  const [, forceTick] = useState(0);
   const [splats, setSplats] = useState<ActiveSplat[]>([]);
   const [keepFighting, setKeepFighting] = useState(false);
   const [autoEatItemId, setAutoEatItemId] = useState("");
   const lastLogCountRef = useRef(0);
   const splatTimersRef = useRef(new Set<number>());
   const enemy = getEnemy(enemyId);
-
-  useEffect(() => {
-    const id = window.setInterval(() => forceTick((n) => n + 1), 1000);
-    return () => window.clearInterval(id);
-  }, []);
 
   const session = getActiveCombat(state);
 

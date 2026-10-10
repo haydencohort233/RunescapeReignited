@@ -34,7 +34,6 @@ export default function AmenityEntry({ amenity }: { amenity: Amenity }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [quickMenuPos, setQuickMenuPos] = useState<{ x: number; y: number } | null>(null);
   const quickMenuRef = useRef<HTMLDivElement | null>(null);
-  const [, forceTick] = useState(0);
 
   useEffect(() => {
     if (!quickMenuPos) return;
@@ -46,14 +45,6 @@ export default function AmenityEntry({ amenity }: { amenity: Amenity }) {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [quickMenuPos]);
-
-  // Live countdowns (session time remaining, keep-alive window) need a
-  // per-second re-render independent of the engine's own tick, same
-  // reasoning as MapView's travel countdown.
-  useEffect(() => {
-    const id = window.setInterval(() => forceTick((n) => n + 1), 1000);
-    return () => window.clearInterval(id);
-  }, []);
 
   const locked = !!amenity.unlockCondition && !!describeUnmetCondition(amenity.unlockCondition, state);
   if (locked) {

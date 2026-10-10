@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { useGame } from "../engine/GameEngineContext";
 import { type JobBoardDefinition, getActiveJobIds } from "../content/jobBoards";
 import { getJob } from "../content/jobs";
@@ -24,16 +23,6 @@ export default function JobBoardBrowsePanel({
   onClose: () => void;
 }) {
   const { engine, state } = useGame();
-  const [, forceTick] = useState(0);
-
-  // The "New job posted in HH:MM:SS" countdown needs a per-second re-render
-  // independent of the engine's own tick, same reasoning as the travel and
-  // gather-session countdowns elsewhere.
-  useEffect(() => {
-    const id = window.setInterval(() => forceTick((n) => n + 1), 1000);
-    return () => window.clearInterval(id);
-  }, []);
-
   // What's shown today = whatever rotation picked, UNION anything the
   // player already has accepted from this board's pool — rotating a job
   // out only affects what's newly offerable, it should never yank
