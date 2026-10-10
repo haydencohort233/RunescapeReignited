@@ -18,8 +18,8 @@ export default function SkillProgress({ skillId, label }: { skillId: string; lab
           <GameImage
             src={skillIconPath(skillId)}
             alt={label}
-            style={{ width: 16, height: 16 }}
-            fallback={<span style={{ width: 16, height: 16, display: "inline-block" }} />}
+            style={{ width: 20, height: 20 }}
+            fallback={<span style={{ width: 20, height: 20, display: "inline-block" }} />}
           />
           {label}: level {progress.level}
         </span>

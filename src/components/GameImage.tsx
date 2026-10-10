@@ -26,6 +26,12 @@ export default function GameImage({
   // image kept the fallback showing even after a later src loaded.
   const status = !src ? "failed" : isImageLoaded(src) ? "loaded" : didImageFail(src) ? "failed" : "pending";
   const [, rerender] = useState(0);
+  // Nearest-neighbour ("pixelated") scaling keeps sprites crisp when
+  // they're drawn LARGER than their file, but when shrinking it drops whole
+  // rows and columns of pixels — a 25px skill icon in a 16px slot loses 9
+  // of every 25, so thin lines like arrows break apart. Decided per image
+  // once its real size is known.
+  const [downscaled, setDownscaled] = useState(false);
 
   useEffect(() => {
     if (!src || status !== "pending") return;
@@ -64,7 +70,13 @@ export default function GameImage({
           objectFit: "contain",
           display: "block",
           margin: "0 auto",
-          imageRendering: "pixelated", // keeps small sprites crisp when upscaled
+          imageRendering: downscaled ? "auto" : "pixelated",
+          // Lifts black-outlined sprites (e.g. Agility) off a dark background.
+          filter: "var(--icon-outline)",
+        }}
+        onLoad={(e) => {
+          const img = e.currentTarget;
+          setDownscaled(img.naturalWidth > img.clientWidth || img.naturalHeight > img.clientHeight);
         }}
       />
     </div>
