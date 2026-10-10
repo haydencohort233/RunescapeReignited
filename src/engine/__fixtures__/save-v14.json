@@ -1,0 +1,191 @@
+{
+  "resources": {
+    "gp": {
+      "amount": 4965,
+      "lifetimeEarned": 8000
+    },
+    "wood": {
+      "amount": 30,
+      "lifetimeEarned": 60
+    },
+    "coal": {
+      "amount": 0,
+      "lifetimeEarned": 0
+    },
+    "raw-fish": {
+      "amount": 0,
+      "lifetimeEarned": 0
+    },
+    "pelt": {
+      "amount": 0,
+      "lifetimeEarned": 0
+    },
+    "flax": {
+      "amount": 12,
+      "lifetimeEarned": 12
+    }
+  },
+  "producers": {
+    "base-gp": {
+      "id": "base-gp",
+      "name": "Base Income",
+      "resource": "gp",
+      "baseRatePerSecond": 1,
+      "quantity": 1
+    },
+    "lumbermill": {
+      "id": "lumbermill",
+      "name": "Lumbermill",
+      "resource": "wood",
+      "baseRatePerSecond": 0.5,
+      "quantity": 3,
+      "baseCost": [
+        {
+          "resource": "gp",
+          "amount": 10
+        }
+      ],
+      "costScalingFactor": 1.15
+    },
+    "quarry": {
+      "id": "quarry",
+      "name": "Quarry",
+      "resource": "coal",
+      "baseRatePerSecond": 0.3,
+      "quantity": 0,
+      "baseCost": [
+        {
+          "resource": "gp",
+          "amount": 50
+        }
+      ],
+      "costScalingFactor": 1.15,
+      "unlockCondition": {
+        "kind": "resourceLifetimeAtLeast",
+        "resource": "gp",
+        "amount": 100
+      }
+    },
+    "fishing-hut": {
+      "id": "fishing-hut",
+      "name": "Fishing Hut",
+      "resource": "raw-fish",
+      "baseRatePerSecond": 0.4,
+      "quantity": 0,
+      "baseCost": [
+        {
+          "resource": "gp",
+          "amount": 30
+        }
+      ],
+      "costScalingFactor": 1.15,
+      "unlockCondition": {
+        "kind": "flag",
+        "flag": "discoveredLakeShore"
+      }
+    },
+    "hunters-camp": {
+      "id": "hunters-camp",
+      "name": "Hunter's Camp",
+      "resource": "pelt",
+      "baseRatePerSecond": 0.2,
+      "quantity": 0,
+      "baseCost": [
+        {
+          "resource": "gp",
+          "amount": 40
+        }
+      ],
+      "costScalingFactor": 1.15,
+      "unlockCondition": {
+        "kind": "flag",
+        "flag": "discoveredDarkForest"
+      }
+    }
+  },
+  "modifiers": {},
+  "skills": {
+    "hitpoints": {
+      "xp": 1154
+    },
+    "woodcutting": {
+      "xp": 2000
+    }
+  },
+  "flags": {
+    "visited:town": true
+  },
+  "inventory": {
+    "item-1791617026661-1n1712": {
+      "instanceId": "item-1791617026661-1n1712",
+      "itemDefId": "bones",
+      "quantity": 3
+    },
+    "item-1791617026661-41fxj4": {
+      "instanceId": "item-1791617026661-41fxj4",
+      "itemDefId": "wooden-bow-u",
+      "quantity": 5
+    },
+    "item-1791617026661-o6zjoy": {
+      "instanceId": "item-1791617026661-o6zjoy",
+      "itemDefId": "shark",
+      "quantity": 2
+    },
+    "item-1791617026661-kbedj6": {
+      "instanceId": "item-1791617026661-kbedj6",
+      "itemDefId": "bronze-dagger"
+    },
+    "item-1791617026661-mrkeb1": {
+      "instanceId": "item-1791617026661-mrkeb1",
+      "itemDefId": "bronze-dagger"
+    }
+  },
+  "equipment": {
+    "weapon": "item-1791617026661-kbedj6"
+  },
+  "activeCraftJob": {
+    "recipeId": "wooden-bow",
+    "recipeName": "Wooden Bow",
+    "skill": "fletching",
+    "xpPerItem": 5,
+    "timePerItemMs": 2000,
+    "output": {
+      "kind": "item",
+      "itemDefId": "wooden-bow-u",
+      "quantity": 1,
+      "stackable": true
+    },
+    "inputsPerItem": [
+      {
+        "resource": "wood",
+        "amount": 1
+      }
+    ],
+    "startedAt": 1800000000000,
+    "quantityTotal": 10,
+    "quantityCompleted": 0
+  },
+  "activeGatherSession": null,
+  "currentHp": 10,
+  "activeCombatSession": null,
+  "acceptedJobs": {
+    "flax-for-the-fletcher": {
+      "acceptedAt": 1800000000000,
+      "acceptedPeriod": 20736
+    }
+  },
+  "currentLocationId": "town",
+  "activeTravel": null,
+  "statistics": {
+    "gp:spent": 35,
+    "buildingsBought:total": 3,
+    "buildingsBought:lumbermill": 3,
+    "wood:spent": 10,
+    "jobCompletedPeriod:deliver-wood": 20833,
+    "jobCompletions:deliver-wood": 1,
+    "kills:goblin": 12
+  },
+  "lastTickTimestamp": 1800000000000,
+  "offlineCapMs": 3600000,
+  "version": 14
+}

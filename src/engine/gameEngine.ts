@@ -78,7 +78,7 @@ const MIN_AWAY_MS_FOR_SUMMARY = 60 * 1000; // 1 minute
 /** Default cost-scaling multiplier for producers that don't specify their own. */
 const DEFAULT_COST_SCALING_FACTOR = 1.15;
 
-export function createInitialState(): GameState {
+export function createInitialState(now: number = Date.now()): GameState {
   return {
     resources: {
       gp: { amount: 0, lifetimeEarned: 0 },
@@ -99,7 +99,7 @@ export function createInitialState(): GameState {
     currentLocationId: STARTING_LOCATION_ID,
     activeTravel: null,
     statistics: {},
-    lastTickTimestamp: Date.now(),
+    lastTickTimestamp: now,
     offlineCapMs: DEFAULT_OFFLINE_CAP_MS,
     version: SCHEMA_VERSION,
   };
@@ -114,7 +114,7 @@ export function createInitialState(): GameState {
  * deserialize() already covers it and a migration entry is optional but
  * still fine to add for clarity.
  */
-const MIGRATIONS: Record<number, (old: any) => any> = {
+const MIGRATIONS: Record<number, (old: any, now: number) => any> = {
   // v3 -> v4: items (like the wooden bow) moved from the resources ledger
   // into a proper instanced inventory. Any pre-existing "bow" resource count
   // is orphaned data at this point (harmless — it just stops being read by
@@ -151,8 +151,8 @@ const MIGRATIONS: Record<number, (old: any) => any> = {
   // "accepted today" (giving them a fresh full day) rather than leaving
   // acceptedPeriod undefined, which would make them expire instantly on
   // the next tick after upgrading.
-  9: (old) => {
-    const todayPeriod = getDailyPeriodNumber(Date.now());
+  9: (old, now) => {
+    const todayPeriod = getDailyPeriodNumber(now);
     const acceptedJobs: Record<string, { acceptedAt: number; acceptedPeriod: number }> = {};
     for (const [jobId, record] of Object.entries(old.acceptedJobs ?? {})) {
       const r = record as { acceptedAt: number; acceptedPeriod?: number };
@@ -222,10 +222,23 @@ const MIGRATIONS: Record<number, (old: any) => any> = {
 export class GameEngine {
   private state: GameState;
   readonly notifications: NotificationQueue;
+  /** The engine's only source of wall-clock time. Injectable so tests can
+   *  drive time deterministically; every timestamp the engine stores or
+   *  compares comes from here, never from Date.now() directly. */
+  private readonly clock: () => number;
 
-  constructor(initialState?: GameState, notifications?: NotificationQueue) {
-    this.state = initialState ?? createInitialState();
+  constructor(
+    initialState?: GameState,
+    notifications?: NotificationQueue,
+    opts?: { clock?: () => number }
+  ) {
+    this.clock = opts?.clock ?? Date.now;
+    this.state = initialState ?? createInitialState(this.clock());
     this.notifications = notifications ?? new NotificationQueue();
+  }
+
+  now(): number {
+    return this.clock();
   }
 
   getState(): GameState {
@@ -633,13 +646,13 @@ export class GameEngine {
 
   /** Resets the keep-alive clock — call this from a "tend to it" UI action.
    *  Returns false if there's no session, or the session doesn't require
-   *  keep-alives (nothing to reset). Uses real Date.now(), not the engine's
+   *  keep-alives (nothing to reset). Uses the engine clock rather than the
    *  lastTickTimestamp anchor, since this is a live player action, not
    *  something resolved retroactively during offline catch-up. */
   keepGatherSessionAlive(): boolean {
     const session = this.state.activeGatherSession;
     if (!session || session.requiresKeepAliveEveryMs === undefined) return false;
-    session.lastKeepAliveAt = Date.now();
+    session.lastKeepAliveAt = this.clock();
     return true;
   }
 
@@ -833,7 +846,7 @@ export class GameEngine {
    * absence caps all forms of progress consistently rather than having
    * production capped while crafting silently kept going uncapped.
    */
-  resolveElapsed(now: number = Date.now()): void {
+  resolveElapsed(now: number = this.clock()): void {
     const from = this.state.lastTickTimestamp;
     const elapsedMs = now - from;
 
@@ -895,6 +908,15 @@ export class GameEngine {
     this.resolveJobExpiry(now);
     this.syncDerivedStatistics();
 
+    // Time beyond the offline cap never happened as far as the simulation
+    // is concerned. Production is delta-based so it already respects the
+    // cap, but every in-progress action measures from an absolute anchor
+    // (startedAt etc.) — without shifting those forward by the skipped
+    // time, the very next tick would compute `now - startedAt` and pay out
+    // everything the cap just withheld.
+    const skippedMs = elapsedMs - cappedMs;
+    if (skippedMs > 0) this.shiftActionAnchors(skippedMs);
+
     this.state.lastTickTimestamp = now;
 
     // Any skill that gained a level THIS resolveElapsed call — could be more
@@ -928,6 +950,20 @@ export class GameEngine {
 
     for (const modifier of expired) {
       this.notifications.push("status", `${modifier.label} has worn off.`);
+    }
+  }
+
+  private shiftActionAnchors(ms: number): void {
+    const { activeCraftJob, activeGatherSession, activeTravel, activeCombatSession } = this.state;
+    if (activeCraftJob) activeCraftJob.startedAt += ms;
+    if (activeGatherSession) {
+      activeGatherSession.startedAt += ms;
+      if (activeGatherSession.lastKeepAliveAt !== undefined) activeGatherSession.lastKeepAliveAt += ms;
+    }
+    if (activeTravel) activeTravel.startedAt += ms;
+    if (activeCombatSession) {
+      activeCombatSession.playerStartedAt += ms;
+      activeCombatSession.enemyStartedAt += ms;
     }
   }
 
@@ -1003,7 +1039,7 @@ export class GameEngine {
   }
 
   private newInstanceId(): string {
-    return `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    return `item-${this.clock()}-${Math.random().toString(36).slice(2, 8)}`;
   }
 
   getInventoryItems(): ItemInstance[] {
@@ -1278,7 +1314,7 @@ export class GameEngine {
     if (this.state.activeCombatSession) {
       const updated = this.state.activeCombatSession;
       updated.playerAttacksResolved += 1;
-      updated.playerStartedAt = Date.now() - updated.playerAttacksResolved * updated.playerAttackSpeedMs;
+      updated.playerStartedAt = this.clock() - updated.playerAttacksResolved * updated.playerAttackSpeedMs;
     }
     return true;
   }
@@ -1292,7 +1328,7 @@ export class GameEngine {
     damage: number
   ): void {
     const outcome: "miss" | "block" | "hit" = !hit ? "miss" : damage <= 0 ? "block" : "hit";
-    session.log.push({ timestamp: Date.now(), attacker, outcome, damage });
+    session.log.push({ timestamp: this.clock(), attacker, outcome, damage });
     if (session.log.length > GameEngine.COMBAT_LOG_LIMIT) session.log.shift();
   }
 
@@ -1466,7 +1502,7 @@ export class GameEngine {
 
   /** Full wipe — new game. Keeps offlineCapMs at the default. */
   resetAll(): void {
-    this.state = createInitialState();
+    this.state = createInitialState(this.clock());
     this.notifications.clear();
     this.notifications.push("status", "Save data cleared — starting fresh.");
   }
@@ -1598,7 +1634,7 @@ export class GameEngine {
   isJobCompleted(jobId: string): boolean {
     const completedPeriod = this.state.statistics[`jobCompletedPeriod:${jobId}`];
     if (completedPeriod === undefined) return false;
-    return completedPeriod === getDailyPeriodNumber(Date.now());
+    return completedPeriod === getDailyPeriodNumber(this.clock());
   }
 
   /** Accepts a job, at its board's location. Refuses if already accepted,
@@ -1624,7 +1660,7 @@ export class GameEngine {
     }
     this.state.acceptedJobs[job.id] = {
       acceptedAt: this.state.lastTickTimestamp,
-      acceptedPeriod: getDailyPeriodNumber(Date.now()),
+      acceptedPeriod: getDailyPeriodNumber(this.clock()),
     };
     this.notifications.push("status", `Accepted job: ${job.title}.`);
     return true;
@@ -1702,7 +1738,7 @@ export class GameEngine {
     this.incrementStatistic(`jobCompletions:${job.id}`, 1);
     this.incrementStatistic("jobCompletions:total", 1);
     if (!job.repeatable) {
-      this.state.statistics[`jobCompletedPeriod:${job.id}`] = getDailyPeriodNumber(Date.now());
+      this.state.statistics[`jobCompletedPeriod:${job.id}`] = getDailyPeriodNumber(this.clock());
     }
 
     this.notifications.push("reward", `Turned in "${job.title}".`);
@@ -1751,13 +1787,18 @@ export class GameEngine {
     return JSON.stringify(this.state);
   }
 
-  static deserialize(json: string, notifications?: NotificationQueue): GameEngine {
+  static deserialize(
+    json: string,
+    notifications?: NotificationQueue,
+    opts?: { clock?: () => number }
+  ): GameEngine {
+    const clock = opts?.clock ?? Date.now;
     let parsed: any = JSON.parse(json);
 
     const fromVersion = typeof parsed.version === "number" ? parsed.version : 0;
     for (let v = fromVersion; v < SCHEMA_VERSION; v++) {
       const migrate = MIGRATIONS[v];
-      if (migrate) parsed = migrate(parsed);
+      if (migrate) parsed = migrate(parsed, clock());
     }
 
     // Safety net beneath the migration chain: backfill any field still
@@ -1787,12 +1828,12 @@ export class GameEngine {
       acceptedJobs: parsed.acceptedJobs ?? {},
       statistics: parsed.statistics ?? {},
       lastTickTimestamp:
-        typeof parsed.lastTickTimestamp === "number" ? parsed.lastTickTimestamp : Date.now(),
+        typeof parsed.lastTickTimestamp === "number" ? parsed.lastTickTimestamp : clock(),
       offlineCapMs:
         typeof parsed.offlineCapMs === "number" ? parsed.offlineCapMs : DEFAULT_OFFLINE_CAP_MS,
       version: SCHEMA_VERSION,
     };
-    return new GameEngine(withDefaults, notifications);
+    return new GameEngine(withDefaults, notifications, { clock });
   }
 }
 
