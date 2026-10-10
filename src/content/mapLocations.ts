@@ -46,6 +46,8 @@ export const MAP_LOCATIONS: MapLocation[] = [
   },
 ];
 
+const LOCATIONS_BY_ID = new Map(MAP_LOCATIONS.map((l) => [l.id, l]));
+
 export function getLocation(id: string): MapLocation | undefined {
-  return MAP_LOCATIONS.find((l) => l.id === id);
+  return LOCATIONS_BY_ID.get(id);
 }

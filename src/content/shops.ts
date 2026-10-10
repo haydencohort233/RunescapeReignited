@@ -34,6 +34,6 @@ export const SHOP_CATALOG: ShopDefinition[] = [
   },
 ];
 
-export function getShopAtLocation(locationId: string): ShopDefinition | undefined {
-  return SHOP_CATALOG.find((s) => s.locationId === locationId);
+export function getShop(id: string): ShopDefinition | undefined {
+  return SHOP_CATALOG.find((s) => s.id === id);
 }

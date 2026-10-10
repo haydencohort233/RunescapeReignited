@@ -23,8 +23,8 @@ export const JOB_BOARD_CATALOG: JobBoardDefinition[] = [
   },
 ];
 
-export function getJobBoardAtLocation(locationId: string): JobBoardDefinition | undefined {
-  return JOB_BOARD_CATALOG.find((b) => b.locationId === locationId);
+export function getJobBoard(id: string): JobBoardDefinition | undefined {
+  return JOB_BOARD_CATALOG.find((b) => b.id === id);
 }
 
 /** Which job ids are actively offered TODAY — deterministic from the board

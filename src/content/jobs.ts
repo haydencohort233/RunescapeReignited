@@ -53,6 +53,8 @@ export const JOB_CATALOG: JobDefinition[] = [
   },
 ];
 
+const JOBS_BY_ID = new Map(JOB_CATALOG.map((j) => [j.id, j]));
+
 export function getJob(id: string): JobDefinition | undefined {
-  return JOB_CATALOG.find((j) => j.id === id);
+  return JOBS_BY_ID.get(id);
 }

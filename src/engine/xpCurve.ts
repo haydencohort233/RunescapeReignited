@@ -20,14 +20,18 @@ const LEVEL_THRESHOLDS: number[] = Array.from({ length: MAX_LEVEL }, (_, i) =>
   xpForLevel(i + 1)
 );
 
-/** Current level for a given total XP, capped at MAX_LEVEL. */
+/** Current level for a given total XP, capped at MAX_LEVEL. Binary search —
+ *  this runs for every skill on every tick and render. */
 export function levelForXp(xp: number): number {
-  let level = 1;
-  for (let i = 0; i < LEVEL_THRESHOLDS.length; i++) {
-    if (xp >= LEVEL_THRESHOLDS[i]) level = i + 1;
-    else break;
+  let lo = 0;
+  let hi = LEVEL_THRESHOLDS.length - 1;
+  // Find the highest threshold <= xp.
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (LEVEL_THRESHOLDS[mid] <= xp) lo = mid;
+    else hi = mid - 1;
   }
-  return level;
+  return lo + 1;
 }
 
 /** XP still needed to reach the next level. Returns 0 at MAX_LEVEL. */

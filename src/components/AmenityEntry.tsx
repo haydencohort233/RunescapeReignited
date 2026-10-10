@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useGame } from "../engine/GameEngineContext";
 import type { Amenity } from "../content/amenities";
-import { getShopAtLocation } from "../content/shops";
-import { getJobBoardAtLocation } from "../content/jobBoards";
+import { getShop } from "../content/shops";
+import { getJobBoard } from "../content/jobBoards";
 import { getMsUntilNextDailyReset, formatCountdown } from "../engine/time";
 import { getRecipe } from "../content/recipes";
 import { describeUnmetCondition } from "../engine/unlockConditions";
@@ -71,7 +71,9 @@ export default function AmenityEntry({ amenity }: { amenity: Amenity }) {
   // interaction, just surfaced here too since this is where players spend
   // most of their time.
   if (amenity.kind === "shop") {
-    const shop = getShopAtLocation(amenity.locationId);
+    // By the amenity's own shopId: a location lookup always found the
+    // first shop there, so a second shop at the same place was unreachable.
+    const shop = getShop(amenity.shopId);
     if (!shop) return null;
     return browsingShop ? (
       <ShopBrowsePanel shop={shop} onClose={() => setBrowsingShop(false)} />
@@ -84,7 +86,7 @@ export default function AmenityEntry({ amenity }: { amenity: Amenity }) {
   // Talk/Browse split like shops, since a bulletin board isn't an NPC with
   // something to say.
   if (amenity.kind === "jobBoard") {
-    const board = getJobBoardAtLocation(amenity.locationId);
+    const board = getJobBoard(amenity.boardId);
     if (!board) return null;
     return panelOpen ? (
       <JobBoardBrowsePanel board={board} onClose={() => setPanelOpen(false)} />

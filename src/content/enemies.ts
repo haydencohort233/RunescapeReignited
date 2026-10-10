@@ -75,6 +75,8 @@ export const ENEMY_CATALOG: EnemyDefinition[] = [
   },
 ];
 
+const ENEMIES_BY_ID = new Map(ENEMY_CATALOG.map((e) => [e.id, e]));
+
 export function getEnemy(id: string): EnemyDefinition | undefined {
-  return ENEMY_CATALOG.find((e) => e.id === id);
+  return ENEMIES_BY_ID.get(id);
 }

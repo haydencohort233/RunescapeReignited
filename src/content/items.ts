@@ -287,8 +287,13 @@ export const ITEM_CATALOG: ItemDefinition[] = [
   },
 ];
 
+// Looked up constantly during render (inventory rows, rich text, resource
+// names), so index once instead of scanning the catalog every call.
+const ITEMS_BY_ID = new Map(ITEM_CATALOG.map((i) => [i.id, i]));
+const ITEMS_BY_LOWER_NAME = new Map(ITEM_CATALOG.map((i) => [i.name.toLowerCase(), i]));
+
 export function getItemDef(itemDefId: string): ItemDefinition | undefined {
-  return ITEM_CATALOG.find((i) => i.id === itemDefId);
+  return ITEMS_BY_ID.get(itemDefId);
 }
 
 /** Case-insensitive lookup BY DISPLAY NAME — an in-memory array scan over
@@ -297,6 +302,5 @@ export function getItemDef(itemDefId: string): ItemDefinition | undefined {
  *  spelled out in the tag — the catalog already knows which folder (via
  *  assetFolder) and extension (via animated) that item uses. */
 export function getItemDefByName(name: string): ItemDefinition | undefined {
-  const lower = name.toLowerCase();
-  return ITEM_CATALOG.find((i) => i.name.toLowerCase() === lower);
+  return ITEMS_BY_LOWER_NAME.get(name.toLowerCase());
 }

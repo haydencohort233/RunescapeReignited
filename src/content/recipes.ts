@@ -97,6 +97,8 @@ export const RECIPE_CATALOG: CraftingRecipe[] = [
  *  Gathering recipes (no inputs) are started from resource nodes instead. */
 export const PROCESSING_RECIPES: CraftingRecipe[] = RECIPE_CATALOG.filter((r) => r.inputs.length > 0);
 
+const RECIPES_BY_ID = new Map(RECIPE_CATALOG.map((r) => [r.id, r]));
+
 export function getRecipe(id: string): CraftingRecipe | undefined {
-  return RECIPE_CATALOG.find((r) => r.id === id);
+  return RECIPES_BY_ID.get(id);
 }
