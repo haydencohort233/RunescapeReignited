@@ -24,7 +24,12 @@ import { levelForXp, xpForLevel, MAX_LEVEL, calculateCombatLevel } from "./xpCur
 import { isUnlocked, captureBaselines, offsetByBaselines } from "./unlockConditions";
 import { getDailyPeriodNumber } from "./time";
 import { formatDuration } from "./format";
-import { BUILDING_SELL_REFUND_FRACTION, DEFAULT_COST_SCALING_FACTOR, EAT_ATTACK_DELAY_MS } from "./tuning";
+import {
+  BUILDING_SELL_REFUND_FRACTION,
+  DEFAULT_COST_SCALING_FACTOR,
+  EAT_ATTACK_DELAY_MS,
+  SHOP_SELL_PRICE_FRACTION,
+} from "./tuning";
 import { resolveAttack } from "./combatMath";
 import { weightedRandomPick } from "./rng";
 import { countOwned } from "./ledger";
@@ -1374,6 +1379,37 @@ export class GameEngine {
     this.addItem(itemDefId, quantity);
     this.incrementStatistic(`shopPurchases:${itemDefId}`, quantity);
     this.notifications.push("status", `Bought ${quantity}x ${itemName}.`);
+    return true;
+  }
+
+  /** What a shop pays per unit (at least 1 GP for anything with a value),
+   *  or 0 if the item can't be sold. */
+  getShopSellPrice(itemDefId: string): number {
+    const value = this.itemsById.get(itemDefId)?.value ?? 0;
+    if (value <= 0) return 0;
+    return Math.max(1, Math.floor(value * SHOP_SELL_PRICE_FRACTION));
+  }
+
+  /** Sells `quantity` of an item to the shop the player is standing at.
+   *  Worn equipment is never sold (getOwnedCount excludes it). */
+  sellToShop(shopLocationId: string, itemDefId: string, quantity: number): boolean {
+    if (quantity <= 0) return false;
+    if (this.state.currentLocationId !== shopLocationId) {
+      this.notifications.push("status", "You need to be at the shop to sell to it.", { severity: "warning" });
+      return false;
+    }
+    const unitPrice = this.getShopSellPrice(itemDefId);
+    if (unitPrice <= 0) {
+      this.notifications.push("status", `The shop won't buy ${this.nameOf(itemDefId)}.`, { severity: "warning" });
+      return false;
+    }
+    if (this.getOwnedCount(itemDefId) < quantity) return false;
+
+    this.removeOwned(itemDefId, quantity);
+    const total = unitPrice * quantity;
+    this.gainResource("gp", total);
+    this.incrementStatistic(`shopSales:${itemDefId}`, quantity);
+    this.notifications.push("status", `Sold ${quantity}x ${this.nameOf(itemDefId)} for ${total.toLocaleString()} GP.`);
     return true;
   }
 

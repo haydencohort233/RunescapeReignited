@@ -1,6 +1,8 @@
 import type { ItemDefinition } from "../engine/types";
 
-// Single source of truth for every item. stats are rough OSRS-wiki-ish
+// Single source of truth for every item. `value` is the base GP value
+// shops pay a fraction of (engine/tuning.ts); items without one can't be
+// sold. stats are rough OSRS-wiki-ish
 // approximations (aggregate attack/strength/defence, not the full OSRS
 // stab/slash/crush/magic/ranged breakdown) — fine for now, tune later.
 export const ITEM_CATALOG: ItemDefinition[] = [
@@ -12,6 +14,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "material",
     rarity: "common",
     stackable: true,
+    value: 4,
     actions: ["drop", "examine"],
   },
   {
@@ -21,6 +24,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "material",
     rarity: "common",
     stackable: true,
+    value: 8,
     actions: ["drop", "examine"],
   },
   {
@@ -30,6 +34,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "material",
     rarity: "common",
     stackable: true,
+    value: 15,
     actions: ["drop", "examine"],
   },
   {
@@ -39,6 +44,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "material",
     rarity: "common",
     stackable: true,
+    value: 5,
     actions: ["drop", "examine"],
   },
   {
@@ -48,6 +54,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "material",
     rarity: "common",
     stackable: true,
+    value: 10,
     actions: ["drop", "examine"],
   },
   {
@@ -57,6 +64,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "material",
     rarity: "common",
     stackable: true,
+    value: 2,
     actions: ["drop", "examine"],
   },
   {
@@ -66,6 +74,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "material",
     rarity: "common",
     stackable: true,
+    value: 10,
     actions: ["drop", "examine"],
   },
   {
@@ -75,6 +84,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "consumable",
     rarity: "common",
     stackable: true,
+    value: 8,
     healAmount: 5,
     actions: ["eat", "drop", "examine"],
   },
@@ -85,6 +95,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "material",
     rarity: "common",
     stackable: true, // intermediate crafting material — most non-equipment items stack
+    value: 10,
     actions: ["drop", "examine"],
   },
   {
@@ -94,6 +105,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "weapon",
     rarity: "common",
     stackable: false, // equipment — always one instance per copy
+    value: 40,
     equipSlot: "weapon",
     stats: { attack: 8 },
     actions: ["equip", "drop", "examine"],
@@ -105,6 +117,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "weapon",
     rarity: "common",
     stackable: false,
+    value: 50,
     equipSlot: "weapon",
     stats: { attack: 4, strength: 3 },
     weaponType: "stab",
@@ -118,6 +131,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "weapon",
     rarity: "common",
     stackable: false,
+    value: 80,
     equipSlot: "weapon",
     stats: { attack: 3, strength: 12 },
     weaponType: "crush",
@@ -131,6 +145,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "armor",
     rarity: "common",
     stackable: false,
+    value: 60,
     equipSlot: "head",
     stats: { defence: 5 },
     actions: ["equip", "drop", "examine"],
@@ -142,6 +157,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "armor",
     rarity: "common",
     stackable: false,
+    value: 160,
     equipSlot: "body",
     stats: { defence: 15 },
     actions: ["equip", "drop", "examine"],
@@ -153,6 +169,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "armor",
     rarity: "common",
     stackable: false,
+    value: 20,
     equipSlot: "shield",
     stats: { defence: 4 },
     actions: ["equip", "drop", "examine"],
@@ -164,6 +181,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "armor",
     rarity: "common",
     stackable: false,
+    value: 10,
     equipSlot: "feet",
     stats: { defence: 1 },
     actions: ["equip", "drop", "examine"],
@@ -175,6 +193,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "armor",
     rarity: "common",
     stackable: false,
+    value: 10,
     equipSlot: "hands",
     stats: { defence: 1 },
     actions: ["equip", "drop", "examine"],
@@ -196,6 +215,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "armor",
     rarity: "uncommon",
     stackable: false,
+    value: 350,
     equipSlot: "ring",
     actions: ["equip", "drop", "examine"], // cosmetic — no combat stats
   },
@@ -209,6 +229,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     // OSRS special case worth its own pass later) — treated as ordinary
     // equipment for now, one instance per copy.
     stackable: false,
+    value: 2,
     equipSlot: "ammo",
     stats: { strength: 7 },
     actions: ["equip", "drop", "examine"],
@@ -220,6 +241,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "armor",
     rarity: "rare",
     stackable: false,
+    value: 1000,
     equipSlot: "neck",
     // No maxDurability set — teleport charges are a natural future use of
     // durability, but durability stays unwired until you decide to use it.
@@ -234,6 +256,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "weapon",
     rarity: "legendary",
     stackable: false,
+    value: 60000,
     equipSlot: "weapon",
     stats: { attack: 67, strength: 66 },
     weaponType: "slash",
@@ -248,6 +271,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "consumable",
     rarity: "common",
     stackable: true,
+    value: 300,
     healAmount: 20,
     actions: ["eat", "drop", "examine"],
   },
@@ -258,6 +282,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     category: "material",
     rarity: "common",
     stackable: true,
+    value: 2,
     actions: ["drop", "examine"],
   },
 ];

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useGame } from "../engine/GameEngineContext";
 import type { ShopDefinition, ShopItem } from "../content/shops";
-import { getItemDef } from "../content/items";
+import { getItemDef, ITEM_CATALOG } from "../content/items";
 import { formatNumber } from "../engine/format";
 import ItemIcon from "./ItemIcon";
 
@@ -31,6 +31,41 @@ function ShopItemBuyActions({ shop, shopItem }: { shop: ShopDefinition; shopItem
       <button onClick={() => buy(maxAffordable)} disabled={maxAffordable === 0} style={{ textAlign: "left" }}>
         Buy All ({maxAffordable})
       </button>
+    </div>
+  );
+}
+
+/** Everything the player could sell here: owned (and not worn) items
+ *  that have a value. */
+function ShopSellList({ shop }: { shop: ShopDefinition }) {
+  const { engine } = useGame();
+  const sellable = ITEM_CATALOG.map((def) => ({
+    def,
+    owned: Math.floor(engine.getOwnedCount(def.id)),
+    unitPrice: engine.getShopSellPrice(def.id),
+  })).filter((e) => e.owned > 0 && e.unitPrice > 0);
+
+  if (sellable.length === 0) {
+    return <p style={{ fontSize: 13, color: "#888", margin: 0 }}>You have nothing this shop will buy.</p>;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {sellable.map(({ def, owned, unitPrice }) => (
+        <div
+          key={def.id}
+          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}
+        >
+          <span>
+            <ItemIcon def={def} size={24} /> {def.name} x{formatNumber(owned)}
+            <span style={{ fontSize: 12, color: "#666" }}> ({formatNumber(unitPrice)} GP each)</span>
+          </span>
+          <span style={{ display: "flex", gap: 4 }}>
+            <button onClick={() => engine.sellToShop(shop.locationId, def.id, 1)}>Sell 1</button>
+            <button onClick={() => engine.sellToShop(shop.locationId, def.id, owned)}>Sell All</button>
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -103,6 +138,15 @@ export default function ShopBrowsePanel({ shop, onClose }: { shop: ShopDefinitio
           );
         })}
       </div>
+
+      {shop.buysItems && (
+        <div style={{ marginTop: 12 }}>
+          <strong style={{ fontSize: 14 }}>Sell</strong>
+          <div style={{ marginTop: 6 }}>
+            <ShopSellList shop={shop} />
+          </div>
+        </div>
+      )}
 
       {quickMenu &&
         (() => {

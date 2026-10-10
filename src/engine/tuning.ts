@@ -8,6 +8,9 @@ export const DEFAULT_COST_SCALING_FACTOR = 1.15;
 /** Selling a building refunds this fraction of what those units cost. */
 export const BUILDING_SELL_REFUND_FRACTION = 0.5;
 
+/** Shops pay this fraction of an item's value when you sell to them. */
+export const SHOP_SELL_PRICE_FRACTION = 0.4;
+
 /** Eating during a fight pushes your next attack back by this much
  *  (OSRS: 3 ticks). Food is a tradeoff, not a free heal. */
 export const EAT_ATTACK_DELAY_MS = 1800;

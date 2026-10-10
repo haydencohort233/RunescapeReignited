@@ -18,6 +18,9 @@ export interface ShopDefinition {
    *  GameEngine.buyFromShop (so it's enforced, not just hidden). */
   locationId: string;
   items: ShopItem[];
+  /** Whether the shop buys items from the player (anything with a value,
+   *  at SHOP_SELL_PRICE_FRACTION of it — see engine/tuning.ts). */
+  buysItems?: boolean;
 }
 
 export const SHOP_CATALOG: ShopDefinition[] = [
@@ -27,6 +30,7 @@ export const SHOP_CATALOG: ShopDefinition[] = [
     title: "Bob's Famous Axes",
     locationId: "town",
     items: [{ itemDefId: "bronze-dagger", price: [{ resource: "gp", amount: 50 }] }],
+    buysItems: true,
   },
 ];
 
