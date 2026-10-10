@@ -57,7 +57,7 @@ export class JobBoardSystem {
       return false;
     }
     this.state.jobs.accepted[job.id] = {
-      acceptedAt: this.state.lastTickTimestamp,
+      acceptedAt: this.engine.now(),
       acceptedPeriod: getDailyPeriodNumber(this.engine.now()),
       baselines: captureBaselines(job.objective, this.state),
     };

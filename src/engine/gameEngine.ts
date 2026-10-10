@@ -23,7 +23,7 @@ import { formatDuration, capitalize } from "./format";
 import { SHOP_SELL_PRICE_FRACTION, EAT_ATTACK_DELAY_MS, BASE_HP_REGEN_PER_SECOND } from "./tuning";
 import { createInitialState } from "./state";
 import { migrateSave } from "./migrations";
-import { countOwned } from "./ledger";
+import { countOwned, isWholeQuantity } from "./ledger";
 import { describeAction, getActiveCombat } from "./activeAction";
 import { BuildingSystem } from "./systems/buildings";
 import { CraftingSystem } from "./systems/crafting";
@@ -307,11 +307,12 @@ export class GameEngine {
   }
 
   addSkillXp(skillId: string, amount: number): void {
-    if (amount <= 0) return;
+    if (!Number.isFinite(amount) || amount <= 0) return;
     if (!this.state.skills[skillId]) this.state.skills[skillId] = { xp: 0 };
     // XP is modifier-scalable — an "xp:woodcutting" buff affects just this
     // skill, an "xp:all" buff affects every skill's gains.
     const scaledAmount = this.getModifiedValue(`xp:${skillId}`, amount);
+    if (!Number.isFinite(scaledAmount) || scaledAmount <= 0) return;
     this.state.skills[skillId].xp += scaledAmount;
     // No notification here on purpose — resolveElapsed snapshots levels
     // before/after and decides how to report level-ups (see comment there).
@@ -339,7 +340,10 @@ export class GameEngine {
 
     if (elapsedMs <= 0) {
       // Clock went backwards (system clock change) or no time passed — don't
-      // apply negative production, just resync the anchor.
+      // apply negative production, just resync. Action anchors move back by
+      // the same amount, so an in-progress craft or fight carries on from
+      // where it was instead of stalling until the clock catches up.
+      if (elapsedMs < 0) this.shiftActionAnchors(elapsedMs);
       this.state.lastTickTimestamp = now;
       return;
     }
@@ -516,7 +520,7 @@ export class GameEngine {
    *  whose ids are returned. A `unique` item refuses a second copy if one
    *  is already owned anywhere, worn or not. */
   addItem(itemDefId: string, quantity: number): string[] {
-    if (quantity <= 0) return [];
+    if (!Number.isFinite(quantity) || quantity <= 0) return [];
     const def = this.itemsById.get(itemDefId);
 
     if (def?.unique) {
@@ -536,7 +540,7 @@ export class GameEngine {
     }
 
     const ids: string[] = [];
-    for (let i = 0; i < quantity; i++) {
+    for (let i = 0; i < Math.floor(quantity); i++) {
       const instanceId = this.newInstanceId();
       this.state.inventory[instanceId] = { instanceId, itemDefId };
       ids.push(instanceId);
@@ -649,7 +653,7 @@ export class GameEngine {
     price: RecipeInput[],
     quantity: number
   ): boolean {
-    if (quantity <= 0) return false;
+    if (!isWholeQuantity(quantity)) return false;
     const itemName = this.nameOf(itemDefId);
 
     if (this.state.currentLocationId !== shopLocationId) {
@@ -687,7 +691,7 @@ export class GameEngine {
   /** Sells `quantity` of an item to the shop the player is standing at.
    *  Worn equipment is never sold (getOwnedCount excludes it). */
   sellToShop(shopLocationId: string, itemDefId: string, quantity: number): boolean {
-    if (quantity <= 0) return false;
+    if (!isWholeQuantity(quantity)) return false;
     if (this.state.currentLocationId !== shopLocationId) {
       this.notifications.push("status", "You need to be at the shop to sell to it.", { severity: "warning" });
       return false;
@@ -722,12 +726,12 @@ export class GameEngine {
    *  with whichever target namespace fits ("hpRegen" vs "healing") — scaling
    *  here too would double-apply it on top of an already-scaled amount. */
   private healHp(amount: number): void {
-    if (amount <= 0) return;
+    if (!Number.isFinite(amount) || amount <= 0) return;
     this.state.currentHp = Math.min(this.getMaxHp(), this.getCurrentHp() + amount);
   }
 
   damageHp(amount: number): void {
-    if (amount <= 0) return;
+    if (!Number.isFinite(amount) || amount <= 0) return;
     this.state.currentHp = Math.max(0, this.getCurrentHp() - amount);
   }
 
@@ -754,6 +758,7 @@ export class GameEngine {
 
   /** Dev tool — directly sets current HP for testing, bypassing regen/combat. */
   devSetCurrentHp(hp: number): void {
+    if (!Number.isFinite(hp)) return;
     this.state.currentHp = Math.max(0, Math.min(this.getMaxHp(), hp));
   }
 
@@ -789,7 +794,8 @@ export class GameEngine {
    *  back what was already yours rather than counting toward lifetime
    *  milestones like "earned 100 GP". */
   gainResource(resourceId: ResourceId, amount: number, opts?: { countAsEarned?: boolean }): void {
-    if (amount <= 0) return;
+    // NaN would poison the save permanently (it serializes as null).
+    if (!Number.isFinite(amount) || amount <= 0) return;
     this.ensureResourceExists(resourceId);
     this.state.resources[resourceId].amount += amount;
     if (opts?.countAsEarned !== false) this.state.resources[resourceId].lifetimeEarned += amount;
@@ -800,6 +806,7 @@ export class GameEngine {
    *  than mutating state.resources directly, so "Total GP Spent" etc. stay
    *  accurate without scattering increment calls at every call site. */
   spendResource(resourceId: ResourceId, amount: number): void {
+    if (!Number.isFinite(amount) || amount <= 0) return;
     this.ensureResourceExists(resourceId);
     this.state.resources[resourceId].amount -= amount;
     this.incrementStatistic(`${resourceId}:spent`, amount);
@@ -828,6 +835,7 @@ export class GameEngine {
    *  tooling (testing travel speed at various Agility levels, etc.), not
    *  intended as a normal gameplay action. */
   setSkillLevel(skillId: string, level: number): void {
+    if (!Number.isFinite(level)) return;
     const clamped = Math.max(1, Math.min(MAX_LEVEL, Math.floor(level)));
     if (!this.state.skills[skillId]) this.state.skills[skillId] = { xp: 0 };
     this.state.skills[skillId].xp = xpForLevel(clamped);

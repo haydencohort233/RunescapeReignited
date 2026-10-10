@@ -10,6 +10,13 @@ import type { GameState, ResourceId } from "./types";
  * need to know which of the two an id lives in.
  */
 
+/** A positive whole number of units — what every buy/sell/craft quantity
+ *  must be. Rejects NaN, Infinity, fractions and anything <= 0, which a
+ *  UI bug or a cleared number input could otherwise pass through. */
+export function isWholeQuantity(quantity: number): boolean {
+  return Number.isInteger(quantity) && quantity > 0;
+}
+
 /** How many of `id` the player owns and could hand over: the stacked count
  *  plus any instances that aren't currently worn. Equipped items never
  *  count, so a delivery or recipe can't consume the sword in your hand. */

@@ -1,6 +1,7 @@
 import type { BuildingDefinition, GameState, RecipeInput } from "../types";
 import type { GameEngine } from "../gameEngine";
 import { isUnlocked } from "../unlockConditions";
+import { isWholeQuantity } from "../ledger";
 import { DEFAULT_COST_SCALING_FACTOR, BUILDING_SELL_REFUND_FRACTION } from "../tuning";
 
 /** Buildings: definitions from content, owned counts in state, buying, selling and limits. */
@@ -58,7 +59,7 @@ export class BuildingSystem {
     const def = this.getBuildingDef(buildingId);
     if (!def || !def.baseCost) return null;
     const owned = this.getBuildingQuantity(buildingId);
-    if (quantity <= 0 || quantity > owned) return null;
+    if (!isWholeQuantity(quantity) || quantity > owned) return null;
     return this.getBuildingCostRange(def, owned - quantity, quantity).map((c) => ({
       resource: c.resource,
       amount: Math.floor(c.amount * BUILDING_SELL_REFUND_FRACTION),
@@ -79,7 +80,7 @@ export class BuildingSystem {
    *  never pass it. */
   purchaseBuilding(buildingId: string, quantity = 1, opts?: { bypassUnlock?: boolean }): boolean {
     const def = this.getBuildingDef(buildingId);
-    if (!def || quantity <= 0) return false;
+    if (!def || !isWholeQuantity(quantity)) return false;
 
     if (!opts?.bypassUnlock && !this.isBuildingUnlocked(buildingId)) {
       this.notifications.push("status", `${def.name} isn't available yet.`, {
@@ -131,7 +132,7 @@ export class BuildingSystem {
     this.engine.incrementStatistic("buildingsSold:total", quantity);
     this.notifications.push(
       "status",
-      `Sold ${quantity}x ${def.name} for ${refund.map((r) => `${r.amount} ${r.resource}`).join(", ")}.`
+      `Sold ${quantity}x ${def.name} for ${refund.map((r) => `${r.amount.toLocaleString()} ${this.engine.nameOf(r.resource)}`).join(", ")}.`
     );
     return true;
   }

@@ -1,6 +1,7 @@
 import type { GameState, CraftingRecipe } from "../types";
 import type { GameEngine } from "../gameEngine";
 import { isUnlocked } from "../unlockConditions";
+import { isWholeQuantity } from "../ledger";
 import { capitalize } from "../format";
 import { DEFAULT_GATHER_MAX_DURATION_MS } from "../tuning";
 import { getActiveCraftJob, getActiveGatherSession } from "../activeAction";
@@ -36,7 +37,7 @@ export class CraftingSystem {
    * one while another is active is rejected.
    */
   startCraftJob(recipe: CraftingRecipe, quantity: number): boolean {
-    if (quantity <= 0) return false;
+    if (!isWholeQuantity(quantity)) return false;
 
     if (recipe.unlockCondition && !isUnlocked(recipe.unlockCondition, this.state)) {
       this.notifications.push("status", `You don't meet the requirements to do this yet.`, {
@@ -68,7 +69,10 @@ export class CraftingSystem {
       timePerItemMs: recipe.timePerItemMs,
       output: recipe.output,
       inputsPerItem: recipe.inputs,
-      startedAt: this.state.lastTickTimestamp,
+      // The real current time, not the last tick: the tick can be stale
+      // (a throttled background tab), and anchoring to it would credit the
+      // job with time from before it was started.
+      startedAt: this.engine.now(),
       quantityTotal: quantity,
       quantityCompleted: 0,
     };
@@ -155,7 +159,7 @@ export class CraftingSystem {
 
     if (!this.engine.ensureIdle()) return false;
 
-    const now = this.state.lastTickTimestamp;
+    const now = this.engine.now();
     this.state.activeAction = {
       kind: "gather",
       amenityId,
