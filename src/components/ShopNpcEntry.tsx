@@ -66,7 +66,7 @@ export default function ShopNpcEntry({
           setQuickMenuPos({ x: e.clientX, y: e.clientY });
         }}
         style={{
-          border: "1px solid #ccc",
+          border: "1px solid var(--border)",
           borderRadius: 6,
           padding: 8,
           cursor: "pointer",
@@ -86,11 +86,11 @@ export default function ShopNpcEntry({
             position: "fixed",
             left: quickMenuPos.x,
             top: quickMenuPos.y,
-            background: "white",
-            border: "1px solid #999",
+            background: "var(--surface-raised)",
+            border: "1px solid var(--text-faint)",
             borderRadius: 4,
             padding: 4,
-            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+            boxShadow: "0 2px 8px var(--shadow)",
             zIndex: 1000,
             display: "flex",
             flexDirection: "column",

@@ -40,7 +40,7 @@ export default function NavBar({ activeView, onChange, alerts }: NavBarProps) {
       style={{
         display: "flex",
         gap: 4,
-        borderBottom: "1px solid #ccc",
+        borderBottom: "1px solid var(--border)",
         marginBottom: 16,
         paddingBottom: 8,
       }}
@@ -63,7 +63,7 @@ export default function NavBar({ activeView, onChange, alerts }: NavBarProps) {
             style={{
               fontWeight: activeView === tab.id ? "bold" : "normal",
               textDecoration: activeView === tab.id ? "underline" : "none",
-              border: hasAlert ? "1px solid #d4af37" : undefined,
+              border: hasAlert ? "1px solid var(--gold-border)" : undefined,
               borderRadius: hasAlert ? 4 : undefined,
               animation: hasAlert ? "navAlertPulse 1.5s infinite" : undefined,
             }}

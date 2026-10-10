@@ -33,13 +33,13 @@ export default function NotificationList({
               gap: 8,
               background:
                 n.type === "achievement"
-                  ? "#fff8e1"
+                  ? "var(--gold-bg)"
                   : n.severity === "error"
-                    ? "#fee2e2"
+                    ? "var(--danger-bg)"
                     : n.severity === "warning"
-                      ? "#fef3c7"
-                      : "#e0f2fe",
-              border: n.type === "achievement" ? "1px solid #d4af37" : undefined,
+                      ? "var(--warning-bg)"
+                      : "var(--info-bg)",
+              border: n.type === "achievement" ? "1px solid var(--gold-border)" : undefined,
             }}
           >
             <span>

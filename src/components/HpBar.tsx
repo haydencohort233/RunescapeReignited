@@ -67,7 +67,7 @@ export default function HpBar({
           </div>
         </div>
       ) : (
-        <div style={{ background: "#eee", borderRadius: 4, height: 8, overflow: "hidden" }}>
+        <div style={{ background: "var(--track)", borderRadius: 4, height: 8, overflow: "hidden" }}>
           <div style={{ width: `${percent}%`, background: fallbackColor, height: "100%" }} />
         </div>
       )}

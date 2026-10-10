@@ -4,16 +4,37 @@ import { ITEM_CATALOG } from "../content/items";
 import { SKILL_CATALOG } from "../content/skills";
 import { MAX_LEVEL } from "../engine/xpCurve";
 import { BUILDING_CATALOG } from "../content/buildings";
+import { getThemeChoice, setThemeChoice, type ThemeChoice } from "../lib/theme";
 
 export default function SettingsPanel() {
   const { engine, autosaveMs, actions } = useGame();
   const importInputRef = useRef<HTMLInputElement>(null);
   const [spawnItemId, setSpawnItemId] = useState(ITEM_CATALOG[0].id);
   const [levelInputs, setLevelInputs] = useState<Record<string, number>>({});
+  const [theme, setTheme] = useState<ThemeChoice>(getThemeChoice);
 
   return (
     <section style={{ fontSize: 14, maxWidth: 480 }}>
       <h2 style={{ fontSize: 18, marginTop: 0 }}>Settings</h2>
+
+      <div style={{ marginBottom: 12 }}>
+        <label>
+          Theme{" "}
+          <select
+            id="theme"
+            value={theme}
+            onChange={(e) => {
+              const choice = e.target.value as ThemeChoice;
+              setTheme(choice);
+              setThemeChoice(choice);
+            }}
+          >
+            <option value="system">Match system</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+      </div>
 
       <div style={{ marginBottom: 12 }}>
         <label>
@@ -54,14 +75,14 @@ export default function SettingsPanel() {
               actions.resetAll();
             }
           }}
-          style={{ color: "#b91c1c" }}
+          style={{ color: "var(--danger)" }}
         >
           Clear Save Data
         </button>
       </div>
 
       <h3 style={{ fontSize: 15 }}>Dev Tools</h3>
-      <p style={{ fontSize: 12, color: "#888", marginTop: -4 }}>
+      <p style={{ fontSize: 12, color: "var(--text-faint)", marginTop: -4 }}>
         Bypasses unlock conditions, but still costs resources. Generated from the building
         catalog, so new buildings show up here automatically.
       </p>
@@ -119,7 +140,7 @@ export default function SettingsPanel() {
       </div>
 
       <h3 style={{ fontSize: 15, marginTop: 16 }}>Set Skill Level</h3>
-      <p style={{ fontSize: 12, color: "#888", marginTop: -4 }}>
+      <p style={{ fontSize: 12, color: "var(--text-faint)", marginTop: -4 }}>
         Sets XP to the exact threshold for that level — useful for testing things like Agility's
         effect on travel speed without grinding.
       </p>
@@ -149,7 +170,7 @@ export default function SettingsPanel() {
       </div>
 
       <h3 style={{ fontSize: 15, marginTop: 16 }}>Notification History</h3>
-      <p style={{ fontSize: 12, color: "#888", marginTop: -4 }}>
+      <p style={{ fontSize: 12, color: "var(--text-faint)", marginTop: -4 }}>
         Everything that's happened, including notifications that got replaced or auto-dismissed —
         most recent first.
       </p>
@@ -157,7 +178,7 @@ export default function SettingsPanel() {
         style={{
           maxHeight: 240,
           overflowY: "auto",
-          border: "1px solid #ddd",
+          border: "1px solid var(--border-subtle)",
           borderRadius: 6,
           padding: 8,
         }}
@@ -168,11 +189,11 @@ export default function SettingsPanel() {
             style={{
               fontSize: 12,
               padding: "3px 0",
-              borderBottom: "1px solid #f0f0f0",
-              color: n.severity === "error" ? "#b91c1c" : n.severity === "warning" ? "#92400e" : "#333",
+              borderBottom: "1px solid var(--border-subtle)",
+              color: n.severity === "error" ? "var(--danger)" : n.severity === "warning" ? "var(--warning)" : "var(--text-strong)",
             }}
           >
-            <span style={{ color: "#999" }}>{new Date(n.timestamp).toLocaleTimeString()}</span>{" "}
+            <span style={{ color: "var(--text-faint)" }}>{new Date(n.timestamp).toLocaleTimeString()}</span>{" "}
             {n.message}
           </div>
         ))}

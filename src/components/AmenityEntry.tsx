@@ -49,7 +49,7 @@ export default function AmenityEntry({ amenity }: { amenity: Amenity }) {
   const locked = !!amenity.unlockCondition && !!describeUnmetCondition(amenity.unlockCondition, state);
   if (locked) {
     return (
-      <div style={{ border: "1px dashed #ccc", borderRadius: 6, padding: 8, color: "#888" }}>
+      <div style={{ border: "1px dashed var(--border)", borderRadius: 6, padding: 8, color: "var(--text-faint)" }}>
         {AMENITY_ICON[amenity.kind]} {amenity.name} (Locked)
         <div style={{ fontSize: 12 }}>
           {amenity.unlockCondition && describeUnmetCondition(amenity.unlockCondition, state)}
@@ -84,10 +84,10 @@ export default function AmenityEntry({ amenity }: { amenity: Amenity }) {
     ) : (
       <div
         onClick={() => setPanelOpen(true)}
-        style={{ border: "1px solid #ccc", borderRadius: 6, padding: 8, cursor: "pointer" }}
+        style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 8, cursor: "pointer" }}
       >
         {AMENITY_ICON[amenity.kind]} {amenity.name}
-        <div style={{ fontSize: 12, color: "#666" }}>
+        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
           Resets in {formatCountdown(getMsUntilNextDailyReset(Date.now()))}
         </div>
       </div>
@@ -113,13 +113,13 @@ export default function AmenityEntry({ amenity }: { amenity: Amenity }) {
       <div>
         <div
           onClick={() => setPanelOpen((open) => !open)}
-          style={{ border: "1px solid #ccc", borderRadius: 6, padding: 8, cursor: "pointer" }}
+          style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 8, cursor: "pointer" }}
         >
           {AMENITY_ICON[amenity.kind]} {amenity.name}
         </div>
         {panelOpen && (
           <div style={{ marginTop: 4 }}>
-            <p style={{ fontSize: 12, color: "#666", margin: "0 0 4px" }}>{amenity.description}</p>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 4px" }}>{amenity.description}</p>
             <button onClick={placeholderAction}>{amenity.kind === "dungeonEntrance" ? "Enter" : "Use"}</button>
           </div>
         )}
@@ -139,7 +139,7 @@ export default function AmenityEntry({ amenity }: { amenity: Amenity }) {
     const recipeLockReason = describeUnmetCondition(recipe.unlockCondition, state);
     if (recipeLockReason) {
       return (
-        <div style={{ border: "1px dashed #ccc", borderRadius: 6, padding: 8, color: "#888" }}>
+        <div style={{ border: "1px dashed var(--border)", borderRadius: 6, padding: 8, color: "var(--text-faint)" }}>
           {AMENITY_ICON[amenity.kind]} {amenity.name} (Locked)
           <div style={{ fontSize: 12 }}>{recipeLockReason}</div>
         </div>
@@ -177,13 +177,13 @@ export default function AmenityEntry({ amenity }: { amenity: Amenity }) {
             setPanelOpen(false);
             setQuickMenuPos({ x: e.clientX, y: e.clientY });
           }}
-          style={{ border: "1px solid #ccc", borderRadius: 6, padding: 8, cursor: "pointer" }}
+          style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 8, cursor: "pointer" }}
         >
           {AMENITY_ICON[amenity.kind]} {amenity.name}
         </div>
         {panelOpen && (
           <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4 }}>
-            <p style={{ fontSize: 12, color: "#666", margin: "0 0 4px" }}>{amenity.description}</p>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 4px" }}>{amenity.description}</p>
             {actions}
           </div>
         )}
@@ -194,11 +194,11 @@ export default function AmenityEntry({ amenity }: { amenity: Amenity }) {
               position: "fixed",
               left: quickMenuPos.x,
               top: quickMenuPos.y,
-              background: "white",
-              border: "1px solid #999",
+              background: "var(--surface-raised)",
+              border: "1px solid var(--text-faint)",
               borderRadius: 4,
               padding: 4,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+              boxShadow: "0 2px 8px var(--shadow)",
               zIndex: 1000,
               display: "flex",
               flexDirection: "column",
@@ -242,21 +242,21 @@ export default function AmenityEntry({ amenity }: { amenity: Amenity }) {
     <div>
       <div
         onClick={() => setPanelOpen((open) => !open)}
-        style={{ border: "1px solid #ccc", borderRadius: 6, padding: 8, cursor: "pointer" }}
+        style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 8, cursor: "pointer" }}
       >
         {AMENITY_ICON[amenity.kind]} {amenity.name}
         {thisNodeIsActive && " (gathering...)"}
       </div>
 
       {statusLine && (
-        <p style={{ fontSize: 12, color: keepAliveDueSoon ? "#b91c1c" : "#666", margin: "2px 0 0" }}>
+        <p style={{ fontSize: 12, color: keepAliveDueSoon ? "var(--danger)" : "var(--text-muted)", margin: "2px 0 0" }}>
           {statusLine}
         </p>
       )}
 
       {panelOpen && (
         <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
-          <p style={{ fontSize: 12, color: "#666", margin: "0 0 2px" }}>{amenity.description}</p>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 2px" }}>{amenity.description}</p>
           {thisNodeIsActive ? (
             <>
               {requiresKeepAliveEveryMs !== undefined && (

@@ -50,8 +50,8 @@ export default function MapView() {
           position: "relative",
           width: DISPLAY_SIZE,
           height: DISPLAY_SIZE,
-          border: "1px solid #999",
-          background: "#eef6ee",
+          border: "1px solid var(--text-faint)",
+          background: "var(--map-bg)",
           backgroundImage: isImageLoaded(worldMapPath()) ? `url(${worldMapPath()})` : undefined,
           backgroundSize: "cover",
         }}
@@ -74,7 +74,7 @@ export default function MapView() {
                 width: 24,
                 height: 24,
                 padding: 0,
-                border: isCurrent ? "2px solid #1a5fa8" : "none",
+                border: isCurrent ? "2px solid var(--info)" : "none",
                 borderRadius: "50%",
                 background: "transparent",
                 cursor: "pointer",
@@ -96,8 +96,8 @@ export default function MapView() {
                       height: 14,
                       margin: "0 auto",
                       borderRadius: "50%",
-                      border: "1px solid #555",
-                      background: isUnlockedHere ? (isCurrent ? "#1a5fa8" : "#4b8") : "#999",
+                      border: "1px solid var(--text-muted)",
+                      background: isUnlockedHere ? (isCurrent ? "var(--info)" : "var(--good)") : "var(--text-faint)",
                     }}
                   />
                 }
@@ -108,22 +108,22 @@ export default function MapView() {
       </div>
 
       {currentLocation && (
-        <p style={{ fontSize: 13, color: "#666" }}>Currently at: {currentLocation.name}</p>
+        <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Currently at: {currentLocation.name}</p>
       )}
 
       {selected && (
-        <div style={{ border: "1px solid #ddd", borderRadius: 6, padding: 10, marginTop: 8 }}>
+        <div style={{ border: "1px solid var(--border-subtle)", borderRadius: 6, padding: 10, marginTop: 8 }}>
           <strong>{selected.name}</strong>
           {selected.id === state.currentLocationId ? (
-            <p style={{ fontSize: 13, color: "#888" }}>You're already here.</p>
+            <p style={{ fontSize: 13, color: "var(--text-faint)" }}>You're already here.</p>
           ) : selected.unlockCondition && describeUnmetCondition(selected.unlockCondition, state) ? (
-            <p style={{ fontSize: 13, color: "#b91c1c" }}>
+            <p style={{ fontSize: 13, color: "var(--danger)" }}>
               {describeUnmetCondition(selected.unlockCondition, state)}
             </p>
           ) : (
             <>
               {currentLocation && (
-                <p style={{ fontSize: 13, color: "#666", margin: "0 0 6px" }}>
+                <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 6px" }}>
                   Estimated travel time:{" "}
                   {Math.round(engine.getTravelDurationEstimate(currentLocation, selected) / 1000)}s
                 </p>
@@ -148,7 +148,7 @@ export default function MapView() {
             const amenities = getAmenitiesAtLocation(selected.id);
             if (amenities.length === 0) return null;
             return (
-              <p style={{ fontSize: 12, color: "#666", marginTop: 6 }}>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
                 Here: {amenities.map((a) => `${AMENITY_ICON[a.kind]} ${a.name}`).join(", ")}
               </p>
             );

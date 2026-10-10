@@ -25,10 +25,10 @@ export default function BuildingsPanel() {
               <div
                 key={def.id}
                 style={{
-                  border: "1px dashed #ccc",
+                  border: "1px dashed var(--border)",
                   borderRadius: 6,
                   padding: 10,
-                  color: "#888",
+                  color: "var(--text-faint)",
                 }}
               >
                 <strong>{def.name} (Locked)</strong>
@@ -46,7 +46,7 @@ export default function BuildingsPanel() {
             cost?.map((c) => `${formatNumber(c.amount)} ${c.resource}`).join(", ");
 
           return (
-            <div key={def.id} style={{ border: "1px solid #ccc", borderRadius: 6, padding: 10 }}>
+            <div key={def.id} style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <strong style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                   <GameImage
@@ -57,7 +57,7 @@ export default function BuildingsPanel() {
                   />
                   {def.name}
                 </strong>
-                <span style={{ fontSize: 13, color: "#555" }}>
+                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
                   Owned: {owned}
                   {def.maxOwned !== undefined && `/${def.maxOwned}`} ({(def.baseRatePerSecond * owned).toFixed(2)}{" "}
                   {def.resource}/s)

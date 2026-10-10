@@ -40,7 +40,7 @@ export default function HomeView() {
           <HpBar current={engine.getCurrentHp()} max={engine.getMaxHp()} label="Health" />
         </div>
         {amenities.length === 0 ? (
-          <p style={{ fontSize: 13, color: "#888" }}>Nothing here yet.</p>
+          <p style={{ fontSize: 13, color: "var(--text-faint)" }}>Nothing here yet.</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {amenities.map((amenity) => (
@@ -56,7 +56,7 @@ export default function HomeView() {
       </section>
 
       {woodPerSecond === 0 && (
-        <p style={{ fontSize: 13, color: "#888", marginTop: -8, marginBottom: 16 }}>
+        <p style={{ fontSize: 13, color: "var(--text-faint)", marginTop: -8, marginBottom: 16 }}>
           No wood income yet — visit the Buildings tab to buy your first Lumbermill.
         </p>
       )}

@@ -12,7 +12,7 @@ export default function ResourceList({ category }: { category: ResourceCategory 
   );
 
   if (entries.length === 0) {
-    return <p style={{ fontSize: 13, color: "#888" }}>Nothing here yet.</p>;
+    return <p style={{ fontSize: 13, color: "var(--text-faint)" }}>Nothing here yet.</p>;
   }
 
   return (
@@ -24,7 +24,7 @@ export default function ResourceList({ category }: { category: ResourceCategory 
           <div key={id}>
             {meta.name}: {Math.floor(resource.amount).toLocaleString()}
             {rate !== 0 && (
-              <span style={{ color: "#666", fontSize: 13 }}> ({rate.toFixed(2)}/s)</span>
+              <span style={{ color: "var(--text-muted)", fontSize: 13 }}> ({rate.toFixed(2)}/s)</span>
             )}
           </div>
         );

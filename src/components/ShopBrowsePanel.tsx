@@ -50,7 +50,7 @@ function ShopSellList({ shop }: { shop: ShopDefinition }) {
   })).filter((e) => e.owned > 0 && e.unitPrice > 0);
 
   if (sellable.length === 0) {
-    return <p style={{ fontSize: 13, color: "#888", margin: 0 }}>You have nothing this shop will buy.</p>;
+    return <p style={{ fontSize: 13, color: "var(--text-faint)", margin: 0 }}>You have nothing this shop will buy.</p>;
   }
 
   return (
@@ -62,7 +62,7 @@ function ShopSellList({ shop }: { shop: ShopDefinition }) {
         >
           <span>
             <ItemIcon def={def} size={24} /> {def.name} x{formatNumber(owned)}
-            <span style={{ fontSize: 12, color: "#666" }}> ({formatNumber(unitPrice)} GP each)</span>
+            <span style={{ fontSize: 12, color: "var(--text-muted)" }}> ({formatNumber(unitPrice)} GP each)</span>
           </span>
           <span style={{ display: "flex", gap: 4 }}>
             <button onClick={() => engine.sellToShop(shop.locationId, def.id, 1)}>Sell 1</button>
@@ -91,7 +91,7 @@ export default function ShopBrowsePanel({ shop, onClose }: { shop: ShopDefinitio
   }, [quickMenu]);
 
   return (
-    <div style={{ border: "1px solid #ddd", borderRadius: 6, padding: 10, marginTop: 8 }}>
+    <div style={{ border: "1px solid var(--border-subtle)", borderRadius: 6, padding: 10, marginTop: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <strong>{shop.title}</strong>
         <button onClick={onClose}>Close Shop</button>
@@ -118,7 +118,7 @@ export default function ShopBrowsePanel({ shop, onClose }: { shop: ShopDefinitio
                   setQuickMenu({ itemDefId: shopItem.itemDefId, x: e.clientX, y: e.clientY });
                 }}
                 style={{
-                  border: "1px solid #ccc",
+                  border: "1px solid var(--border)",
                   borderRadius: 6,
                   padding: 8,
                   cursor: "pointer",
@@ -129,12 +129,12 @@ export default function ShopBrowsePanel({ shop, onClose }: { shop: ShopDefinitio
                 <span>
                   <ItemIcon def={def} size={24} /> {def.name}
                 </span>
-                <span style={{ fontSize: 13, color: "#666" }}>{priceText}</span>
+                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>{priceText}</span>
               </div>
 
               {openPanelId === shopItem.itemDefId && (
-                <div style={{ border: "1px solid #eee", borderRadius: 6, padding: 8, marginTop: 2 }}>
-                  <p style={{ fontSize: 13, color: "#666", marginTop: 0 }}>{def.description}</p>
+                <div style={{ border: "1px solid var(--border-subtle)", borderRadius: 6, padding: 8, marginTop: 2 }}>
+                  <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 0 }}>{def.description}</p>
                   <ShopItemBuyActions shop={shop} shopItem={shopItem} />
                 </div>
               )}
@@ -163,11 +163,11 @@ export default function ShopBrowsePanel({ shop, onClose }: { shop: ShopDefinitio
                 position: "fixed",
                 left: quickMenu.x,
                 top: quickMenu.y,
-                background: "white",
-                border: "1px solid #999",
+                background: "var(--surface-raised)",
+                border: "1px solid var(--text-faint)",
                 borderRadius: 4,
                 padding: 4,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+                boxShadow: "0 2px 8px var(--shadow)",
                 zIndex: 1000,
               }}
             >

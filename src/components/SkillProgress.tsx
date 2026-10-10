@@ -24,14 +24,14 @@ export default function SkillProgress({ skillId, label }: { skillId: string; lab
           {label}: level {progress.level}
         </span>
         {progress.level < MAX_LEVEL && (
-          <span style={{ color: "#666" }}>{Math.round(progress.percent * 100)}%</span>
+          <span style={{ color: "var(--text-muted)" }}>{Math.round(progress.percent * 100)}%</span>
         )}
       </div>
-      <div style={{ background: "#eee", borderRadius: 4, height: 6, overflow: "hidden" }}>
+      <div style={{ background: "var(--track)", borderRadius: 4, height: 6, overflow: "hidden" }}>
         <div
           style={{
             width: `${progress.percent * 100}%`,
-            background: "#4b8",
+            background: "var(--good)",
             height: "100%",
           }}
         />

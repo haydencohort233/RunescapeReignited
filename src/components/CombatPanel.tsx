@@ -17,9 +17,9 @@ interface ActiveSplat {
 }
 
 const SPLAT_COLOR: Record<ActiveSplat["outcome"], string> = {
-  hit: "#b91c1c", // red — real damage, matches OSRS
-  block: "#2563eb", // blue — landed but rolled 0
-  miss: "#9ca3af", // gray — didn't land at all
+  hit: "var(--splat-hit)", // red — real damage, matches OSRS
+  block: "var(--splat-block)", // blue — landed but rolled 0
+  miss: "var(--splat-miss)", // gray — didn't land at all
 };
 
 /** The fight UI for a combatEncounter amenity. Auto-resolves via the
@@ -105,12 +105,12 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
   if (!fightingThisEnemy) {
     const foods = ITEM_CATALOG.filter((def) => def.healAmount && engine.getOwnedCount(def.id) >= 1);
     return (
-      <div style={{ border: "1px solid #ccc", borderRadius: 6, padding: 8 }}>
+      <div style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 8 }}>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <strong>⚔️ {enemy.name}</strong>
-          {enemy.isBoss && <span style={{ fontSize: 11, color: "#b8860b" }}>Boss</span>}
+          {enemy.isBoss && <span style={{ fontSize: 11, color: "var(--gold)" }}>Boss</span>}
         </div>
-        <p style={{ fontSize: 12, color: "#666", margin: "4px 0" }}>Max HP: {enemy.maxHp}</p>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "4px 0" }}>Max HP: {enemy.maxHp}</p>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", fontSize: 12, marginBottom: 6 }}>
           <label>
             <input
@@ -155,7 +155,7 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
       ));
 
   return (
-    <div style={{ border: "1px solid #ccc", borderRadius: 6, padding: 8 }}>
+    <div style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 8 }}>
       <style>{`
         @keyframes hitsplatFloat {
           0% { opacity: 1; transform: translate(-50%, 0); }
@@ -165,7 +165,7 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
 
       <strong>⚔️ Fighting {session.enemyName}</strong>
       {session.autoRepeat && (
-        <span style={{ fontSize: 12, color: "#666" }}>
+        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
           {" "}
           — {session.kills} killed this trip
           {session.autoEatItemId &&
@@ -210,7 +210,7 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
         </div>
       </div>
 
-      <p style={{ fontSize: 12, color: "#666", margin: "6px 0 0" }}>
+      <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "6px 0 0" }}>
         Your next attack: {nextPlayerAttackSeconds}s (every {(session.playerAttackSpeedMs / 1000).toFixed(1)}
         s) — {session.enemyName}'s next attack: {nextEnemyAttackSeconds}s (every{" "}
         {(session.enemyAttackSpeedMs / 1000).toFixed(1)}s)
@@ -237,18 +237,18 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
           fontFamily: "monospace",
           maxHeight: 140,
           overflowY: "auto",
-          border: "1px solid #eee",
+          border: "1px solid var(--border-subtle)",
           borderRadius: 4,
           padding: "4px 6px",
           display: "flex",
           flexDirection: "column-reverse", // newest at top
         }}
       >
-        {session.log.length === 0 && <span style={{ color: "#999" }}>No attacks yet.</span>}
+        {session.log.length === 0 && <span style={{ color: "var(--text-faint)" }}>No attacks yet.</span>}
         {session.log.map((entry, i) => (
           <div key={i} style={{ display: "flex", gap: 6, lineHeight: 1.5 }}>
             <span
-              style={{ width: 12, fontWeight: 700, color: entry.attacker === "player" ? "#1a5fa8" : "#b91c1c" }}
+              style={{ width: 12, fontWeight: 700, color: entry.attacker === "player" ? "var(--info)" : "var(--danger)" }}
             >
               {entry.attacker === "player" ? "Y" : "E"}
             </span>

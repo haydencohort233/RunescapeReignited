@@ -17,9 +17,9 @@ export default function EquipmentPanel() {
           const def = instance ? getItemDef(instance.itemDefId) : undefined;
 
           return (
-            <div key={slot.id} style={{ border: "1px solid #ddd", borderRadius: 6, padding: 8 }}>
+            <div key={slot.id} style={{ border: "1px solid var(--border-subtle)", borderRadius: 6, padding: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <strong style={{ fontSize: 13, color: "#888" }}>{slot.label}</strong>
+                <strong style={{ fontSize: 13, color: "var(--text-faint)" }}>{slot.label}</strong>
                 <span>
                   {def ? (
                     <>

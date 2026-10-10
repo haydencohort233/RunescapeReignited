@@ -1,15 +1,37 @@
+/* Theme tokens. Every component color comes from these, so the light and
+   dark palettes are each defined once. The theme follows the system
+   setting unless the player picks one in Settings, which sets
+   data-theme on <html>. */
 :root {
+  --bg: #fff;
+  --surface-raised: #fff;
   --text: #6b6375;
   --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  --text-strong: #333;
+  --text-muted: #666;
+  --text-faint: #888;
+  --border: #ccc;
+  --border-subtle: #ddd;
+  --track: #eee;
+  --map-bg: #eef6ee;
+  --shadow: rgba(0, 0, 0, 0.2);
+
+  --danger: #b91c1c;
+  --danger-bg: #fee2e2;
+  --warning: #92400e;
+  --warning-bg: #fef3c7;
+  --info: #1a5fa8;
+  --info-bg: #e0f2fe;
+  --success: #1a7a3a;
+  --good: #4b8;
+  --gold: #b8860b;
+  --gold-border: #d4af37;
+  --gold-bg: #fff8e1;
+
+  /* Combat log text (not the splat circles, which carry their own white text). */
+  --splat-hit: #b91c1c;
+  --splat-block: #2563eb;
+  --splat-miss: #9ca3af;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
@@ -17,9 +39,6 @@
 
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
-  /* Every component's inline colors are written for a light background, so
-     the page stays light rather than mixing dark page chrome with light
-     panels and grey-on-grey text. */
   color-scheme: light;
   color: var(--text);
   background: var(--bg);
@@ -33,12 +52,80 @@
   }
 }
 
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b0c0f;
+    --surface-raised: #1c1f26;
+    --text: #c9ccd3;
+    --text-h: #f3f4f6;
+    --text-strong: #e5e7eb;
+    --text-muted: #a1a7b3;
+    --text-faint: #7c8290;
+    --border: #2c303a;
+    --border-subtle: #23262e;
+    --track: #23262e;
+    --map-bg: #121a14;
+    --shadow: rgba(0, 0, 0, 0.6);
+
+    --danger: #f87171;
+    --danger-bg: #3a1517;
+    --warning: #fbbf24;
+    --warning-bg: #3a2c0f;
+    --info: #60a5fa;
+    --info-bg: #10263a;
+    --success: #4ade80;
+    --good: #4b8;
+    --gold: #e0b44a;
+    --gold-border: #a8842a;
+    --gold-bg: #2a2310;
+
+    --splat-hit: #f87171;
+    --splat-block: #60a5fa;
+    --splat-miss: #7c8290;
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0b0c0f;
+  --surface-raised: #1c1f26;
+  --text: #c9ccd3;
+  --text-h: #f3f4f6;
+  --text-strong: #e5e7eb;
+  --text-muted: #a1a7b3;
+  --text-faint: #7c8290;
+  --border: #2c303a;
+  --border-subtle: #23262e;
+  --track: #23262e;
+  --map-bg: #121a14;
+  --shadow: rgba(0, 0, 0, 0.6);
+
+  --danger: #f87171;
+  --danger-bg: #3a1517;
+  --warning: #fbbf24;
+  --warning-bg: #3a2c0f;
+  --info: #60a5fa;
+  --info-bg: #10263a;
+  --success: #4ade80;
+  --good: #4b8;
+  --gold: #e0b44a;
+  --gold-border: #a8842a;
+  --gold-bg: #2a2310;
+
+  --splat-hit: #f87171;
+  --splat-block: #60a5fa;
+  --splat-miss: #7c8290;
+
+  color-scheme: dark;
+}
+
 #root {
   width: 1126px;
   max-width: 100%;
   margin: 0 auto;
   text-align: center;
-  border-inline: 1px solid var(--border);
+  border-inline: 1px solid var(--border-subtle);
   min-height: 100svh;
   display: flex;
   flex-direction: column;
@@ -47,6 +134,8 @@
 
 body {
   margin: 0;
+  background: var(--bg);
+  color: var(--text);
 }
 
 h1,

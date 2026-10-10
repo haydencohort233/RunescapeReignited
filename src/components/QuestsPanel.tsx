@@ -12,7 +12,7 @@ function QuestEntry({ quest }: { quest: QuestDefinition }) {
   const stageMet = engine.isQuestStageMet(quest.id);
   const startBlocked = quest.startCondition ? describeUnmetCondition(quest.startCondition, state) : null;
 
-  const statusColor = status === "completed" ? "#1a7a3a" : status === "in-progress" ? "#b8860b" : "#888";
+  const statusColor = status === "completed" ? "var(--success)" : status === "in-progress" ? "var(--gold)" : "var(--text-faint)";
   const statusText =
     status === "completed"
       ? "Completed"
@@ -21,16 +21,16 @@ function QuestEntry({ quest }: { quest: QuestDefinition }) {
         : "Not started";
 
   return (
-    <div style={{ border: "1px solid #ddd", borderRadius: 6, padding: 10 }}>
+    <div style={{ border: "1px solid var(--border-subtle)", borderRadius: 6, padding: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <strong>{quest.name}</strong>
         <span style={{ fontSize: 12, color: statusColor }}>{statusText}</span>
       </div>
-      <p style={{ fontSize: 13, color: "#666", margin: "4px 0" }}>{quest.description}</p>
+      <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "4px 0" }}>{quest.description}</p>
 
       {status === "not-started" &&
         (startBlocked ? (
-          <p style={{ fontSize: 12, color: "#888", margin: 0 }}>{startBlocked}</p>
+          <p style={{ fontSize: 12, color: "var(--text-faint)", margin: 0 }}>{startBlocked}</p>
         ) : (
           <button onClick={() => engine.startQuest(quest.id)}>Start quest</button>
         ))}
@@ -39,7 +39,7 @@ function QuestEntry({ quest }: { quest: QuestDefinition }) {
         <div style={{ fontSize: 13 }}>
           <div>{stage.description}</div>
           {!stageMet && (
-            <div style={{ fontSize: 12, color: "#b91c1c" }}>
+            <div style={{ fontSize: 12, color: "var(--danger)" }}>
               {describeConditionProgress(stage.objective, state, progress!.baselines) ??
                 describeUnmetCondition(objective, state)}
             </div>

@@ -33,12 +33,12 @@ export default function JobBoardBrowsePanel({
   );
 
   return (
-    <div style={{ border: "1px solid #ddd", borderRadius: 6, padding: 10, marginTop: 8 }}>
+    <div style={{ border: "1px solid var(--border-subtle)", borderRadius: 6, padding: 10, marginTop: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <strong>{board.title}</strong>
         <button onClick={onClose}>Close</button>
       </div>
-      <p style={{ fontSize: 12, color: "#666", margin: "2px 0 0" }}>
+      <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "2px 0 0" }}>
         Resets in {formatCountdown(getMsUntilNextDailyReset(Date.now()))}
       </p>
 
@@ -57,8 +57,8 @@ export default function JobBoardBrowsePanel({
           if (completed) {
             if (job.frequency === "once") return null;
             return (
-              <div key={job.id} style={{ border: "1px solid #eee", borderRadius: 6, padding: 8 }}>
-                <span style={{ fontSize: 12, color: "#888" }}>
+              <div key={job.id} style={{ border: "1px solid var(--border-subtle)", borderRadius: 6, padding: 8 }}>
+                <span style={{ fontSize: 12, color: "var(--text-faint)" }}>
                   New job posted in {formatCountdown(getMsUntilNextDailyReset(Date.now()))}
                 </span>
               </div>
@@ -75,15 +75,15 @@ export default function JobBoardBrowsePanel({
               : null;
 
           return (
-            <div key={job.id} style={{ border: "1px solid #eee", borderRadius: 6, padding: 8 }}>
+            <div key={job.id} style={{ border: "1px solid var(--border-subtle)", borderRadius: 6, padding: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <strong>{job.title}</strong>
-                {job.frequency === "repeatable" && <span style={{ fontSize: 11, color: "#888" }}>Repeatable</span>}
-                {job.frequency === "once" && <span style={{ fontSize: 11, color: "#888" }}>One-time</span>}
+                {job.frequency === "repeatable" && <span style={{ fontSize: 11, color: "var(--text-faint)" }}>Repeatable</span>}
+                {job.frequency === "once" && <span style={{ fontSize: 11, color: "var(--text-faint)" }}>One-time</span>}
               </div>
-              <p style={{ fontSize: 13, color: "#666", margin: "4px 0" }}>{job.description}</p>
+              <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "4px 0" }}>{job.description}</p>
               {job.reward && (
-                <p style={{ fontSize: 12, color: "#888", margin: "0 0 6px" }}>
+                <p style={{ fontSize: 12, color: "var(--text-faint)", margin: "0 0 6px" }}>
                   Reward: {formatReward(job.reward)}
                 </p>
               )}
@@ -92,7 +92,7 @@ export default function JobBoardBrowsePanel({
                 objectiveMet ? (
                   <button onClick={() => engine.turnInJob(job, board.locationId)}>Turn In</button>
                 ) : (
-                  <p style={{ fontSize: 12, color: "#b91c1c", margin: 0 }}>{progressOrReason}</p>
+                  <p style={{ fontSize: 12, color: "var(--danger)", margin: 0 }}>{progressOrReason}</p>
                 )
               ) : (
                 <button onClick={() => engine.acceptJob(job, board.locationId)}>Accept</button>

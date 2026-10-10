@@ -24,29 +24,29 @@ export default function StatisticsPanel() {
     <section style={{ maxWidth: 480 }}>
       <h2 style={{ fontSize: 18, marginTop: 0 }}>Statistics</h2>
 
-      <h3 style={{ fontSize: 14, color: "#888", marginBottom: 4 }}>General</h3>
+      <h3 style={{ fontSize: 14, color: "var(--text-faint)", marginBottom: 4 }}>General</h3>
       <StatRow label="Total GP Earned" value={formatNumber(stat("gp:earned"))} />
       <StatRow label="Total GP Spent" value={formatNumber(stat("gp:spent"))} />
       <StatRow label="Overall Exp Gained" value={formatNumber(stat("totalExp"))} />
       <StatRow label="Total Level" value={stat("totalLevel")} />
 
-      <h3 style={{ fontSize: 14, color: "#888", marginTop: 12, marginBottom: 4 }}>Buildings</h3>
+      <h3 style={{ fontSize: 14, color: "var(--text-faint)", marginTop: 12, marginBottom: 4 }}>Buildings</h3>
       <StatRow label="Buildings Bought (Total)" value={stat("buildingsBought:total")} />
       {BUILDING_CATALOG.filter((b) => b.baseCost).map((b) => (
         <StatRow key={b.id} label={`${b.name} Bought`} value={stat(`buildingsBought:${b.id}`)} />
       ))}
 
-      <h3 style={{ fontSize: 14, color: "#888", marginTop: 12, marginBottom: 4 }}>Travel</h3>
+      <h3 style={{ fontSize: 14, color: "var(--text-faint)", marginTop: 12, marginBottom: 4 }}>Travel</h3>
       <StatRow label="</assets/items/Abyssal Whip/abyssal_whip.png> Total Travel Time" value={formatDuration(stat("totalTravelTimeMs"))} />
       {MAP_LOCATIONS.map((loc) => (
         <StatRow key={loc.id} label={`Times Traveled to ${loc.name}`} value={stat(`traveledTo:${loc.id}`)} />
       ))}
 
-      <h3 style={{ fontSize: 14, color: "#888", marginTop: 12, marginBottom: 4 }}>Skilling</h3>
+      <h3 style={{ fontSize: 14, color: "var(--text-faint)", marginTop: 12, marginBottom: 4 }}>Skilling</h3>
       <StatRow label="<Fletching> Bows Fletched" value={stat("crafted:wooden-bow")} />
       <StatRow label="Total Fish Caught" value="Not trackable yet — no active Fishing action exists" />
 
-      <h3 style={{ fontSize: 14, color: "#888", marginTop: 12, marginBottom: 4 }}>Jobs</h3>
+      <h3 style={{ fontSize: 14, color: "var(--text-faint)", marginTop: 12, marginBottom: 4 }}>Jobs</h3>
       <StatRow label="Jobs Completed" value={stat("jobCompletions:total")} />
     </section>
   );

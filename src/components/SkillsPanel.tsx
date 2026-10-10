@@ -16,7 +16,7 @@ export default function SkillsPanel() {
           return (
             <div key={skill.id}>
               <SkillProgress skillId={skill.id} label={skill.name} />
-              <div style={{ fontSize: 12, color: "#888" }}>
+              <div style={{ fontSize: 12, color: "var(--text-faint)" }}>
                 {xp.toLocaleString()} xp
                 {progress.xpForThisLevel > 0 &&
                   ` — ${(progress.xpForThisLevel - progress.xpIntoLevel).toLocaleString()} to next level`}

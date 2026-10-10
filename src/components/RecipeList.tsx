@@ -24,15 +24,15 @@ function RecipeRow({ recipe }: { recipe: CraftingRecipe }) {
   };
 
   return (
-    <div style={{ border: "1px solid #ddd", borderRadius: 6, padding: 8 }}>
+    <div style={{ border: "1px solid var(--border-subtle)", borderRadius: 6, padding: 8 }}>
       <div style={{ fontSize: 13 }}>
         <strong>{recipe.name}</strong>{" "}
-        <span style={{ color: "#666" }}>
+        <span style={{ color: "var(--text-muted)" }}>
           {formatAmounts(recipe.inputs)} → {formatAmounts([recipe.output])}
         </span>
       </div>
       {lockReason ? (
-        <div style={{ fontSize: 12, color: "#888" }}>{lockReason}</div>
+        <div style={{ fontSize: 12, color: "var(--text-faint)" }}>{lockReason}</div>
       ) : (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
           <button onClick={() => craft(1)} disabled={maxCraftable < 1}>

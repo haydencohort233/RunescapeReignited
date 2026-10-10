@@ -39,11 +39,11 @@ export default function AchievementsPanel() {
     <section style={{ maxWidth: 480 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <h2 style={{ fontSize: 18, marginTop: 0 }}>Achievements</h2>
-        <span style={{ fontSize: 13, color: "#666" }}>
+        <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
           {earnedCount}/{ACHIEVEMENT_CATALOG.length} Completed
         </span>
       </div>
-      <p style={{ fontSize: 13, color: "#666" }}>Achievement Points: {formatNumber(achievementPoints)}</p>
+      <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Achievement Points: {formatNumber(achievementPoints)}</p>
 
       <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
         <input
@@ -64,8 +64,8 @@ export default function AchievementsPanel() {
             <div
               key={achievement.id}
               style={{
-                border: "1px solid " + (earned ? "#d4af37" : "#ddd"),
-                background: earned ? "#fff8e1" : undefined,
+                border: "1px solid " + (earned ? "var(--gold-border)" : "var(--border-subtle)"),
+                background: earned ? "var(--gold-bg)" : undefined,
                 borderRadius: 6,
                 padding: 10,
               }}
@@ -83,16 +83,16 @@ export default function AchievementsPanel() {
                 {earned && !claimed && (
                   <button onClick={() => engine.claimAchievementReward(achievement)}>Claim</button>
                 )}
-                {claimed && <span style={{ fontSize: 12, color: "#888" }}>Claimed ✓</span>}
+                {claimed && <span style={{ fontSize: 12, color: "var(--text-faint)" }}>Claimed ✓</span>}
               </div>
-              <p style={{ fontSize: 13, color: "#666", margin: "4px 0" }}>{achievement.description}</p>
+              <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "4px 0" }}>{achievement.description}</p>
               {achievement.reward && (
-                <p style={{ fontSize: 12, color: "#888", margin: 0 }}>
+                <p style={{ fontSize: 12, color: "var(--text-faint)", margin: 0 }}>
                   Reward: {formatReward(achievement.reward)}
                 </p>
               )}
               {!earned && unmetReason && (
-                <p style={{ fontSize: 12, color: "#b91c1c", margin: "4px 0 0" }}>{unmetReason}</p>
+                <p style={{ fontSize: 12, color: "var(--danger)", margin: "4px 0 0" }}>{unmetReason}</p>
               )}
             </div>
           );

@@ -18,10 +18,10 @@ interface InventoryEntry {
 }
 
 const RARITY_COLOR: Record<string, string> = {
-  common: "#333",
-  uncommon: "#1a7a3a",
-  rare: "#1a5fa8",
-  legendary: "#b8860b",
+  common: "var(--text-strong)",
+  uncommon: "var(--success)",
+  rare: "var(--info)",
+  legendary: "var(--gold)",
 };
 
 export default function InventoryPanel() {
@@ -74,7 +74,7 @@ export default function InventoryPanel() {
     <section style={{ maxWidth: 480, position: "relative" }}>
       <h2 style={{ fontSize: 18, marginTop: 0 }}>Inventory</h2>
 
-      {entries.length === 0 && <p style={{ fontSize: 13, color: "#888" }}>Nothing here yet.</p>}
+      {entries.length === 0 && <p style={{ fontSize: 13, color: "var(--text-faint)" }}>Nothing here yet.</p>}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {entries.map(({ key, def, instanceId, quantity }) => {
@@ -93,7 +93,7 @@ export default function InventoryPanel() {
                   setQuickMenu({ key, x: e.clientX, y: e.clientY });
                 }}
                 style={{
-                  border: "1px solid #ccc",
+                  border: "1px solid var(--border)",
                   borderRadius: 6,
                   padding: 8,
                   cursor: "pointer",
@@ -110,8 +110,8 @@ export default function InventoryPanel() {
               </div>
 
               {openPanelId === key && (
-                <div style={{ border: "1px solid #ddd", borderRadius: 6, padding: 8, marginTop: 2 }}>
-                  <p style={{ fontSize: 13, color: "#666", marginTop: 0 }}>
+                <div style={{ border: "1px solid var(--border-subtle)", borderRadius: 6, padding: 8, marginTop: 2 }}>
+                  <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 0 }}>
                     {def.description}
                     {def.stats && Object.keys(def.stats).length > 0 && (
                       <span>
@@ -147,11 +147,11 @@ export default function InventoryPanel() {
                 position: "fixed",
                 left: quickMenu.x,
                 top: quickMenu.y,
-                background: "white",
-                border: "1px solid #999",
+                background: "var(--surface-raised)",
+                border: "1px solid var(--text-faint)",
                 borderRadius: 4,
                 padding: 4,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+                boxShadow: "0 2px 8px var(--shadow)",
                 zIndex: 1000,
               }}
             >
