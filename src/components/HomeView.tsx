@@ -1,11 +1,8 @@
 import { useGame } from "../engine/GameEngineContext";
 import { getLocation } from "../content/mapLocations";
 import { getAmenitiesAtLocation } from "../content/amenities";
-import { confirmAndStartCraftJob } from "../engine/actionHelpers";
-import { getActiveCraftJob } from "../engine/activeAction";
-import { WOODEN_BOW_RECIPE } from "../content/recipes";
 import ResourceList from "./ResourceList";
-import SkillProgress from "./SkillProgress";
+import RecipeList from "./RecipeList";
 import AmenityEntry from "./AmenityEntry";
 import HpBar from "./HpBar";
 
@@ -21,11 +18,7 @@ export default function HomeView() {
   const currentLocation = getLocation(state.currentLocationId);
   const amenities = getAmenitiesAtLocation(state.currentLocationId);
 
-  const wood = state.resources.wood?.amount ?? 0;
   const woodPerSecond = engine.getEffectiveRatePerSecond("wood");
-  const job = getActiveCraftJob(state);
-  const woodPerBow = WOODEN_BOW_RECIPE.inputs[0].amount;
-  const maxCraftable = Math.floor(wood / woodPerBow);
 
   const grantSpeedBuff = () => {
     engine.addModifier({
@@ -37,11 +30,6 @@ export default function HomeView() {
       expiresAt: Date.now() + 30_000,
       label: "Woodcutting Frenzy (x2 wood, 30s)",
     });
-  };
-
-  const craft = (quantity: number) => {
-    if (quantity <= 0) return;
-    confirmAndStartCraftJob(engine, WOODEN_BOW_RECIPE, quantity);
   };
 
   return (
@@ -78,30 +66,8 @@ export default function HomeView() {
       </section>
 
       <section style={{ marginBottom: 16 }}>
-        <h2 style={{ fontSize: 16 }}>Fletching</h2>
-        <div style={{ marginBottom: 8 }}>
-          <SkillProgress skillId="fletching" label="Fletching" />
-        </div>
-        {job ? (
-          <div>
-            Crafting {job.recipeName}: {job.quantityCompleted}/{job.quantityTotal}
-            <button style={{ marginLeft: 8 }} onClick={() => engine.cancelCraftJob()}>
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button onClick={() => craft(1)}>
-              Make 1 Bow ({(WOODEN_BOW_RECIPE.timePerItemMs / 1000).toFixed(0)}s)
-            </button>
-            <button onClick={() => craft(5)}>
-              Make 5 Bows ({((WOODEN_BOW_RECIPE.timePerItemMs * 5) / 1000).toFixed(0)}s)
-            </button>
-            <button onClick={() => craft(maxCraftable)} disabled={maxCraftable === 0}>
-              Make All ({maxCraftable}x, {((WOODEN_BOW_RECIPE.timePerItemMs * maxCraftable) / 1000).toFixed(0)}s)
-            </button>
-          </div>
-        )}
+        <h2 style={{ fontSize: 16 }}>Crafting</h2>
+        <RecipeList />
       </section>
     </div>
   );

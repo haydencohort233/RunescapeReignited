@@ -37,6 +37,8 @@ const KNOWN_SKILLS = new Set([
   "agility",
   "farming",
   "herblore",
+  "crafting",
+  "cooking",
 ]);
 
 function resolveTag(tag: string): { src: string; alt: string } | null {

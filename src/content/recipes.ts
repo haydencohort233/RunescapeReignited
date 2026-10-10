@@ -5,13 +5,51 @@ import type { CraftingRecipe } from "../engine/types";
 // recipe is just one with an empty inputs array. No engine change needed
 // for that; startCraftJob already handles zero-cost recipes correctly.
 export const WOODEN_BOW_RECIPE: CraftingRecipe = {
+  // id kept as "wooden-bow" — the crafted:wooden-bow statistic and the
+  // Fletching Novice achievement key off it.
   id: "wooden-bow",
-  name: "Wooden Bow",
+  name: "Wooden Bow (u)",
   skill: "fletching",
   xpPerItem: 5,
   timePerItemMs: 2000,
   inputs: [{ resource: "wood", amount: 1 }],
   output: { resource: "wooden-bow-u", amount: 1 },
+};
+
+// The full bow chain: Wood -> Wooden Bow (u), Flax -> Bow String, then
+// both -> Wooden Bow. Inputs and outputs can be any item, stackable or not.
+export const SPIN_FLAX_RECIPE: CraftingRecipe = {
+  id: "spin-flax",
+  name: "Bow String",
+  skill: "crafting",
+  xpPerItem: 15,
+  timePerItemMs: 2000,
+  inputs: [{ resource: "flax", amount: 1 }],
+  output: { resource: "bowstring", amount: 1 },
+};
+
+export const STRING_WOODEN_BOW_RECIPE: CraftingRecipe = {
+  id: "string-wooden-bow",
+  name: "Wooden Bow",
+  skill: "fletching",
+  xpPerItem: 5,
+  timePerItemMs: 1800,
+  inputs: [
+    { resource: "wooden-bow-u", amount: 1 },
+    { resource: "bowstring", amount: 1 },
+  ],
+  // Non-stackable: each one is its own equippable instance.
+  output: { resource: "wooden-bow", amount: 1 },
+};
+
+export const COOK_FISH_RECIPE: CraftingRecipe = {
+  id: "cook-fish",
+  name: "Cooked Fish",
+  skill: "cooking",
+  xpPerItem: 30,
+  timePerItemMs: 2400,
+  inputs: [{ resource: "raw-fish", amount: 1 }],
+  output: { resource: "cooked-fish", amount: 1 },
 };
 
 export const PICK_FLAX_RECIPE: CraftingRecipe = {
@@ -47,10 +85,17 @@ export const CHOP_WILLOW_TREE_RECIPE: CraftingRecipe = {
 
 export const RECIPE_CATALOG: CraftingRecipe[] = [
   WOODEN_BOW_RECIPE,
+  SPIN_FLAX_RECIPE,
+  STRING_WOODEN_BOW_RECIPE,
+  COOK_FISH_RECIPE,
   PICK_FLAX_RECIPE,
   CHOP_NORMAL_TREE_RECIPE,
   CHOP_WILLOW_TREE_RECIPE,
 ];
+
+/** Recipes that turn materials into something, shown on the Home tab.
+ *  Gathering recipes (no inputs) are started from resource nodes instead. */
+export const PROCESSING_RECIPES: CraftingRecipe[] = RECIPE_CATALOG.filter((r) => r.inputs.length > 0);
 
 export function getRecipe(id: string): CraftingRecipe | undefined {
   return RECIPE_CATALOG.find((r) => r.id === id);

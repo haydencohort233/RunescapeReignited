@@ -21,6 +21,8 @@ export const SKILL_CATALOG: SkillDefinition[] = [
   { id: "woodcutting", name: "Woodcutting" },
   { id: "firemaking", name: "Firemaking" },
   { id: "fletching", name: "Fletching" },
+  { id: "crafting", name: "Crafting" },
+  { id: "cooking", name: "Cooking" },
   { id: "agility", name: "Agility" },
   { id: "farming", name: "Farming" },
   { id: "ranged", name: "Ranged" },
