@@ -2,11 +2,11 @@
 
 Oct 11, 2026. Local copy of the live doc, which is the source of truth: https://claude.ai/code/artifact/fb252a61-8b75-4562-b645-755ca5489eae
 
-Next up: the Den dungeon, now that combat is done, then the remaining Phase 2 skills (Herblore, Agility, Runecrafting) and Phase 3 depth. See Built on Oct 11 for what is already in.
+Next up: the remaining Phase 2 skills (Herblore, Agility, Runecrafting) and Phase 3 depth. See Built on Oct 11 for what is already in.
 
 ## Built on Oct 11
 
-Most of Phase 1 and parts of Phases 2 and 3 are now in the game (branch engine-fixes, not yet committed). Combat is complete, so the Den dungeon can start next.
+Most of Phase 1, parts of Phases 2 and 3, and the Den dungeon are now in the game (branch engine-fixes).
 
 | Roadmap item | What was built |
 | --- | --- |
@@ -26,9 +26,10 @@ Most of Phase 1 and parts of Phases 2 and 3 are now in the game (branch engine-f
 | Construction | New skill. Buildings give Construction XP. Fishing Hut and Hunter's Camp have the decided requirements; requirements live in one entry per building in content/buildings.ts. |
 | Durability, Glory, Aggie | Degrading gear (Dharok's Greataxe as the example, dev spawn only) breaks into an unusable 0 copy that Bob repairs. Glory has 4 charges; Aggie in Draynor recharges them, with a short dialogue. Dev tool restores all wear, charges and special energy. |
 | Longer offline time | 8 hours, raised on existing saves too. |
+| Overgrown Den dungeon | Unlocked by the quest The Overgrown Den. Waves of Goblin, Goblin and Bandit run back to back, then a regear stop with "Continue to Den Guardian", then the boss (no fleeing). Only a 6-slot loadout comes in (proposed, within the decided 4 to 8; one number in content/dungeons.ts): each piece of gear or food takes a slot, a stack of runes one slot, worn gear is free. Inside, only loadout food is eaten and only loadout gear equipped. Fleeing, dying or running out of arrows or runes ends the run. Beating the boss sets denCleared, which the job "Something's Living in the Den" now waits on. |
 | Other | Bob and every shopkeeper have dialogue; Bob sells axes and pickaxes; the dagger moved to a new Riverside Armoury; Aubury's Rune Shop sells runes and the Air Staff; 3 new achievements. |
 
-Still not built: Den dungeon, intro (on hold), Herblore, Agility, Runecrafting, Thieving, achievement point shop, more quests, building upgrades, poison, mobile layout and the rest of Phase 4, and item art for the new items.
+Still not built: intro (on hold), Herblore, Agility, Runecrafting, Thieving, achievement point shop, more quests, building upgrades, poison, mobile layout and the rest of Phase 4, and item art for the new items.
 
 ### Proposed values to review
 

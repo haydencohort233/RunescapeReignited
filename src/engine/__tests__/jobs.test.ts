@@ -32,7 +32,7 @@ describe("job board", () => {
   it("a once job never comes back, and its reward isn't repeatable", () => {
     const g = makeEngine();
     const job = getJob("clear-the-den")!;
-    g.engine.setFlag("investigatedDen");
+    g.engine.setFlag("denCleared");
     g.engine.acceptJob(job, "town");
     g.engine.turnInJob(job, "town");
     g.setNow(g.now() + 3 * DAY);

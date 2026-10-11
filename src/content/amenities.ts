@@ -56,8 +56,7 @@ export interface NpcAmenity extends BaseAmenity {
 
 export interface DungeonEntranceAmenity extends BaseAmenity {
   kind: "dungeonEntrance";
-  // Placeholder — combat/dungeons aren't designed yet. Having this variant
-  // exist now means the Amenity system won't need restructuring once they are.
+  dungeonId: string; // references content/dungeons.ts
 }
 
 export interface JobBoardAmenity extends BaseAmenity {
@@ -188,8 +187,7 @@ export const AMENITY_CATALOG: Amenity[] = [
     kind: "dungeonEntrance",
     name: "Overgrown Den",
     description: "A dark opening in the undergrowth. Something lives in there.",
-    // Not wired to the Den Guardian boss yet — that's a dungeon-sequence
-    // concern (Phase 4, deliberately deferred).
+    dungeonId: "overgrown-den",
   },
   {
     id: "dark-forest-goblin",

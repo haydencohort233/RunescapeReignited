@@ -15,6 +15,7 @@ import { SKILL_CATALOG } from "./skills";
 import { SPELL_CATALOG } from "./spells";
 import { NPC_CATALOG, STARTER_KIT } from "./npcs";
 import { getSpecialAttack } from "../engine/specialAttacks";
+import { DUNGEON_CATALOG } from "./dungeons";
 
 /** Ledger ids that are plain currencies rather than items. */
 const CURRENCIES = new Set(["gp", "achievement-points"]);
@@ -151,6 +152,15 @@ export function validateContent(): string[] {
 
   for (const id of STARTER_KIT) if (!items.has(id)) err(`starter kit: unknown item "${id}"`);
 
+  const dungeons = ids("dungeons", DUNGEON_CATALOG);
+  for (const d of DUNGEON_CATALOG) {
+    const where = `dungeon "${d.id}"`;
+    if (!locations.has(d.locationId)) err(`${where}: unknown location "${d.locationId}"`);
+    for (const id of [...d.waves, d.bossId]) if (!enemies.has(id)) err(`${where}: unknown enemy "${id}"`);
+    if (!(d.loadoutSlots > 0)) err(`${where}: loadoutSlots must be > 0`);
+    if (d.unlockCondition) condition(where, d.unlockCondition);
+  }
+
   for (const e of ENEMY_CATALOG) {
     const where = `enemy "${e.id}"`;
     if (!(e.maxHp > 0)) err(`${where}: maxHp must be > 0`);
@@ -184,6 +194,7 @@ export function validateContent(): string[] {
     if (a.kind === "jobBoard" && !boards.has(a.boardId)) err(`${where}: unknown job board "${a.boardId}"`);
     if (a.kind === "combatEncounter" && !enemies.has(a.enemyId)) err(`${where}: unknown enemy "${a.enemyId}"`);
     if (a.kind === "npc" && !npcs.has(a.npcId)) err(`${where}: unknown npc "${a.npcId}"`);
+    if (a.kind === "dungeonEntrance" && !dungeons.has(a.dungeonId)) err(`${where}: unknown dungeon "${a.dungeonId}"`);
     if (a.kind === "npc" && NPC_CATALOG.find((n) => n.id === a.npcId)?.locationId !== a.locationId) {
       err(`${where}: npc "${a.npcId}" lives somewhere else`);
     }

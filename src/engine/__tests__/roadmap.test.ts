@@ -388,3 +388,77 @@ describe("save format v22", () => {
     expect(again.getState().specialEnergy).toBe(42);
   });
 });
+
+describe("Overgrown Den dungeon", () => {
+  function atDen() {
+    const g = fighter();
+    g.engine.setFlag("investigatedDen");
+    g.engine.devTeleport(getLocation("dark-forest")!);
+    const [scim] = g.engine.addItem("dragon-scimitar", 1);
+    g.engine.equipItem(g.engine.itemsById.get("dragon-scimitar")!, scim);
+    return g;
+  }
+
+  it("needs the quest done and limits the loadout to 6 slots", () => {
+    const g = atDen();
+    g.engine.addItem("shark", 20);
+    expect(g.engine.getDungeonEnterBlocker("overgrown-den", [{ itemDefId: "shark", quantity: 7 }])).toMatch(/only bring 6/);
+    g.engine.setFlag("investigatedDen", false);
+    expect(g.engine.enterDungeon("overgrown-den", [{ itemDefId: "shark", quantity: 2 }])).toBe(false);
+  });
+
+  it("runs the waves, stops to regear before the boss, then clears it", () => {
+    const g = atDen();
+    g.engine.addItem("shark", 20);
+    expect(g.engine.enterDungeon("overgrown-den", [{ itemDefId: "shark", quantity: 4 }])).toBe(true);
+    for (let i = 0; i < 300 && !g.state().dungeonRun?.awaitingBoss; i++) g.advance(SECOND);
+    const run = g.state().dungeonRun!;
+    expect(run.awaitingBoss).toBe(true);
+    expect(run.wavesCleared).toBe(3);
+    expect(g.state().activeAction).toBeNull();
+    // Nothing else can start while inside.
+    expect(g.engine.startGatherSession("trees", getRecipe("chop-normal-tree")!)).toBe(false);
+
+    expect(g.engine.continueToBoss()).toBe(true);
+    expect(combat(g).enemyId).toBe("den-guardian");
+    for (let i = 0; i < 600 && g.state().dungeonRun; i++) g.advance(SECOND);
+    expect(g.engine.getFlag("denCleared")).toBe(true);
+    expect(g.state().statistics["dungeonClears:overgrown-den"]).toBe(1);
+  });
+
+  it("only loadout food is eaten inside, and only loadout gear can be equipped", () => {
+    const g = atDen();
+    g.engine.addItem("shark", 10);
+    equip(g, "shark"); // worn food doesn't come in by itself
+    const [dagger] = g.engine.addItem("bronze-dagger", 1);
+    const [dds] = g.engine.addItem("dragon-dagger", 1);
+    g.engine.enterDungeon("overgrown-den", [
+      { itemDefId: "shark", quantity: 2 },
+      { itemDefId: "dragon-dagger", instanceId: dds, quantity: 1 },
+    ]);
+    expect(g.engine.getFoodCount("shark")).toBe(2);
+    g.engine.devSetCurrentHp(1);
+    g.engine.eatItem("shark");
+    g.engine.eatItem("shark");
+    expect(g.engine.eatItem("shark")).toBe(false);
+    expect(g.engine.getResourceAmount("shark")).toBe(8);
+
+    for (let i = 0; i < 300 && !g.state().dungeonRun?.awaitingBoss && g.state().dungeonRun; i++) g.advance(SECOND);
+    expect(g.state().dungeonRun?.awaitingBoss).toBe(true);
+    const daggerDef = g.engine.itemsById.get("bronze-dagger")!;
+    expect(g.engine.equipItem(daggerDef, dagger)).toBe(false);
+    expect(g.engine.equipItem(g.engine.itemsById.get("dragon-dagger")!, dds)).toBe(true);
+    // The scimitar taken off can go back on.
+    expect(g.engine.equipItem(g.engine.itemsById.get("dragon-scimitar")!, Object.values(g.state().inventory).find((i) => i.itemDefId === "dragon-scimitar")!.instanceId)).toBe(true);
+  });
+
+  it("leaving or dying ends the run, and a run survives a save", () => {
+    const g = atDen();
+    g.engine.enterDungeon("overgrown-den", []);
+    const loaded = GameEngine.deserialize(g.engine.serialize(), GAME_CONTENT, { clock: () => g.now() });
+    expect(loaded.getState().dungeonRun?.dungeonId).toBe("overgrown-den");
+    expect(g.engine.leaveDungeon()).toBe(true); // flees the goblin wave
+    expect(g.state().dungeonRun).toBeNull();
+    expect(g.state().activeAction).toBeNull();
+  });
+});

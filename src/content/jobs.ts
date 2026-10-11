@@ -35,12 +35,10 @@ export const JOB_CATALOG: JobDefinition[] = [
   {
     id: "clear-the-den",
     title: "Something's Living in the Den",
-    description: "Investigate the Overgrown Den at Dark Forest.",
-    // Placeholder objective until dungeons/combat exist — a flag a future
-    // "Enter" action would set. Included now to prove a job CAN be the
-    // first step of something bigger, not just a delivery.
-    objective: { kind: "flag", flag: "investigatedDen", label: "Complete the quest The Overgrown Den" },
-    reward: { gp: 250, setFlags: ["denCleared"] },
+    description: "Clear the Overgrown Den at Dark Forest and defeat the Den Guardian.",
+    // The dungeon sets denCleared when its boss falls.
+    objective: { kind: "flag", flag: "denCleared", label: "Defeat the Den Guardian in the Overgrown Den" },
+    reward: { gp: 250 },
     frequency: "once",
   },
   {

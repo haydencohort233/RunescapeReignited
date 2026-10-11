@@ -229,6 +229,8 @@ const MIGRATIONS: Record<number, (old: any, now: number) => any> = {
     specialEnergy: 100,
     combatStyles: { ...DEFAULT_COMBAT_STYLES },
   }),
+  // v22 -> v23: dungeon runs. Nobody is in one yet.
+  22: (old) => ({ ...old, dungeonRun: null }),
 };
 
 /** Brings a parsed save of any version up to the current GameState shape:
@@ -279,6 +281,7 @@ export function migrateSave(parsed: any, now: number): GameState {
       magic: typeof parsed.combatStyles?.magic === "string" ? parsed.combatStyles.magic : DEFAULT_COMBAT_STYLES.magic,
     },
     selectedSpellId: typeof parsed.selectedSpellId === "string" ? parsed.selectedSpellId : undefined,
+    dungeonRun: sanitizeDungeonRun(parsed.dungeonRun),
     jobs: {
       accepted: isRecord(parsed.jobs?.accepted) ? parsed.jobs.accepted : {},
       lastCompletedPeriod: isRecord(parsed.jobs?.lastCompletedPeriod) ? parsed.jobs.lastCompletedPeriod : {},
@@ -313,6 +316,21 @@ function isRecord(value: unknown): value is Record<string, any> {
 
 function finiteOr(value: unknown, fallback: number, min = Number.NEGATIVE_INFINITY): number {
   return typeof value === "number" && Number.isFinite(value) ? Math.max(min, value) : fallback;
+}
+
+/** A run missing its id, counters or loadout list is dropped (the loadout
+ *  items were never removed from the ledger, so nothing is lost). */
+function sanitizeDungeonRun(raw: unknown): GameState["dungeonRun"] {
+  if (!isRecord(raw) || typeof raw.dungeonId !== "string" || !Array.isArray(raw.loadout)) return null;
+  const wavesCleared = typeof raw.wavesCleared === "number" && Number.isFinite(raw.wavesCleared) ? Math.max(0, Math.floor(raw.wavesCleared)) : 0;
+  const loadout = raw.loadout
+    .filter((e: unknown) => isRecord(e) && typeof e.itemDefId === "string" && typeof e.quantity === "number" && Number.isFinite(e.quantity))
+    .map((e: any) => ({
+      itemDefId: e.itemDefId,
+      quantity: Math.max(0, Math.floor(e.quantity)),
+      ...(typeof e.instanceId === "string" ? { instanceId: e.instanceId } : {}),
+    }));
+  return { dungeonId: raw.dungeonId, wavesCleared, awaitingBoss: raw.awaitingBoss === true, loadout };
 }
 
 function sanitizeResources(raw: unknown): GameState["resources"] {

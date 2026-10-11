@@ -6,6 +6,8 @@ import { SHOP_CATALOG } from "./shops";
 import { NPC_CATALOG, STARTER_KIT } from "./npcs";
 import { SPELL_CATALOG } from "./spells";
 import { AMENITY_CATALOG } from "./amenities";
+import { ENEMY_CATALOG } from "./enemies";
+import { DUNGEON_CATALOG } from "./dungeons";
 import type { StationType } from "../engine/types";
 
 const stationLocations: Partial<Record<StationType, string[]>> = {};
@@ -23,4 +25,6 @@ export const GAME_CONTENT: GameContent = {
   spells: SPELL_CATALOG,
   stationLocations,
   starterKit: STARTER_KIT,
+  enemies: ENEMY_CATALOG,
+  dungeons: DUNGEON_CATALOG,
 };

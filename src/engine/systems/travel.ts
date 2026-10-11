@@ -96,6 +96,10 @@ export class TravelSystem {
     }
     // Teleporting interrupts whatever you were doing, same as OSRS — but it
     // can't be used to escape a fight you aren't allowed to flee.
+    if (this.state.dungeonRun) {
+      this.notifications.push("status", "You can't teleport out of a dungeon. Leave it first.", { severity: "warning" });
+      return false;
+    }
     if (def.maxCharges !== undefined && (instance.charges ?? 0) <= 0) {
       this.notifications.push("status", `Your ${def.name} has no charges left. Aggie in Draynor Village can recharge it.`, {
         severity: "warning",

@@ -18,6 +18,8 @@ import type {
   SpellDefinition,
   NpcDefinition,
   EquipSlot,
+  DungeonDefinition,
+  LoadoutEntry,
   ToolType,
 } from "./types";
 import { NotificationQueue } from "./notificationQueue";
@@ -36,6 +38,7 @@ import { TravelSystem } from "./systems/travel";
 import { CombatSystem } from "./systems/combat";
 import { JobBoardSystem } from "./systems/jobs";
 import { QuestSystem } from "./systems/quests";
+import { DungeonSystem } from "./systems/dungeons";
 
 /** Below this, a gap is just a tab-switch/screen-lock, not a real "away"
  *  session — don't narrate it, even though the simulation still resolves
@@ -81,6 +84,8 @@ export class GameEngine {
   private readonly combatSystem: CombatSystem;
   private readonly jobBoardSystem: JobBoardSystem;
   private readonly questSystem: QuestSystem;
+  private readonly dungeonSystem: DungeonSystem;
+  private readonly enemiesById: Map<string, EnemyDefinition>;
   /** Non-null only while resolveElapsed() is replaying an away period.
    *  Combat outcomes collect here and go into the one "while you were
    *  away" summary instead of a toast per kill. */
@@ -99,6 +104,8 @@ export class GameEngine {
     this.combatSystem = new CombatSystem(this);
     this.jobBoardSystem = new JobBoardSystem(this);
     this.questSystem = new QuestSystem(this);
+    this.enemiesById = new Map((content.enemies ?? []).map((e) => [e.id, e]));
+    this.dungeonSystem = new DungeonSystem(this);
     this.clock = opts?.clock ?? Date.now;
     this.state = opts?.state ?? createInitialState(this.clock());
     this.notifications = opts?.notifications ?? new NotificationQueue();
@@ -180,6 +187,12 @@ export class GameEngine {
    *  enforced in exactly one place — adding a new action kind can't
    *  forget to check the others. */
   ensureIdle(): boolean {
+    const run = this.state.dungeonRun;
+    if (run) {
+      const name = this.dungeonSystem.getDungeon(run.dungeonId)?.name ?? "a dungeon";
+      this.notifications.push("status", `You're in the ${name}. Leave it first.`, { severity: "warning" });
+      return false;
+    }
     const action = this.state.activeAction;
     if (!action) return true;
     this.notifications.push("status", `You're busy ${describeAction(action)} — stop that first.`, {
@@ -706,6 +719,15 @@ export class GameEngine {
   equipItem(def: ItemDefinition, instanceId?: string): boolean {
     if (!def.equipSlot) return false;
     if (!this.canChangeSlot(def.equipSlot)) return false;
+    if (this.state.dungeonRun) {
+      const brought = def.stackable
+        ? this.state.dungeonRun.loadout.some((e) => e.itemDefId === def.id)
+        : !!instanceId && this.dungeonSystem.canUseInstance(instanceId);
+      if (!brought) {
+        this.notifications.push("status", "Only what you brought into the dungeon can be used here.", { severity: "warning" });
+        return false;
+      }
+    }
     if (def.stackable) {
       if (this.getResourceAmount(def.id) < 1) return false;
     } else {
@@ -720,6 +742,11 @@ export class GameEngine {
       return false;
     }
 
+    // In a dungeon, whatever this replaces stays usable for the run.
+    const replaced = this.state.equipment[def.equipSlot];
+    if (this.state.dungeonRun && replaced && !replaced.startsWith("stack:")) {
+      this.dungeonSystem.rememberUnequipped(this.state.inventory[replaced]?.itemDefId ?? "", replaced);
+    }
     this.state.equipment[def.equipSlot] = def.stackable ? stackEquipId(def.id) : instanceId;
     this.notifications.push("status", `Equipped ${def.name}.`);
     return true;
@@ -729,6 +756,9 @@ export class GameEngine {
     const def = this.state.equipment[slot as keyof GameState["equipment"]];
     if (!def) return;
     if (!this.canChangeSlot(slot as EquipSlot)) return;
+    if (this.state.dungeonRun && !def.startsWith("stack:")) {
+      this.dungeonSystem.rememberUnequipped(this.state.inventory[def]?.itemDefId ?? "", def);
+    }
     delete this.state.equipment[slot as keyof GameState["equipment"]];
     this.notifications.push("status", `Unequipped item.`);
   }
@@ -776,6 +806,7 @@ export class GameEngine {
     if (!def?.healAmount || this.getFoodCount(itemDefId) < 1) return false;
     if (def.stackable) this.spendWornStack(itemDefId, 1);
     else this.removeOwned(itemDefId, 1);
+    if (this.state.dungeonRun) this.dungeonSystem.useFood(itemDefId);
     const before = this.getCurrentHp();
     this.healHp(this.getModifiedValue("healing", def.healAmount));
     const healed = Math.floor(this.getCurrentHp() - before);
@@ -801,6 +832,8 @@ export class GameEngine {
   getFoodCount(itemDefId: string): number {
     const def = this.itemsById.get(itemDefId);
     if (!def) return 0;
+    // In a dungeon only the food brought along counts.
+    if (this.state.dungeonRun) return this.dungeonSystem.foodLeft(itemDefId);
     return def.stackable ? Math.floor(this.getResourceAmount(itemDefId)) : this.getOwnedCount(itemDefId);
   }
 
@@ -1119,6 +1152,7 @@ export class GameEngine {
     // a "can't flee" warning right before the teleport happens anyway.
     if (this.combatSession) this.state.activeAction = null;
     else this.stopActiveAction();
+    this.dungeonSystem.end();
     this.travelSystem.arriveDirectly(destination);
   }
 
@@ -1397,6 +1431,51 @@ export class GameEngine {
 
   setAutoEat(enabled: boolean): void {
     this.combatSystem.setAutoEat(enabled);
+  }
+
+  // DungeonSystem (systems/dungeons.ts)
+
+  getEnemy(enemyId: string): EnemyDefinition | undefined {
+    return this.enemiesById.get(enemyId);
+  }
+
+  getDungeon(dungeonId: string): DungeonDefinition | undefined {
+    return this.dungeonSystem.getDungeon(dungeonId);
+  }
+
+  getDungeonEnterBlocker(dungeonId: string, loadout: LoadoutEntry[]): string | null {
+    return this.dungeonSystem.getEnterBlocker(dungeonId, loadout);
+  }
+
+  getLoadoutSlotsUsed(loadout: LoadoutEntry[]): number {
+    return this.dungeonSystem.slotsUsed(loadout);
+  }
+
+  enterDungeon(dungeonId: string, loadout: LoadoutEntry[]): boolean {
+    return this.dungeonSystem.enterDungeon(dungeonId, loadout);
+  }
+
+  continueToBoss(): boolean {
+    return this.dungeonSystem.continueToBoss();
+  }
+
+  leaveDungeon(): boolean {
+    return this.dungeonSystem.leave();
+  }
+
+  /** Internal: combat ends a run on a flee, death or running out of supplies. */
+  endDungeonRun(message?: string): void {
+    this.dungeonSystem.end(message);
+  }
+
+  /** Internal: combat reports a dungeon kill. */
+  onDungeonFightWon(session: ActiveCombatSession, at: number, lootMessages: string[]): void {
+    this.dungeonSystem.onFightWon(session, at, lootMessages);
+  }
+
+  /** Internal: the dungeon starts its own waves. */
+  startDungeonFight(enemy: EnemyDefinition, dungeonId: string, startAt: number, autoEatItemId?: string): void {
+    this.combatSystem.startDungeonFight(enemy, dungeonId, startAt, autoEatItemId);
   }
 
   // JobBoardSystem (systems/jobs.ts)

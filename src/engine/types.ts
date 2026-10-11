@@ -62,6 +62,44 @@ export interface GameContent {
   stationLocations?: Partial<Record<StationType, string[]>>;
   /** Tools every save is given once. */
   starterKit?: string[];
+  /** Enemies, needed by dungeons to start each wave themselves. */
+  enemies?: EnemyDefinition[];
+  dungeons?: DungeonDefinition[];
+}
+
+/** A run of fights: waves, then a boss, with a regear stop before the boss.
+ *  Only a small loadout comes in, not the whole inventory. */
+export interface DungeonDefinition {
+  id: string;
+  name: string;
+  locationId: string;
+  /** Enemy ids fought in order, one after another. */
+  waves: string[];
+  bossId: string;
+  /** How many loadout slots: each gear piece or food takes one; a stack of
+   *  anything else (runes) takes one. */
+  loadoutSlots: number;
+  unlockCondition?: UnlockCondition;
+  /** Set when the boss is beaten. */
+  clearFlag?: string;
+}
+
+/** One thing brought into a dungeon: a specific copy, or a quantity of a stack. */
+export interface LoadoutEntry {
+  itemDefId: string;
+  instanceId?: string;
+  quantity: number;
+}
+
+/** A dungeon in progress. Waves run as ordinary combat sessions tagged
+ *  with the dungeon id; between the last wave and the boss the run waits
+ *  (awaitingBoss) so the player can regear from the loadout. */
+export interface DungeonRun {
+  dungeonId: string;
+  /** Waves cleared so far. waves.length means the boss is next. */
+  wavesCleared: number;
+  awaitingBoss: boolean;
+  loadout: LoadoutEntry[];
 }
 
 /** A combat spell: fixed max hit, runes used up per cast. */
@@ -415,6 +453,9 @@ export interface GameState {
   combatStyles: Record<AttackStyle, string>;
   /** The combat spell a magic weapon casts (engine/spells.ts). */
   selectedSpellId?: string;
+  /** The dungeon being run, if any. While set, only loadout items can be
+   *  used and nothing else can be started. */
+  dungeonRun: DungeonRun | null;
   jobs: JobBoardState;
   /** questId -> progress, for quests the player has started. */
   quests: Record<string, QuestProgress>;
@@ -699,6 +740,8 @@ export interface ActiveCombatSession {
   specArmed?: boolean;
   /** Damage over time on the enemy, resolved on its own timer. */
   bleed?: BleedState;
+  /** Set when this fight is a wave or boss of a dungeon run. */
+  dungeonId?: string;
   /**
    * Player and enemy attack on INDEPENDENT timers — not one shared "round."
    * A fast dagger and a slow warhammer genuinely swing at different rates,

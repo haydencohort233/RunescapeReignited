@@ -32,7 +32,7 @@ const SPLAT_COLOR: Record<ActiveSplat["outcome"], string> = {
  *  card until clicked; held open while you're fighting this enemy. Combat
  *  resolves on the engine's own tick — this only reflects it and offers
  *  Attack Now and Flee. */
-export default function CombatPanel({ enemyId }: { enemyId: string }) {
+export default function CombatPanel({ enemyId, inDungeon = false }: { enemyId: string; inDungeon?: boolean }) {
   const { engine, state, actions } = useGame();
   const [splats, setSplats] = useState<ActiveSplat[]>([]);
   const [keepFighting, setKeepFighting] = useState(false);
@@ -84,7 +84,9 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
 
   if (!enemy) return null;
 
-  const fightingThisEnemy = session?.enemyId === enemyId;
+  // A dungeon wave is shown by the dungeon's card, not the overworld one
+  // for the same enemy.
+  const fightingThisEnemy = session?.enemyId === enemyId && !!session.dungeonId === inDungeon;
   const bossTag = enemy.isBoss ? <span className="tag tag-gold">Boss</span> : null;
   const title = (
     <>

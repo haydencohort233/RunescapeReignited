@@ -84,10 +84,39 @@ export class CombatSystem {
       }
     }
 
+    this.state.activeAction = this.buildSession(enemy, gear, this.engine.now(), {
+      autoRepeat: opts?.autoRepeat ?? false,
+      autoEatItemId: opts?.autoEatItemId ?? gear.foodItemId,
+      spell,
+    });
+    const food = opts?.autoEatItemId ?? gear.foodItemId;
+    if (food) this.state.lastCombatFoodId = food;
+    this.notifications.push("status", `Engaged ${enemy.name}!`);
+    return true;
+  }
+
+  /** A dungeon wave or boss, started by the dungeon itself (possibly
+   *  mid-resolve, offline): no idle check, current gear, auto-eat from the
+   *  loadout. Missing arrows or runes end it on the first swing. */
+  startDungeonFight(enemy: EnemyDefinition, dungeonId: string, startAt: number, autoEatItemId?: string): void {
+    const gear = this.engine.getEquipmentBonuses();
+    const spell = gear.attackStyle === "magic" ? this.engine.getSpell(this.state.selectedSpellId) : undefined;
+    const session = this.buildSession(enemy, gear, startAt, { autoRepeat: false, autoEatItemId, spell });
+    session.dungeonId = dungeonId;
+    this.state.activeAction = session;
+  }
+
+  private buildSession(
+    enemy: EnemyDefinition,
+    gear: Partial<EquipmentBonuses>,
+    now: number,
+    opts: { autoRepeat: boolean; autoEatItemId?: string; spell?: SpellDefinition }
+  ): { kind: "combat" } & ActiveCombatSession {
+    const attackStyle: AttackStyle = gear.attackStyle ?? "melee";
+    const spell = opts.spell;
     const style = resolveCombatStyle(attackStyle, this.state.combatStyles[attackStyle]);
     const baseSpeed = gear.attackSpeedMs ?? UNARMED_ATTACK_SPEED_MS;
-    const now = this.engine.now();
-    this.state.activeAction = {
+    return {
       kind: "combat",
       enemyId: enemy.id,
       enemyName: enemy.name,
@@ -125,16 +154,12 @@ export class CombatSystem {
       enemyStartedAt: now,
       playerAttacksResolved: 0,
       enemyAttacksResolved: 0,
-      autoRepeat: opts?.autoRepeat ?? false,
-      autoEatItemId: opts?.autoEatItemId ?? gear.foodItemId,
+      autoRepeat: opts.autoRepeat,
+      autoEatItemId: opts.autoEatItemId,
       kills: 0,
       log: [],
       logCount: 0,
     };
-    const food = opts?.autoEatItemId ?? gear.foodItemId;
-    if (food) this.state.lastCombatFoodId = food;
-    this.notifications.push("status", `Engaged ${enemy.name}!`);
-    return true;
   }
 
   /** Leaves the fight with no reward and no penalty — only if the enemy
@@ -153,6 +178,7 @@ export class CombatSystem {
     }
     this.state.activeAction = null;
     this.notifications.push("status", `Fled from ${session.enemyName}.`);
+    if (session.dungeonId) this.engine.endDungeonRun("You flee the dungeon.");
     return true;
   }
 
@@ -315,6 +341,7 @@ export class CombatSystem {
   private endOutOfSupplies(session: ActiveCombatSession, message: string): void {
     this.state.activeAction = null;
     this.notifications.push("status", `${message} You stop fighting ${session.enemyName}.`, { severity: "warning" });
+    if (session.dungeonId) this.engine.endDungeonRun("Out of supplies, you retreat from the dungeon.");
   }
 
   /** One player attack: pays for it (an arrow, a spell's runes), then
@@ -505,6 +532,13 @@ export class CombatSystem {
     }
 
     session.kills++;
+    if (session.dungeonId) {
+      // The dungeon decides what comes next (the next wave, or a pause
+      // before the boss); there's no respawn.
+      this.state.activeAction = null;
+      this.engine.onDungeonFightWon(session, at, lootMessages);
+      return;
+    }
     if (this.engine.catchUp) {
       this.engine.catchUp.kills[session.enemyName] = (this.engine.catchUp.kills[session.enemyName] ?? 0) + 1;
     } else {
@@ -592,6 +626,7 @@ export class CombatSystem {
     this.state.currentHp = 1;
     this.applyDeathPenalty(session);
     this.state.activeAction = null;
+    if (session.dungeonId) this.engine.endDungeonRun();
   }
 
   /** Resolve combat up to `effectiveNow`. Player attacks, enemy attacks

@@ -24,7 +24,7 @@ export default function EquipmentPanel() {
   return (
     <Page title="Equipment">
       {/* Melvor-style: the fight itself is right here too. */}
-      {session && <CombatPanel enemyId={session.enemyId} />}
+      {session && <CombatPanel enemyId={session.enemyId} inDungeon={!!session.dungeonId} />}
       <div className="card stack">
         {fighting && (
           <p className="text-warning text-small">

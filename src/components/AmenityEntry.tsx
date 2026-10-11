@@ -19,6 +19,7 @@ import { getActiveGatherSession } from "../engine/activeAction";
 import ShopBrowsePanel from "./ShopBrowsePanel";
 import JobBoardBrowsePanel from "./JobBoardBrowsePanel";
 import CombatPanel from "./CombatPanel";
+import DungeonCard from "./DungeonCard";
 import { ActionCard, LockedCard } from "./ui/ActionCard";
 import { RecipeYield, SkillIcon } from "./ui/GameIcons";
 
@@ -50,7 +51,7 @@ export default function AmenityEntry({ amenity }: { amenity: Amenity }) {
     case "npc":
       return <NpcCard npcId={amenity.npcId} description={amenity.description} />;
     case "dungeonEntrance":
-      return <PlaceholderCard amenity={amenity} />;
+      return <DungeonCard dungeonId={amenity.dungeonId} description={amenity.description} />;
   }
 }
 
@@ -215,28 +216,6 @@ function JobBoardCard({ boardId, name }: { boardId: string; name: string }) {
   );
 }
 
-function PlaceholderCard({ amenity }: { amenity: Amenity }) {
-  const { engine } = useGame();
-  const isDungeon = amenity.kind === "dungeonEntrance";
-  return (
-    <ActionCard
-      icon={AMENITY_ICON[amenity.kind]}
-      title={amenity.name}
-      description={amenity.description}
-      actions={[
-        {
-          label: isDungeon ? "Enter" : "Use",
-          onClick: () =>
-            engine.notifications.push(
-              "status",
-              isDungeon ? "Dungeons aren't implemented yet." : "Nothing usable here yet.",
-              { severity: "warning" }
-            ),
-        },
-      ]}
-    />
-  );
-}
 
 function ResourceNodeCard({ amenity }: { amenity: ResourceNodeAmenity }) {
   const { engine, state, actions } = useGame();
