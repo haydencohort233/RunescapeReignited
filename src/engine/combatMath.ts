@@ -1,13 +1,10 @@
 // Pure combat resolution — no GameState, no engine dependency. Simplified
-// versions of OSRS's real accuracy/max-hit formulas (skipping prayer bonus
-// and attack-style bonuses, which don't exist in this game yet — easy to
-// fold in later without changing the shape).
+// versions of OSRS's real accuracy/max-hit formulas (no prayer bonus yet).
+// Combat-style invisible levels are added to `level` by the caller.
 //
 // Deliberately STYLE-AGNOSTIC: "accuracy" and "power" instead of hardcoding
-// "attack"/"strength" — melee, Ranged, and Magic all resolve through the
-// exact same functions later, just fed a different skill pair. Only melee
-// is actually wired to skills/equipment right now; this is the framework
-// for the other two to plug into without rewriting the math.
+// "attack"/"strength". Melee, Ranged and Magic all resolve through these
+// functions, fed a different skill pair (Magic passes a fixed spell max hit).
 
 export interface AccuracySide {
   /** The relevant skill level for this side — Attack (attacking) or

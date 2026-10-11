@@ -14,13 +14,7 @@ export function getSkill(id: string): SkillDefinition | undefined {
 
 // Every known skill, so the Skills tab can show each at level 1 / 0xp from
 // the start rather than only appearing once you've earned XP in it.
-//
-// Note on hitpoints: included here as a skill entry (levels/XP work the same
-// as any other skill), but actual HP mechanics — current/max health as a
-// combat resource, damage, regen — are NOT built yet. That's a meaningfully
-// bigger system (ties into combat resolution) and belongs in its own pass
-// once combat design starts, same reasoning as deferring equipment stats'
-// actual combat math for now.
+// Hitpoints levels like any other skill; its level is the player's max HP.
 export const SKILL_CATALOG: SkillDefinition[] = [
   { id: "attack", name: "Attack", activity: "Fighting" },
   { id: "strength", name: "Strength", activity: "Fighting" },

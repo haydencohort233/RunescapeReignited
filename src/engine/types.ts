@@ -827,8 +827,8 @@ export interface EnemyDefinition {
   attackBonus: number;
   strengthBonus: number;
   defenceBonus: number;
-  /** Total combat XP per kill — split evenly across Attack/Strength/
-   *  Defence/Hitpoints for now (no combat-style selection UI yet). */
+  /** Total combat XP per kill: HITPOINTS_XP_SHARE to Hitpoints, the rest
+   *  split across the skills the player's combat style trains. */
   xpReward: number;
   lootTable?: LootEntry[];
   /** Default true. Bosses typically set this false. */
