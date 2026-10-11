@@ -17,11 +17,26 @@ function BuildingCard({ def }: { def: BuildingDefinition }) {
 
   if (!engine.isBuildingUnlocked(def.id)) {
     const reason = def.unlockCondition ? describeUnmetCondition(def.unlockCondition, state, CONDITION_LABELS) : null;
-    return <LockedCard icon={icon} title={def.name} reason={reason ?? "Not available yet"} />;
+    // Show the price too, so players know what to save up (shrimps, bones).
+    const firstCost = engine.getBuildingPurchaseCost(def.id, 1);
+    return (
+      <LockedCard
+        icon={icon}
+        title={def.name}
+        reason={
+          <>
+            {reason ?? "Not available yet"}
+            {firstCost && <div>Costs {formatAmounts(firstCost)}</div>}
+          </>
+        }
+      />
+    );
   }
 
   const owned = engine.getBuildingQuantity(def.id);
-  const rate = def.baseRatePerSecond * owned;
+  // Buffs that multiply this resource scale this building too.
+  const multiplier = engine.getModifierMultiplier(def.resource);
+  const rate = def.baseRatePerSecond * owned * multiplier;
 
   const buyActions: CardAction[] = QUANTITY_STEPS.map((q) => {
     const cost = engine.getBuildingPurchaseCost(def.id, q) ?? [];
@@ -48,7 +63,9 @@ function BuildingCard({ def }: { def: BuildingDefinition }) {
       icon={icon}
       title={def.name}
       meta={`${owned}${def.maxOwned !== undefined ? `/${def.maxOwned}` : ""} owned · +${rate.toFixed(2)} ${resourceName(def.resource)}/s`}
-      description={`Each produces ${def.baseRatePerSecond} ${resourceName(def.resource)} per second.`}
+      description={`Each produces ${def.baseRatePerSecond} ${resourceName(def.resource)} per second${
+        multiplier !== 1 ? ` (x${Number(multiplier.toFixed(2))} from buffs right now)` : ""
+      }.${def.constructionXp ? ` Each one built gives ${def.constructionXp} Construction XP.` : ""}`}
       actions={[...buyActions, sellAction]}
     />
   );

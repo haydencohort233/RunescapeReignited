@@ -13,6 +13,8 @@ import StatisticsPanel from "./components/StatisticsPanel";
 import AchievementsPanel from "./components/AchievementsPanel";
 import SettingsPanel from "./components/SettingsPanel";
 import NotificationOverlay from "./components/NotificationOverlay";
+import PlayerSidebar, { PlayerStrip } from "./components/PlayerSidebar";
+import { applySidebarOpen, getSidebarOpen } from "./lib/sidebar";
 import { DialogHost } from "./components/ui/DialogHost";
 import { ACHIEVEMENT_CATALOG } from "./content/achivements";
 import { preloadImages } from "./lib/imagePreloader";
@@ -23,11 +25,31 @@ import {
   hitsplatIconPath,
 } from "./content/assetPaths";
 
+const COMBAT_SKILLS = new Set(["attack", "strength", "defence", "ranged", "magic"]);
+
 /** Lives inside GameEngineProvider so it can read engine state — App itself
  *  can't, since it's the component that mounts the provider. */
 function AppContent() {
   const [activeView, setActiveView] = useState<View>("home");
+  const [focusSkillId, setFocusSkillId] = useState<string | undefined>();
+  const [sidebarOpen, setSidebarOpen] = useState(getSidebarOpen);
   const { engine, suspended } = useGame();
+
+  useEffect(() => applySidebarOpen(sidebarOpen), [sidebarOpen]);
+
+  const changeView = (view: View) => {
+    setFocusSkillId(undefined);
+    setActiveView(view);
+  };
+  // Combat skills open the combat hub (Equipment), as in Melvor.
+  const openSkill = (skillId: string) => {
+    if (COMBAT_SKILLS.has(skillId)) {
+      changeView("equipment");
+      return;
+    }
+    setFocusSkillId(skillId);
+    setActiveView("skills");
+  };
 
   // Shared UI chrome (HP bar layers, hitsplat icons) is needed the moment
   // combat starts, so request it at app startup rather than mid-fight.
@@ -63,23 +85,41 @@ function AppContent() {
   }
 
   return (
-    <div className="app">
-      <h1 className="app-title">Idle Engine</h1>
-      <NavBar
-        activeView={activeView}
-        onChange={setActiveView}
-        alerts={{ achievements: hasUnclaimedAchievement }}
-      />
-      {activeView === "home" && <HomeView />}
-      {activeView === "map" && <MapView />}
-      {activeView === "quests" && <QuestsPanel />}
-      {activeView === "buildings" && <BuildingsPanel />}
-      {activeView === "skills" && <SkillsPanel />}
-      {activeView === "inventory" && <InventoryPanel />}
-      {activeView === "equipment" && <EquipmentPanel />}
-      {activeView === "statistics" && <StatisticsPanel />}
-      {activeView === "achievements" && <AchievementsPanel />}
-      {activeView === "settings" && <SettingsPanel />}
+    <div className={`shell${sidebarOpen ? "" : " is-sidebar-collapsed"}`}>
+      <aside className="shell-nav">
+        <div className="shell-brand">
+          <h1 className="app-title">Idle Engine</h1>
+          <span className="text-faint text-small">v{__APP_VERSION__}</span>
+        </div>
+        <NavBar activeView={activeView} onChange={changeView} alerts={{ achievements: hasUnclaimedAchievement }} />
+      </aside>
+
+      <main className="shell-main">
+        <PlayerStrip />
+        {activeView === "home" && <HomeView />}
+        {activeView === "map" && <MapView />}
+        {activeView === "quests" && <QuestsPanel />}
+        {activeView === "buildings" && <BuildingsPanel />}
+        {activeView === "skills" && <SkillsPanel selectedSkillId={focusSkillId} onSelectSkill={setFocusSkillId} />}
+        {activeView === "inventory" && <InventoryPanel onOpenSkill={openSkill} />}
+        {activeView === "equipment" && <EquipmentPanel />}
+        {activeView === "statistics" && <StatisticsPanel />}
+        {activeView === "achievements" && <AchievementsPanel />}
+        {activeView === "settings" && <SettingsPanel />}
+      </main>
+
+      <aside className="shell-side" aria-label="Player">
+        <button
+          type="button"
+          className="sidebar-toggle btn btn-ghost"
+          aria-expanded={sidebarOpen}
+          onClick={() => setSidebarOpen((open) => !open)}
+          title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+        >
+          {sidebarOpen ? "Hide ›" : "‹"}
+        </button>
+        {sidebarOpen && <PlayerSidebar onOpenSkill={openSkill} />}
+      </aside>
     </div>
   );
 }

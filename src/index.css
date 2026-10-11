@@ -38,6 +38,8 @@
   --splat-hit: #b91c1c;
   --splat-block: #2563eb;
   --splat-miss: #9ca3af;
+  --splat-bleed: #9f1239;
+  --spec: #b45309;
 
   /* Outline for sprites; only needed against a dark background. */
   --icon-outline: none;
@@ -88,6 +90,8 @@
   --splat-hit: #f87171;
   --splat-block: #60a5fa;
   --splat-miss: #7c8290;
+  --splat-bleed: #fb7185;
+  --spec: #f59e0b;
   --icon-outline: drop-shadow(0 0 1px rgba(255, 255, 255, 0.55));
 
   color-scheme: dark;
@@ -132,7 +136,10 @@ input[type="checkbox"] {
   outline-offset: 2px;
 }
 
-/* ── App shell ────────────────────────────────────────────────────────── */
+/* ── App shell ────────────────────────────────────────────────────────
+   Phones get one column: title, wrapping tab bar, a compact player strip,
+   then the page. From 1024px it becomes three columns: section nav on the
+   left, the page, and the player sidebar on the right (collapsible). */
 
 .app {
   max-width: 560px;
@@ -141,10 +148,45 @@ input[type="checkbox"] {
   box-sizing: border-box;
 }
 
+.shell {
+  --nav-w: 200px;
+  --side-w: 270px;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 16px 16px 48px;
+  box-sizing: border-box;
+}
+
+.shell-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+
 .app-title {
   font-size: 24px;
   font-weight: 700;
   margin: 4px 0 12px;
+}
+
+.shell-brand .app-title {
+  margin: 0;
+}
+
+.shell-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.shell-side {
+  display: none;
+}
+
+.player-strip {
+  gap: 6px;
 }
 
 .tabs {
@@ -165,6 +207,7 @@ input[type="checkbox"] {
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
+  text-align: left;
 }
 
 .tab:hover {
@@ -192,6 +235,214 @@ input[type="checkbox"] {
   50% {
     box-shadow: 0 0 0 4px rgba(212, 175, 55, 0);
   }
+}
+
+@media (min-width: 1024px) {
+  .shell {
+    display: grid;
+    grid-template-columns: var(--nav-w) minmax(0, 1fr) var(--side-w);
+    max-width: none;
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  .shell.is-sidebar-collapsed {
+    grid-template-columns: var(--nav-w) minmax(0, 1fr) 44px;
+  }
+
+  .shell-nav,
+  .shell-side {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    box-sizing: border-box;
+    overflow-y: auto;
+    background: var(--surface);
+  }
+
+  .shell-nav {
+    display: flex;
+    flex-direction: column;
+    padding: 20px 12px;
+    border-right: 1px solid var(--border-subtle);
+  }
+
+  .shell-brand {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 0 8px 16px;
+    margin: 0 0 12px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .shell-brand .app-title {
+    font-size: 20px;
+  }
+
+  .shell-nav .tabs {
+    flex: 1;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 2px;
+    padding: 0;
+    margin: 0;
+    border: none;
+  }
+
+  .shell-nav .tab {
+    font-size: 15px;
+    padding: 8px 12px;
+  }
+
+  /* Settings sits apart, at the bottom. */
+  .shell-nav .tab:last-child {
+    margin-top: auto;
+  }
+
+  .shell-main {
+    padding: 24px 32px 64px;
+    max-width: 880px;
+    width: 100%;
+    margin: 0 auto;
+    box-sizing: border-box;
+  }
+
+  /* The sidebar covers health, gold and materials; collapse it and the
+     compact strip (and Home's resource list) come back. */
+  .shell:not(.is-sidebar-collapsed) .player-strip,
+  .shell:not(.is-sidebar-collapsed) .home-resources {
+    display: none;
+  }
+
+  .shell-side {
+    display: block;
+    padding: 12px 16px 24px;
+    border-left: 1px solid var(--border-subtle);
+  }
+
+  .is-sidebar-collapsed .shell-side {
+    padding: 12px 4px;
+  }
+}
+
+/* ── Player sidebar ───────────────────────────────────────────────────── */
+
+.sidebar-toggle {
+  display: block;
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.is-sidebar-collapsed .sidebar-toggle {
+  margin: 0 auto;
+  font-size: 18px;
+  border-color: var(--border);
+}
+
+.sidebar-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.sidebar-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sidebar-name {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.avatar {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  padding: 6px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  fill: var(--text-faint);
+}
+
+.sidebar-gold {
+  font: inherit;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--gold-border);
+  background: var(--gold-bg);
+  color: inherit;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.sidebar-breakdown {
+  padding: 2px 10px;
+  border-left: 2px solid var(--gold-border);
+}
+
+.sidebar-skills {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-skill {
+  font: inherit;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-strong);
+  text-align: left;
+  cursor: pointer;
+}
+
+.skill-card {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.skill-card:hover {
+  border-color: var(--border);
+  background: var(--surface-hover);
+}
+
+.sidebar-skill:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-subtle);
+}
+
+.sidebar-skill-level {
+  font-weight: 600;
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebar-skill .progress-track {
+  display: block;
+  height: 4px;
+}
+
+.sidebar-skill .progress-fill {
+  display: block;
 }
 
 /* ── Page structure ───────────────────────────────────────────────────── */
@@ -365,6 +616,57 @@ input[type="checkbox"] {
   gap: 6px;
 }
 
+/* ── Icons, item chips, cycle bars ─────────────────────────────────────── */
+
+.game-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.item-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.recipe-yield {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-strong);
+}
+
+.cycle-track {
+  height: 4px;
+}
+
+.progress-fill.cycle-fill {
+  width: 0;
+  background: var(--gold);
+  animation-name: cycle-fill;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes cycle-fill {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-fill.cycle-fill {
+    animation: none;
+    width: 100%;
+    opacity: 0.4;
+  }
+}
+
 /* ── Quick menu (right-click) ─────────────────────────────────────────── */
 
 .quick-menu {
@@ -412,6 +714,10 @@ input[type="checkbox"] {
 
 .text-success {
   color: var(--success);
+}
+
+.text-warning {
+  color: var(--warning);
 }
 
 .text-info {
@@ -485,28 +791,45 @@ input[type="checkbox"] {
   background: var(--good);
 }
 
-/* ── Toasts ───────────────────────────────────────────────────────────── */
+/* ── Toasts ───────────────────────────────────────────────────────────
+   Status toasts stack up from the bottom-right corner (newest nearest
+   the corner), shifted left of the player sidebar while it's open. */
 
 .toast-zone {
   position: fixed;
   z-index: 9999;
   width: 320px;
   max-width: calc(100vw - 32px);
-  max-height: 80vh;
+  max-height: 70vh;
   overflow-y: auto;
   pointer-events: none;
 }
 
-.toast-zone-top {
-  top: 16px;
+.toast-zone-status {
+  bottom: 16px;
   right: 16px;
 }
 
-.toast-zone-bottom {
-  bottom: 24px;
+.toast-zone-status .toast-list {
+  flex-direction: column-reverse;
+}
+
+/* Achievements drop in at the top so they never cover the stack. */
+.toast-zone-achievement {
+  top: 16px;
   left: 50%;
   transform: translateX(-50%);
   width: 360px;
+}
+
+@media (min-width: 1024px) {
+  :root[data-sidebar="open"] .toast-zone-status {
+    right: calc(270px + 16px);
+  }
+
+  :root[data-sidebar="collapsed"] .toast-zone-status {
+    right: calc(44px + 16px);
+  }
 }
 
 .toast-list {
@@ -689,4 +1012,51 @@ input[type="checkbox"] {
   border-radius: 6px;
   padding: 6px;
   resize: vertical;
+}
+
+/* ── NPC dialogue ─────────────────────────────────────────────────────── */
+
+.dialogue-line {
+  font-style: italic;
+  color: var(--text-strong);
+}
+
+.dialogue-option {
+  width: 100%;
+  text-align: left;
+  justify-content: flex-start;
+}
+
+/* ── Combat hub (Equipment tab) and fight card ───────────────────────── */
+
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.segmented .btn[aria-pressed="true"] {
+  background: var(--accent-bg);
+  border-color: var(--accent-bg);
+  color: var(--accent-fg);
+}
+
+.spec-bar .progress-fill {
+  background: var(--spec);
+}
+
+.spec-bar.is-armed {
+  outline: 2px solid var(--spec);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 2px 16px;
+}
+
+.spell-select {
+  max-width: 100%;
 }

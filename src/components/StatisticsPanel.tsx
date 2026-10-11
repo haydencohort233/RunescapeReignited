@@ -19,7 +19,7 @@ const GROUPS: { title: string; keys: string[] }[] = [
     title: "Skilling",
     keys: RECIPE_CATALOG.map((r) => (r.inputs.length > 0 ? `crafted:${r.id}` : `gathered:${r.id}`)),
   },
-  { title: "Combat", keys: ["kills:total", ...ENEMY_CATALOG.map((e) => `kills:${e.id}`)] },
+  { title: "Combat", keys: ["kills:total", "deaths", "gp:lostOnDeath", ...ENEMY_CATALOG.map((e) => `kills:${e.id}`)] },
 ];
 
 export default function StatisticsPanel() {

@@ -7,6 +7,9 @@ import { preloadImages } from "../lib/imagePreloader";
 import type { ItemDefinition } from "../engine/types";
 import { itemActions, formatItemStats } from "./ItemActions";
 import ItemIcon from "./ItemIcon";
+import { stackEquipId } from "../engine/ledger";
+import { RECIPE_CATALOG } from "../content/recipes";
+import { SKILL_CATALOG } from "../content/skills";
 import { ActionCard } from "./ui/ActionCard";
 import { EmptyState, Page } from "./ui/Page";
 
@@ -25,7 +28,13 @@ const RARITY_CLASS: Record<string, string> = {
   legendary: "text-gold",
 };
 
-export default function InventoryPanel() {
+/** Skills with a recipe that uses this item, for "Use in Firemaking" etc. */
+function skillsUsing(itemDefId: string): { id: string; name: string }[] {
+  const ids = new Set(RECIPE_CATALOG.filter((r) => r.inputs.some((i) => i.resource === itemDefId)).map((r) => r.skill));
+  return SKILL_CATALOG.filter((s) => ids.has(s.id));
+}
+
+export default function InventoryPanel({ onOpenSkill }: { onOpenSkill: (skillId: string) => void }) {
   const { engine, state } = useGame();
 
   const entries: InventoryEntry[] = [];
@@ -54,7 +63,7 @@ export default function InventoryPanel() {
       ) : (
         <div className="stack-sm">
           {entries.map(({ key, def, instanceId, quantity }) => {
-            const equipped = instanceId !== undefined && engine.isEquipped(instanceId);
+            const equipped = engine.isEquipped(instanceId ?? stackEquipId(def.id));
             const stats = formatItemStats(def);
             return (
               <ActionCard
@@ -63,7 +72,9 @@ export default function InventoryPanel() {
                 title={<span className={RARITY_CLASS[def.rarity ?? "common"]}>{def.name}</span>}
                 meta={
                   equipped ? (
-                    <span className="tag tag-success">Equipped</span>
+                    <span className="tag tag-success">
+                      Equipped{quantity !== undefined ? ` x${formatNumber(quantity)}` : ""}
+                    </span>
                   ) : quantity !== undefined ? (
                     `x${formatNumber(quantity)}`
                   ) : undefined
@@ -74,7 +85,13 @@ export default function InventoryPanel() {
                     {stats && <div className="text-small">{stats}</div>}
                   </>
                 }
-                actions={itemActions(engine, def, { instanceId, equipped })}
+                actions={[
+                  ...skillsUsing(def.id).map((skill) => ({
+                    label: `Use in ${skill.name}`,
+                    onClick: () => onOpenSkill(skill.id),
+                  })),
+                  ...itemActions(engine, def, { instanceId, equipped, quantity }),
+                ]}
               />
             );
           })}

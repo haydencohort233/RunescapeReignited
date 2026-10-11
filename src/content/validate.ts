@@ -12,6 +12,9 @@ import { JOB_BOARD_CATALOG } from "./jobBoards";
 import { QUEST_CATALOG } from "./quests";
 import { ACHIEVEMENT_CATALOG } from "./achivements";
 import { SKILL_CATALOG } from "./skills";
+import { SPELL_CATALOG } from "./spells";
+import { NPC_CATALOG, STARTER_KIT } from "./npcs";
+import { getSpecialAttack } from "../engine/specialAttacks";
 
 /** Ledger ids that are plain currencies rather than items. */
 const CURRENCIES = new Set(["gp", "achievement-points"]);
@@ -46,6 +49,8 @@ export function validateContent(): string[] {
   const boards = ids("job boards", JOB_BOARD_CATALOG);
   const skills = ids("skills", SKILL_CATALOG);
   ids("amenities", AMENITY_CATALOG);
+  ids("spells", SPELL_CATALOG);
+  const npcs = ids("npcs", NPC_CATALOG);
   ids("quests", QUEST_CATALOG);
   ids("achievements", ACHIEVEMENT_CATALOG);
 
@@ -85,7 +90,21 @@ export function validateContent(): string[] {
 
   for (const item of ITEM_CATALOG) {
     const where = `item "${item.id}"`;
-    if (item.equipSlot && item.stackable) err(`${where}: equipment can't be stackable`);
+    // Worn as a whole stack only makes sense for ammo and food.
+    if (item.equipSlot && item.stackable && item.equipSlot !== "ammo" && item.equipSlot !== "food") {
+      err(`${where}: only ammo and food can be stackable equipment`);
+    }
+    if (item.equipSlot === "food" && !item.healAmount) err(`${where}: worn as food but has no healAmount`);
+    if (item.actions.includes("bury") && !(item.prayerXp && item.prayerXp > 0)) err(`${where}: has "bury" but no prayerXp`);
+    if (item.specialAttack && !getSpecialAttack(item.specialAttack)) err(`${where}: unknown special attack "${item.specialAttack}"`);
+    if (item.specialAttack && item.equipSlot !== "weapon") err(`${where}: only weapons have special attacks`);
+    for (const runeId of item.infiniteRunes ?? []) ledgerId(where, runeId);
+    if (item.brokenItemId && !items.has(item.brokenItemId)) err(`${where}: unknown broken item "${item.brokenItemId}"`);
+    if (item.brokenItemId && item.maxDurability === undefined) err(`${where}: breaks but has no maxDurability`);
+    if (item.repairsTo && !items.has(item.repairsTo)) err(`${where}: repairs to unknown item "${item.repairsTo}"`);
+    if (item.maxCharges !== undefined && !(item.maxCharges > 0)) err(`${where}: maxCharges must be > 0`);
+    if (item.tool?.requirement) condition(where, item.tool.requirement);
+    if (item.tool && item.stackable) err(`${where}: tools can't be stackable`);
     if (item.actions.includes("equip") && !item.equipSlot) err(`${where}: has "equip" but no equipSlot`);
     if (item.actions.includes("eat") && !(item.healAmount && item.healAmount > 0)) err(`${where}: has "eat" but no healAmount`);
     if (item.teleportTo && !locations.has(item.teleportTo)) err(`${where}: teleports to unknown location`);
@@ -107,8 +126,30 @@ export function validateContent(): string[] {
     if (!(r.timePerItemMs > 0)) err(`${where}: timePerItemMs must be > 0`);
     amounts(where, r.inputs);
     amounts(where, [r.output]);
+    for (const d of r.bonusDrops ?? []) {
+      ledgerId(where, d.resource);
+      if (!(d.amount > 0)) err(`${where}: bonus drop amount must be > 0`);
+      if (!(d.chance > 0 && d.chance <= 1)) err(`${where}: bonus drop chance must be in (0, 1]`);
+    }
     if (r.unlockCondition) condition(where, r.unlockCondition);
+    if (r.tool && !ITEM_CATALOG.some((i) => i.tool?.type === r.tool)) err(`${where}: no item is a "${r.tool}" tool`);
+    if (r.station && !AMENITY_CATALOG.some((a) => a.kind === "craftingStation" && a.station === r.station)) {
+      err(`${where}: no "${r.station}" station exists anywhere`);
+    }
   }
+
+  for (const spell of SPELL_CATALOG) {
+    const where = `spell "${spell.id}"`;
+    amounts(where, spell.runes);
+    if (!(spell.maxHit > 0)) err(`${where}: maxHit must be > 0`);
+  }
+
+  for (const npc of NPC_CATALOG) {
+    if (!locations.has(npc.locationId)) err(`npc "${npc.id}": unknown location "${npc.locationId}"`);
+    if (npc.dialogue.length === 0) err(`npc "${npc.id}": needs at least one line of dialogue`);
+  }
+
+  for (const id of STARTER_KIT) if (!items.has(id)) err(`starter kit: unknown item "${id}"`);
 
   for (const e of ENEMY_CATALOG) {
     const where = `enemy "${e.id}"`;
@@ -142,6 +183,10 @@ export function validateContent(): string[] {
     if (a.kind === "resourceNode" && !recipes.has(a.recipeId)) err(`${where}: unknown recipe "${a.recipeId}"`);
     if (a.kind === "jobBoard" && !boards.has(a.boardId)) err(`${where}: unknown job board "${a.boardId}"`);
     if (a.kind === "combatEncounter" && !enemies.has(a.enemyId)) err(`${where}: unknown enemy "${a.enemyId}"`);
+    if (a.kind === "npc" && !npcs.has(a.npcId)) err(`${where}: unknown npc "${a.npcId}"`);
+    if (a.kind === "npc" && NPC_CATALOG.find((n) => n.id === a.npcId)?.locationId !== a.locationId) {
+      err(`${where}: npc "${a.npcId}" lives somewhere else`);
+    }
   }
 
   for (const board of JOB_BOARD_CATALOG) {

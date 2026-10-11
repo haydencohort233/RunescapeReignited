@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { getDialog, subscribeDialog } from "../../lib/dialog";
+import { getDialog, subscribeDialog, type DialogRequest } from "../../lib/dialog";
+import { formatNumber } from "../../engine/format";
 
 /** Renders the pending in-page dialog (see lib/dialog.ts). Mounted once. */
 export function DialogHost() {
@@ -15,6 +16,7 @@ export function DialogHost() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (dialog.kind === "confirm") dialog.resolve(false);
+      else if (dialog.kind === "quantity" || dialog.kind === "dialogue") dialog.resolve(null);
       else dialog.resolve();
     };
     document.addEventListener("keydown", onKey);
@@ -26,7 +28,35 @@ export function DialogHost() {
   return (
     <div className="dialog-backdrop" role="presentation">
       <div className="dialog card" role="dialog" aria-modal="true">
-        {dialog.kind === "confirm" ? (
+        {dialog.kind === "quantity" ? (
+          <QuantityPrompt key={dialog.message} dialog={dialog} />
+        ) : dialog.kind === "dialogue" ? (
+          <>
+            <h3 className="card-title">{dialog.speaker}</h3>
+            <p className="dialogue-line">{dialog.line}</p>
+            <div className="stack-sm">
+              {dialog.options.map((option, i) => (
+                <button
+                  key={i}
+                  ref={i === 0 ? primaryRef : undefined}
+                  type="button"
+                  className="btn dialogue-option"
+                  onClick={() => dialog.resolve(i)}
+                >
+                  {option}
+                </button>
+              ))}
+              <button
+                ref={dialog.options.length === 0 ? primaryRef : undefined}
+                type="button"
+                className="btn btn-ghost dialogue-option"
+                onClick={() => dialog.resolve(null)}
+              >
+                Goodbye
+              </button>
+            </div>
+          </>
+        ) : dialog.kind === "confirm" ? (
           <>
             <p>{dialog.message}</p>
             <div className="btn-row" style={{ justifyContent: "flex-end" }}>
@@ -77,5 +107,53 @@ export function DialogHost() {
         )}
       </div>
     </div>
+  );
+}
+
+/** "How many?" with a number field (Enter submits) and 1 / All shortcuts. */
+function QuantityPrompt({ dialog }: { dialog: Extract<DialogRequest, { kind: "quantity" }> }) {
+  const [value, setValue] = useState("1");
+  const quantity = Math.floor(Number(value));
+  const valid = Number.isFinite(quantity) && quantity >= 1 && quantity <= dialog.max;
+  const submit = () => valid && dialog.resolve(quantity);
+
+  return (
+    <form
+      className="stack"
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+    >
+      <label htmlFor="dialog-quantity">{dialog.message}</label>
+      <div className="row">
+        <input
+          id="dialog-quantity"
+          type="number"
+          min={1}
+          max={dialog.max}
+          step={1}
+          value={value}
+          autoFocus
+          onFocus={(e) => e.currentTarget.select()}
+          onChange={(e) => setValue(e.target.value)}
+          style={{ width: 110 }}
+        />
+        <button type="button" className="btn" onClick={() => dialog.resolve(1)}>
+          1
+        </button>
+        <button type="button" className="btn" onClick={() => dialog.resolve(dialog.max)}>
+          All ({formatNumber(dialog.max)})
+        </button>
+      </div>
+      <div className="btn-row" style={{ justifyContent: "flex-end" }}>
+        <button type="button" className="btn" onClick={() => dialog.resolve(null)}>
+          Cancel
+        </button>
+        <button type="submit" className="btn btn-primary" disabled={!valid}>
+          {dialog.confirmLabel}
+        </button>
+      </div>
+    </form>
   );
 }

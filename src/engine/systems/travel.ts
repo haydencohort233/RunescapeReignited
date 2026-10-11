@@ -73,6 +73,7 @@ export class TravelSystem {
   /** Cancels an in-progress trip. Simplification: you stay at your ORIGIN,
    *  not somewhere partway there — no partial-position tracking (yet). */
   cancelTravel(): void {
+    this.engine.catchUpToNow(); // a trip that already arrived stays arrived
     const travel = this.travel;
     if (!travel) return;
     this.state.activeAction = null;
@@ -82,7 +83,7 @@ export class TravelSystem {
   /** Instantly moves the player to `destination`, bypassing normal travel
    *  time — e.g. an Amulet of Glory. Still respects the destination's
    *  unlockCondition (you can't teleport somewhere you haven't unlocked).
-   *  Not charge-limited yet — see the teleportTo comment in items.ts. */
+   *  Uses one charge on an item with maxCharges, and refuses at 0. */
   teleportTo(def: ItemDefinition, instanceId: string, destination: MapLocation): boolean {
     this.engine.catchUpToNow();
     const instance = this.state.inventory[instanceId];
@@ -95,11 +96,31 @@ export class TravelSystem {
     }
     // Teleporting interrupts whatever you were doing, same as OSRS — but it
     // can't be used to escape a fight you aren't allowed to flee.
+    if (def.maxCharges !== undefined && (instance.charges ?? 0) <= 0) {
+      this.notifications.push("status", `Your ${def.name} has no charges left. Aggie in Draynor Village can recharge it.`, {
+        severity: "warning",
+      });
+      return false;
+    }
     if (this.state.activeAction && !this.engine.stopActiveAction()) return false;
+    if (def.maxCharges !== undefined) {
+      instance.charges = (instance.charges ?? 0) - 1;
+      const left = instance.charges;
+      this.notifications.push("status", `Your ${def.name} has ${left} ${left === 1 ? "charge" : "charges"} left.`);
+    }
     this.state.currentLocationId = destination.id;
     this.arriveAt(destination.id, destination.name, destination.onArriveSetFlag);
     this.notifications.push("status", `You teleport to ${destination.name} using ${def.name}.`);
     return true;
+  }
+
+  /** Puts the player at `destination` with no item, travel time or unlock
+   *  check — the dev menu's teleport. The caller clears the active action. */
+  arriveDirectly(destination: MapLocation): void {
+    if (this.state.currentLocationId === destination.id) return;
+    this.state.currentLocationId = destination.id;
+    this.arriveAt(destination.id, destination.name, destination.onArriveSetFlag);
+    this.notifications.push("status", `Teleported to ${destination.name}.`);
   }
 
   /** Resolve travel completion up to `effectiveNow`. Internal — called from resolveElapsed(). */

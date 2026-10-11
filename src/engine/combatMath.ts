@@ -30,8 +30,8 @@ function accuracyRoll(side: AccuracySide): number {
 }
 
 /** Probability (0-1) that an attack with these accuracy rolls lands. */
-export function calculateHitChance(attacker: AccuracySide, defender: AccuracySide): number {
-  const attackRoll = accuracyRoll(attacker);
+export function calculateHitChance(attacker: AccuracySide, defender: AccuracySide, attackRollMultiplier = 1): number {
+  const attackRoll = Math.floor(accuracyRoll(attacker) * attackRollMultiplier);
   const defenceRoll = accuracyRoll(defender);
   if (attackRoll > defenceRoll) {
     return 1 - (defenceRoll + 2) / (2 * (attackRoll + 1));
@@ -59,17 +59,27 @@ export interface AttackOutcome {
  *  into one ambiguous value. `rand` defaults to Math.random but accepts
  *  any () => number generator — pass a SeededRandom-bound function for a
  *  reproducible/testable result. */
+export interface AttackModifiers {
+  /** Multiplies the attack roll (special attacks). */
+  accuracyMultiplier?: number;
+  /** Multiplies the max hit (special attacks). */
+  damageMultiplier?: number;
+  /** A fixed max hit instead of one from `power` (spells). */
+  maxHit?: number;
+}
+
 export function resolveAttack(
   accuracy: AccuracySide,
   power: PowerSide,
   defence: AccuracySide,
-  rand: () => number = Math.random
+  rand: () => number = Math.random,
+  mods: AttackModifiers = {}
 ): AttackOutcome {
-  const hitChance = calculateHitChance(accuracy, defence);
+  const hitChance = calculateHitChance(accuracy, defence, mods.accuracyMultiplier ?? 1);
   const hit = rand() < hitChance;
   if (!hit) return { hit: false, damage: 0 };
 
-  const maxHit = calculateMaxHit(power);
+  const maxHit = Math.floor((mods.maxHit ?? calculateMaxHit(power)) * (mods.damageMultiplier ?? 1));
   const damage = maxHit <= 0 ? 0 : Math.floor(rand() * (maxHit + 1));
   return { hit: true, damage };
 }

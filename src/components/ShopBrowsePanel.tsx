@@ -22,7 +22,7 @@ function ShopItemCard({ shop, shopItem }: { shop: ShopDefinition; shopItem: Shop
       actions={quantityActions(
         "Buy",
         affordable,
-        (q) => engine.buyFromShop(shop.locationId, def.id, shopItem.price, q),
+        (q) => engine.buyFromShop(shop.id, def.id, q),
         `Not enough to pay ${formatAmounts(shopItem.price)} each`
       )}
     />
@@ -51,7 +51,7 @@ function ShopSellList({ shop }: { shop: ShopDefinition }) {
           icon={<ItemIcon def={def} size={24} />}
           title={`${def.name} x${formatNumber(owned)}`}
           meta={`${formatNumber(unitPrice)} GP each`}
-          actions={quantityActions("Sell", owned, (q) => engine.sellToShop(shop.locationId, def.id, q), "You don't have that many")}
+          actions={quantityActions("Sell", owned, (q) => engine.sellToShop(shop.id, def.id, q), "You don't have that many")}
         />
       ))}
     </div>

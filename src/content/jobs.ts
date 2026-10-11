@@ -39,7 +39,7 @@ export const JOB_CATALOG: JobDefinition[] = [
     // Placeholder objective until dungeons/combat exist — a flag a future
     // "Enter" action would set. Included now to prove a job CAN be the
     // first step of something bigger, not just a delivery.
-    objective: { kind: "flag", flag: "investigatedDen" },
+    objective: { kind: "flag", flag: "investigatedDen", label: "Complete the quest The Overgrown Den" },
     reward: { gp: 250, setFlags: ["denCleared"] },
     frequency: "once",
   },

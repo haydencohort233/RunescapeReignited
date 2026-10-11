@@ -30,7 +30,7 @@ export const ACHIEVEMENT_CATALOG: AchievementDefinition[] = [
   {
     id: "fletching-novice",
     name: "Fletching Novice",
-    description: "Fletch 10 wooden bows.",
+    description: "Fletch 10 Unstrung Bows.",
     condition: { kind: "statisticAtLeast", statistic: "crafted:wooden-bow", atLeast: 10 },
     reward: { gp: 200 },
   },
@@ -54,5 +54,26 @@ export const ACHIEVEMENT_CATALOG: AchievementDefinition[] = [
     description: "Complete 5 job board tasks.",
     condition: { kind: "statisticAtLeast", statistic: "jobCompletions:total", atLeast: 5 },
     reward: { achievementPoints: 20 },
+  },
+  {
+    id: "gone-fishing",
+    name: "Gone Fishing",
+    description: "Catch 100 shrimps.",
+    condition: { kind: "statisticAtLeast", statistic: "gathered:fish-shrimps", atLeast: 100 },
+    reward: { achievementPoints: 10 },
+  },
+  {
+    id: "bronze-age",
+    name: "The Bronze Age",
+    description: "Smelt 50 bronze bars.",
+    condition: { kind: "statisticAtLeast", statistic: "crafted:smelt-bronze-bar", atLeast: 50 },
+    reward: { achievementPoints: 10, gp: 250 },
+  },
+  {
+    id: "grave-digger",
+    name: "Grave Digger",
+    description: "Bury 100 bones.",
+    condition: { kind: "statisticAtLeast", statistic: "buried:bones", atLeast: 100 },
+    reward: { achievementPoints: 10 },
   },
 ];

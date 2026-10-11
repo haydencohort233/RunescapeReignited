@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { makeEngine } from "./helpers";
 import { getEnemy } from "../../content/enemies";
+import { ACHIEVEMENT_CATALOG } from "../../content/achivements";
+import { GAME_CONTENT } from "../../content";
+import { GameEngine } from "../gameEngine";
 
 const NO_GEAR = { attack: 0, strength: 0, defence: 0 };
 
@@ -21,15 +24,29 @@ describe("eating", () => {
     expect(g.engine.eatItem("shark")).toBe(false);
   });
 
-  it("delays the player's next attack mid-fight", () => {
+  it("restarts the player's attack timer mid-fight", () => {
     const g = makeEngine();
     g.engine.addItem("shark", 1);
     g.engine.startCombat(getEnemy("goblin")!, NO_GEAR);
-    const before = g.state().activeAction!;
-    const anchor = before.kind === "combat" ? before.playerStartedAt : 0;
+    // Unarmed swings every 4s; eat 3s in, just before the first swing.
+    g.advance(3000);
     g.engine.eatItem("shark");
-    const after = g.state().activeAction!;
-    expect(after.kind === "combat" && after.playerStartedAt).toBe(anchor + 1800);
+    const s = g.state().activeAction!;
+    if (s.kind !== "combat") throw new Error("fight ended");
+    const nextAt = s.playerStartedAt + (s.playerAttacksResolved + 1) * s.playerAttackSpeedMs;
+    expect(nextAt).toBe(g.now() + s.playerAttackSpeedMs);
+  });
+
+  it("never pulls the next attack earlier", () => {
+    const g = makeEngine();
+    g.engine.addItem("shark", 1);
+    g.engine.startCombat(getEnemy("goblin")!, NO_GEAR);
+    const s = g.state().activeAction!;
+    if (s.kind !== "combat") throw new Error("no fight");
+    // As if mid-respawn: the next swing is far in the future.
+    s.playerStartedAt = g.now() + 60_000;
+    g.engine.eatItem("shark");
+    expect(s.playerStartedAt).toBe(g.now() + 60_000);
   });
 });
 
@@ -125,5 +142,43 @@ describe("combat robustness", () => {
     if (s?.kind !== "combat") throw new Error("fight ended");
     expect(s.log.length).toBe(20);
     expect(s.logCount).toBeGreaterThan(20);
+  });
+});
+
+describe("dying", () => {
+  it("loses GP without counting it as spent", () => {
+    const g = makeEngine();
+    g.engine.gainResource("gp", 20_000);
+    g.engine.devSetCurrentHp(1);
+    g.engine.startCombat(getEnemy("goblin")!, NO_GEAR);
+    for (let i = 0; i < 600 && g.state().activeAction; i++) g.advance(1000);
+    expect(g.state().activeAction).toBeNull();
+    // ~10% of 20k; base income trickles in during the fight.
+    expect(g.state().statistics["gp:lostOnDeath"]).toBeGreaterThanOrEqual(2000);
+    expect(g.state().statistics["gp:spent"] ?? 0).toBe(0);
+    expect(g.state().statistics.deaths).toBe(1);
+    g.engine.checkAchievements(ACHIEVEMENT_CATALOG);
+    expect(g.engine.isAchievementEarned("bling-bling")).toBe(false);
+  });
+});
+
+describe("combat food", () => {
+  it("remembers the food picked for a fight, and switches auto-eat mid-fight", () => {
+    const g = makeEngine();
+    g.engine.addItem("shark", 2);
+    g.engine.startCombat(getEnemy("goblin")!, NO_GEAR, { autoEatItemId: "shark" });
+    expect(g.state().lastCombatFoodId).toBe("shark");
+    g.engine.setAutoEat(false);
+    const s = g.state().activeAction!;
+    expect(s.kind === "combat" && s.autoEatItemId).toBeUndefined();
+    g.engine.setAutoEat(true);
+    expect(s.kind === "combat" && s.autoEatItemId).toBe("shark");
+  });
+
+  it("survives a save round-trip", () => {
+    const g = makeEngine();
+    g.engine.setCombatFood("shark");
+    const loaded = GameEngine.deserialize(g.engine.serialize(), GAME_CONTENT, { clock: g.now });
+    expect(loaded.getState().lastCombatFoodId).toBe("shark");
   });
 });

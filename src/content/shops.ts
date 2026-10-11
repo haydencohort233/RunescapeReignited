@@ -1,36 +1,85 @@
-import type { RecipeInput } from "../engine/types";
+import type { ShopDefinition, ShopItem } from "../engine/types";
+export type { ShopDefinition, ShopItem };
 
-export interface ShopItem {
-  itemDefId: string;
-  /** Cost per unit. Almost always just GP, but this is a RecipeInput[] (the
-   *  same shape building/recipe costs use) rather than a single number, so
-   *  a resource-priced or multi-resource-priced item — or trading — works
-   *  without changing this shape later. */
-  price: RecipeInput[];
-}
+const gp = (amount: number) => [{ resource: "gp", amount }];
 
-export interface ShopDefinition {
-  id: string;
-  npcName: string;
-  title: string;
-  /** The MapLocation id this shop is accessible from — you have to
-   *  physically be there, checked both here (for UI display) and inside
-   *  GameEngine.buyFromShop (so it's enforced, not just hidden). */
-  locationId: string;
-  items: ShopItem[];
-  /** Whether the shop buys items from the player (anything with a value,
-   *  at SHOP_SELL_PRICE_FRACTION of it — see engine/tuning.ts). */
-  buysItems?: boolean;
-}
-
+// Shop names, NPCs and prices beyond Bob's are proposed. Tool prices
+// follow OSRS.
 export const SHOP_CATALOG: ShopDefinition[] = [
   {
     id: "bobs-famous-axes",
     npcName: "Bob",
     title: "Bob's Famous Axes",
     locationId: "town",
-    items: [{ itemDefId: "bronze-dagger", price: [{ resource: "gp", amount: 50 }] }],
+    items: [
+      ...["bronze", "iron", "steel", "mithril", "adamant", "rune"].map((m) => ({
+        itemDefId: `${m}-axe`,
+        price: gp({ bronze: 16, iron: 56, steel: 200, mithril: 520, adamant: 1280, rune: 12800 }[m]!),
+      })),
+      ...["bronze", "iron", "steel", "mithril", "adamant", "rune"].map((m) => ({
+        itemDefId: `${m}-pickaxe`,
+        price: gp({ bronze: 1, iron: 140, steel: 500, mithril: 1300, adamant: 3200, rune: 32000 }[m]!),
+      })),
+      { itemDefId: "tinderbox", price: gp(1) },
+    ],
     buysItems: true,
+    repairs: true,
+    dialogue: [
+      "Axes, pickaxes, the lot. And if your armour's falling apart, I can fix that too.",
+      "Heard there's something nasty living in the den out in the Dark Forest. Wouldn't go in there without a decent weapon.",
+      "Copper and tin from the Quarry make bronze. The furnace and anvil are right here in town.",
+      "Aggie over in Draynor Village can put the magic back into a tired amulet. For a price.",
+    ],
+  },
+  {
+    id: "riverside-armoury",
+    npcName: "Armourer",
+    title: "Riverside Armoury",
+    locationId: "town",
+    items: [
+      { itemDefId: "bronze-dagger", price: gp(50) },
+      { itemDefId: "bronze-warhammer", price: gp(80) },
+      { itemDefId: "wooden-shield", price: gp(20) },
+      { itemDefId: "bronze-full-helm", price: gp(60) },
+      { itemDefId: "bronze-arrow", price: gp(2) },
+    ],
+    buysItems: true,
+    dialogue: ["A bow's no use without arrows. I sell those too.", "Bronze won't stop a dragon, but it'll stop a goblin."],
+  },
+  {
+    id: "aubury-runes",
+    npcName: "Aubury",
+    title: "Aubury's Rune Shop",
+    locationId: "town",
+    items: [
+      { itemDefId: "air-rune", price: gp(4) },
+      { itemDefId: "water-rune", price: gp(4) },
+      { itemDefId: "earth-rune", price: gp(4) },
+      { itemDefId: "fire-rune", price: gp(4) },
+      { itemDefId: "mind-rune", price: gp(3) },
+      { itemDefId: "chaos-rune", price: gp(90) },
+      { itemDefId: "death-rune", price: gp(180) },
+      { itemDefId: "blood-rune", price: gp(400) },
+      { itemDefId: "air-staff", price: gp(1500) },
+    ],
+    buysItems: true,
+    dialogue: [
+      "An Air Staff saves you carrying air runes. Every spell needs them.",
+      "Strikes first, then bolts, blasts and waves as your Magic grows.",
+    ],
+  },
+  {
+    id: "gerrants-fishing",
+    npcName: "Gerrant",
+    title: "Gerrant's Fishy Business",
+    locationId: "lake-shore",
+    items: [
+      { itemDefId: "fishing-net", price: gp(5) },
+      { itemDefId: "fishing-rod", price: gp(5) },
+      { itemDefId: "harpoon", price: gp(5) },
+    ],
+    buysItems: true,
+    dialogue: ["Shrimps in the shallows, trout on a rod, tuna and sharks if you've got a harpoon."],
   },
 ];
 

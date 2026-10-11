@@ -53,7 +53,8 @@ function QuestCard({ quest }: { quest: QuestDefinition }) {
       {status === "in-progress" && stage && objective && (
         <>
           <p className="text-small">{stage.description}</p>
-          {!stageMet && (
+          {/* A flag stage's description already says what to do. */}
+          {!stageMet && stage.objective.kind !== "flag" && (
             <p className="text-small text-info">
               {describeConditionProgress(stage.objective, state, progress!.baselines, CONDITION_LABELS) ??
                 describeUnmetCondition(objective, state, CONDITION_LABELS)}

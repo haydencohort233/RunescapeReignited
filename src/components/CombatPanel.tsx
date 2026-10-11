@@ -10,11 +10,14 @@ import { enemyImagePath } from "../content/assetPaths";
 import HpBar from "./HpBar";
 import Hitsplat from "./Hitsplat";
 import GameImage from "./GameImage";
+import { SpecialAttackBar } from "./CombatControls";
+import { getSpell } from "../content/spells";
+import { formatAmounts } from "../content/display";
 
 interface ActiveSplat {
   id: string;
   side: "player" | "enemy"; // which HP bar this floats over
-  outcome: "miss" | "block" | "hit";
+  outcome: "miss" | "block" | "hit" | "bleed";
   damage: number;
 }
 
@@ -22,6 +25,7 @@ const SPLAT_COLOR: Record<ActiveSplat["outcome"], string> = {
   hit: "var(--splat-hit)", // red — real damage, matches OSRS
   block: "var(--splat-block)", // blue — landed but rolled 0
   miss: "var(--splat-miss)", // gray — didn't land at all
+  bleed: "var(--splat-bleed)", // crimson — the target bleeding
 };
 
 /** The fight card for a combatEncounter amenity. Collapsed like every other
@@ -32,7 +36,6 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
   const { engine, state, actions } = useGame();
   const [splats, setSplats] = useState<ActiveSplat[]>([]);
   const [keepFighting, setKeepFighting] = useState(false);
-  const [autoEatItemId, setAutoEatItemId] = useState("");
   const lastLogCountRef = useRef(0);
   const splatTimersRef = useRef(new Set<number>());
   const enemy = getEnemy(enemyId);
@@ -89,13 +92,51 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
     </>
   );
 
+  // Food counts whether it's in the inventory or worn in the food slot.
+  const foods = ITEM_CATALOG.filter((def) => def.healAmount && engine.getFoodCount(def.id) >= 1);
+  const foodOptions = foods.map((def) => (
+    <option key={def.id} value={def.id}>
+      {def.name} (x{Math.floor(engine.getFoodCount(def.id))})
+    </option>
+  ));
+  const gear = getEquipmentBonuses(state);
+  // The worn food first (Melvor-style preloading), else last fight's food.
+  const rememberedFood =
+    gear.foodItemId ?? (foods.some((def) => def.id === state.lastCombatFoodId) ? state.lastCombatFoodId! : "");
+  // Picking food equips it to the food slot, so the Equipment tab agrees.
+  const pickFood = (itemDefId: string) => {
+    const def = itemDefId ? getItemDef(itemDefId) : undefined;
+    if (def?.equipSlot === "food") engine.equipItem(def);
+    else if (!itemDefId && state.equipment.food) engine.unequipSlot("food");
+    engine.setCombatFood(itemDefId);
+    actions.refresh();
+  };
+  const supplies =
+    gear.attackStyle === "ranged"
+      ? gear.ammoItemId
+        ? `${getItemDef(gear.ammoItemId)?.name ?? "Arrows"}: ${Math.floor(engine.getResourceAmount(gear.ammoItemId))} left`
+        : "No arrows equipped"
+      : gear.attackStyle === "magic"
+        ? (() => {
+            const spell = getSpell(state.selectedSpellId);
+            if (!spell) return "No spell picked";
+            const runes = spell.runes.filter((r) => !gear.infiniteRunes.includes(r.resource));
+            return `Casting ${spell.name}${runes.length ? ` (${formatAmounts(runes, " + ")} each)` : ""}`;
+          })()
+        : null;
+
   if (!fightingThisEnemy || !session) {
-    const foods = ITEM_CATALOG.filter((def) => def.healAmount && engine.getOwnedCount(def.id) >= 1);
     const noHp = engine.getCurrentHp() <= 0;
     return (
       <ActionCard
         title={title}
         meta={`Max HP ${enemy.maxHp}`}
+        description={
+          <span className="text-small">
+            Your gear is locked once the fight starts. Set it up in the Equipment tab first.
+            {supplies && <> {supplies}.</>}
+          </span>
+        }
         actions={[
           {
             label: "Fight",
@@ -105,7 +146,7 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
             onClick: () =>
               confirmAndStartCombat(engine, enemy, getEquipmentBonuses(state), {
                 autoRepeat: keepFighting,
-                autoEatItemId: autoEatItemId || undefined,
+                autoEatItemId: rememberedFood || undefined,
               }),
           },
         ]}
@@ -122,17 +163,9 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
           </label>
           <label>
             Auto-eat{" "}
-            <select
-              id={`auto-eat-${enemy.id}`}
-              value={autoEatItemId}
-              onChange={(e) => setAutoEatItemId(e.target.value)}
-            >
+            <select id={`auto-eat-${enemy.id}`} value={rememberedFood} onChange={(e) => pickFood(e.target.value)}>
               <option value="">None</option>
-              {foods.map((def) => (
-                <option key={def.id} value={def.id}>
-                  {def.name} (x{Math.floor(engine.getOwnedCount(def.id))})
-                </option>
-              ))}
+              {foodOptions}
             </select>
           </label>
         </div>
@@ -156,6 +189,10 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
       .map((s, i) => <Hitsplat key={s.id} outcome={s.outcome} damage={s.damage} offsetIndex={i} />);
 
   const autoEatName = session.autoEatItemId ? getItemDef(session.autoEatItemId)?.name : undefined;
+  // The food the Eat button uses: auto-eat's, else last picked, else any.
+  const selectedFood = session.autoEatItemId && foods.some((d) => d.id === session.autoEatItemId)
+    ? session.autoEatItemId
+    : rememberedFood || foods[0]?.id || "";
 
   return (
     <ActionCard
@@ -177,9 +214,18 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
           },
         },
         {
+          label: selectedFood ? `Eat ${getItemDef(selectedFood)?.name ?? ""}` : "Eat",
+          disabled: !selectedFood,
+          reason: "You have no food",
+          onClick: () => {
+            engine.setCombatFood(selectedFood);
+            engine.eatItem(selectedFood);
+          },
+        },
+        {
           label: "Flee",
-          disabled: !session.canFlee,
-          reason: `You can't flee from ${session.enemyName}`,
+          disabled: !session.canFlee || engine.getCurrentHp() <= 0,
+          reason: session.canFlee ? "You're out of HP" : `You can't flee from ${session.enemyName}`,
           onClick: () => engine.fleeCombat(),
         },
       ]}
@@ -208,6 +254,38 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
         </div>
       </div>
 
+      <div className="row text-muted">
+        <label>
+          Food{" "}
+          <select
+            id={`combat-food-${enemy.id}`}
+            value={selectedFood}
+            disabled={foods.length === 0}
+            onChange={(e) => pickFood(e.target.value)}
+          >
+            {foods.length === 0 && <option value="">None left</option>}
+            {foodOptions}
+          </select>
+        </label>
+        <label>
+          <input
+            id={`combat-auto-eat-${enemy.id}`}
+            type="checkbox"
+            checked={!!session.autoEatItemId}
+            disabled={!selectedFood}
+            onChange={(e) => {
+              if (e.target.checked) engine.setCombatFood(selectedFood);
+              engine.setAutoEat(e.target.checked);
+              actions.refresh();
+            }}
+          />{" "}
+          Auto-eat
+        </label>
+      </div>
+
+      {session.specialAttackId && <SpecialAttackBar />}
+      {supplies && <p className="text-muted text-small">{supplies}</p>}
+
       <p className="text-muted text-small">
         Your next attack in {nextPlayerAttackSeconds}s (every {(session.playerAttackSpeedMs / 1000).toFixed(1)}s) ·{" "}
         {session.enemyName} in {nextEnemyAttackSeconds}s (every {(session.enemyAttackSpeedMs / 1000).toFixed(1)}s)
@@ -222,7 +300,14 @@ export default function CombatPanel({ enemyId }: { enemyId: string }) {
               {entry.attacker === "player" ? "You" : "Foe"}
             </span>
             <span style={{ color: SPLAT_COLOR[entry.outcome] }}>
-              {entry.outcome === "miss" ? "miss" : entry.outcome === "block" ? "block" : `hit ${entry.damage}`}
+              {entry.outcome === "miss"
+                ? "miss"
+                : entry.outcome === "block"
+                  ? "block"
+                  : entry.outcome === "bleed"
+                    ? `bleed ${entry.damage}`
+                    : `hit ${entry.damage}`}
+              {entry.special && " (special)"}
             </span>
           </div>
         ))}

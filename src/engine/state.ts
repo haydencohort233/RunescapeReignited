@@ -1,10 +1,11 @@
 import type { GameState } from "./types";
 import { xpForLevel } from "./xpCurve";
 import { DEFAULT_OFFLINE_CAP_MS } from "./tuning";
+import { DEFAULT_COMBAT_STYLES } from "./combatStyles";
 
 /** Bump when GameState's shape changes, and add a matching entry to
  *  MIGRATIONS in migrations.ts. */
-export const SCHEMA_VERSION = 20;
+export const SCHEMA_VERSION = 22;
 
 /** OSRS-authentic: Hitpoints starts pre-leveled at 10 (unlike every other
  *  skill, which starts at 1) — this is the XP threshold for level 10. */
@@ -28,6 +29,8 @@ export function createInitialState(now: number = Date.now()): GameState {
     equipment: {},
     activeAction: null,
     currentHp: 10, // matches STARTING_HITPOINTS_XP's level-10 max
+    specialEnergy: 100,
+    combatStyles: { ...DEFAULT_COMBAT_STYLES },
     jobs: { accepted: {}, lastCompletedPeriod: {}, completedOnce: {} },
     quests: {},
     currentLocationId: STARTING_LOCATION_ID,

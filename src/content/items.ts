@@ -1,4 +1,90 @@
-import type { ItemDefinition } from "../engine/types";
+import type { ItemDefinition, ToolType, UnlockCondition } from "../engine/types";
+
+const level = (skill: string, atLeast: number): UnlockCondition | undefined =>
+  atLeast > 1 ? { kind: "skillLevel", skill, atLeast } : undefined;
+
+// ── Tools ── Speeds are proposed: each metal tier is 5% faster than the
+// last. Level requirements and shop prices follow OSRS.
+const METAL_TIERS = [
+  { metal: "bronze", name: "Bronze", speed: 1, level: 1, axeValue: 16, pickValue: 1 },
+  { metal: "iron", name: "Iron", speed: 0.95, level: 1, axeValue: 56, pickValue: 140 },
+  { metal: "steel", name: "Steel", speed: 0.9, level: 6, axeValue: 200, pickValue: 500 },
+  { metal: "mithril", name: "Mithril", speed: 0.85, level: 21, axeValue: 520, pickValue: 1300 },
+  { metal: "adamant", name: "Adamant", speed: 0.8, level: 31, axeValue: 1280, pickValue: 3200 },
+  { metal: "rune", name: "Rune", speed: 0.75, level: 41, axeValue: 12800, pickValue: 32000 },
+];
+
+function tool(id: string, name: string, type: ToolType, speed: number, value: number, description: string, requirement?: UnlockCondition): ItemDefinition {
+  return {
+    id,
+    assetFolder: "Tools",
+    name,
+    description,
+    category: "tool",
+    rarity: "common",
+    stackable: false,
+    value,
+    tool: { type, speedMultiplier: speed, requirement },
+    actions: ["drop", "examine"],
+  };
+}
+
+const TOOL_ITEMS: ItemDefinition[] = [
+  ...METAL_TIERS.map((t) =>
+    tool(`${t.metal}-axe`, `${t.name} Axe`, "axe", t.speed, t.axeValue, `A woodcutter's axe.`, level("woodcutting", t.level))
+  ),
+  ...METAL_TIERS.map((t) =>
+    tool(`${t.metal}-pickaxe`, `${t.name} Pickaxe`, "pickaxe", t.speed, t.pickValue, `Used for mining.`, level("mining", t.level))
+  ),
+  tool("fishing-net", "Fishing Net", "net", 1, 5, "Useful for catching small fish."),
+  tool("fishing-rod", "Fishing Rod", "rod", 1, 5, "Useful for catching sardines and trout."),
+  tool("harpoon", "Harpoon", "harpoon", 1, 5, "Useful for catching big fish."),
+  tool("tinderbox", "Tinderbox", "tinderbox", 1, 1, "Useful for lighting a fire."),
+];
+
+// ── Fish ── Raw catches and the food they cook into. Shark (cooked) is
+// defined above with the other food.
+function rawFish(id: string, name: string, value: number): ItemDefinition {
+  return { id, assetFolder: "Fish", name, description: `A raw ${name.slice(4).toLowerCase()}. Cook it at a range.`, category: "material", rarity: "common", stackable: true, value, actions: ["drop", "examine"] };
+}
+function cookedFish(id: string, name: string, heal: number, value: number): ItemDefinition {
+  return { id, assetFolder: "Fish", name, description: `Cooked ${name.toLowerCase()}. Heals ${heal} HP.`, category: "consumable", rarity: "common", stackable: true, value, healAmount: heal, equipSlot: "food", actions: ["eat", "equip", "drop", "examine"] };
+}
+
+const FISH_ITEMS: ItemDefinition[] = [
+  rawFish("raw-shrimps", "Raw Shrimps", 5),
+  cookedFish("shrimps", "Shrimps", 3, 8),
+  rawFish("raw-trout", "Raw Trout", 20),
+  cookedFish("trout", "Trout", 7, 25),
+  rawFish("raw-tuna", "Raw Tuna", 60),
+  cookedFish("tuna", "Tuna", 10, 80),
+  rawFish("raw-shark", "Raw Shark", 250),
+];
+
+// ── Mining and Smithing ──
+const MINING_ITEMS: ItemDefinition[] = [
+  { id: "copper-ore", assetFolder: "Ores", name: "Copper Ore", description: "Smelt it with tin ore to make bronze.", category: "material", rarity: "common", stackable: true, value: 5, actions: ["drop", "examine"] },
+  { id: "tin-ore", assetFolder: "Ores", name: "Tin Ore", description: "Smelt it with copper ore to make bronze.", category: "material", rarity: "common", stackable: true, value: 5, actions: ["drop", "examine"] },
+  { id: "bronze-bar", assetFolder: "Bars", name: "Bronze Bar", description: "Smith it into bronze gear at an anvil.", category: "material", rarity: "common", stackable: true, value: 12, actions: ["drop", "examine"] },
+];
+
+// ── Runes ── Bought from Aubury until Runecrafting exists. Values are
+// proposed, roughly OSRS shop prices.
+function rune(element: string, value: number): ItemDefinition {
+  const name = `${element[0].toUpperCase()}${element.slice(1)} Rune`;
+  return { id: `${element}-rune`, assetFolder: "Runes", name, description: `Used to cast spells.`, category: "material", rarity: "common", stackable: true, value, actions: ["drop", "examine"] };
+}
+
+const RUNE_ITEMS: ItemDefinition[] = [
+  rune("air", 4),
+  rune("water", 4),
+  rune("earth", 4),
+  rune("fire", 4),
+  rune("mind", 3),
+  rune("chaos", 90),
+  rune("death", 180),
+  rune("blood", 400),
+];
 
 // Single source of truth for every item. `value` is the base GP value
 // shops pay a fraction of (engine/tuning.ts); items without one can't be
@@ -9,6 +95,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
   // ── Materials — produced by buildings and gathering, spent by recipes ──
   {
     id: "wood",
+    assetFolder: "Logs",
     name: "Wood",
     description: "Logs from an ordinary tree.",
     category: "material",
@@ -19,6 +106,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
   },
   {
     id: "willow-logs",
+    assetFolder: "Logs",
     name: "Willow Logs",
     description: "Logs cut from a willow tree.",
     category: "material",
@@ -29,6 +117,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
   },
   {
     id: "coal",
+    assetFolder: "Ores",
     name: "Coal",
     description: "Hey, this is not for colouring books.",
     category: "material",
@@ -39,6 +128,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
   },
   {
     id: "raw-fish",
+    assetFolder: "Fish",
     name: "Raw Fish",
     description: "A fresh catch. Needs cooking.",
     category: "material",
@@ -49,6 +139,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
   },
   {
     id: "pelt",
+    assetFolder: "Materials",
     name: "Pelt",
     description: "An animal hide, ready for tanning.",
     category: "material",
@@ -59,6 +150,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
   },
   {
     id: "flax",
+    assetFolder: "Materials",
     name: "Flax",
     description: "A plant fibre that can be spun into bowstring.",
     category: "material",
@@ -69,6 +161,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
   },
   {
     id: "bowstring",
+    assetFolder: "Materials",
     name: "Bow String",
     description: "Spun from flax. Strings an unstrung bow.",
     category: "material",
@@ -79,6 +172,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
   },
   {
     id: "cooked-fish",
+    assetFolder: "Fish",
     name: "Cooked Fish",
     description: "Simple, filling, and not burnt. Mostly.",
     category: "consumable",
@@ -86,10 +180,12 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     stackable: true,
     value: 8,
     healAmount: 5,
-    actions: ["eat", "drop", "examine"],
+    equipSlot: "food",
+    actions: ["eat", "equip", "drop", "examine"],
   },
   {
     id: "wooden-bow-u",
+    assetFolder: "Weapons/Bows",
     name: "Wooden Bow (u)",
     description: "An unstrung wooden bow. Needs a bowstring before it can be used.",
     category: "material",
@@ -100,18 +196,22 @@ export const ITEM_CATALOG: ItemDefinition[] = [
   },
   {
     id: "wooden-bow",
+    assetFolder: "Weapons/Bows",
     name: "Wooden Bow",
-    description: "A simple bow carved from ash wood, strung and ready to use.",
+    description: "A simple bow carved from ash wood, strung and ready to use. Needs arrows.",
     category: "weapon",
     rarity: "common",
     stackable: false, // equipment — always one instance per copy
     value: 40,
     equipSlot: "weapon",
-    stats: { attack: 8 },
+    attackStyle: "ranged",
+    attackSpeedMs: 2400,
+    stats: { ranged: 8 },
     actions: ["equip", "drop", "examine"],
   },
   {
     id: "bronze-dagger",
+    assetFolder: "Weapons/Bronze",
     name: "Bronze Dagger",
     description: "A basic dagger. Weak, but fast.",
     category: "weapon",
@@ -126,6 +226,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
   },
   {
     id: "bronze-warhammer",
+    assetFolder: "Weapons/Bronze",
     name: "Bronze Warhammer",
     description: "A heavy, slow hammer. Hits like a truck.",
     category: "weapon",
@@ -140,6 +241,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
   },
   {
     id: "bronze-full-helm",
+    assetFolder: "Armor/Bronze",
     name: "Bronze Full Helm",
     description: "A full helmet made of bronze.",
     category: "armor",
@@ -152,6 +254,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
   },
   {
     id: "bronze-platebody",
+    assetFolder: "Armor/Bronze",
     name: "Bronze Platebody",
     description: "Sturdy bronze armor for the torso.",
     category: "armor",
@@ -164,6 +267,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
   },
   {
     id: "wooden-shield",
+    assetFolder: "Armor/Wooden",
     name: "Wooden Shield",
     description: "A simple wooden shield. Better than nothing.",
     category: "armor",
@@ -176,6 +280,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
   },
   {
     id: "leather-boots",
+    assetFolder: "Armor/Leather",
     name: "Leather Boots",
     description: "Basic leather footwear.",
     category: "armor",
@@ -188,6 +293,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
   },
   {
     id: "leather-gloves",
+    assetFolder: "Armor/Leather",
     name: "Leather Gloves",
     description: "Basic leather gloves.",
     category: "armor",
@@ -200,6 +306,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
   },
   {
     id: "ardougne-cloak",
+    assetFolder: "Capes",
     name: "Ardougne Cloak",
     description: "A cloak awarded for completing tasks in Ardougne.",
     category: "armor",
@@ -210,6 +317,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
   },
   {
     id: "gold-ring",
+    assetFolder: "Jewellery",
     name: "Gold Ring",
     description: "A plain gold ring. More decorative than useful.",
     category: "armor",
@@ -221,21 +329,21 @@ export const ITEM_CATALOG: ItemDefinition[] = [
   },
   {
     id: "bronze-arrow",
+    assetFolder: "Ammo",
     name: "Bronze Arrow",
     description: "Ammunition for a bow.",
     category: "weapon",
     rarity: "common",
-    // Simplification: ammo isn't stack-while-equipped yet (that's a real
-    // OSRS special case worth its own pass later) — treated as ordinary
-    // equipment for now, one instance per copy.
-    stackable: false,
+    // Worn as a whole stack in the ammo slot (see ledger.ts stackEquipId).
+    stackable: true,
     value: 2,
     equipSlot: "ammo",
-    stats: { strength: 7 },
+    stats: { rangedStrength: 7 }, // only Ranged uses it, so melee ignores it
     actions: ["equip", "drop", "examine"],
   },
   {
     id: "amulet-of-glory",
+    assetFolder: "Jewellery",
     name: "Amulet of Glory",
     description: "A powerful amulet with a limited number of teleport charges.",
     category: "armor",
@@ -243,14 +351,16 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     stackable: false,
     value: 1000,
     equipSlot: "neck",
-    // No maxDurability set — teleport charges are a natural future use of
-    // durability, but durability stays unwired until you decide to use it.
+    // Each teleport uses a charge; Aggie in Draynor Village refills them.
     teleportTo: "town",
+    maxCharges: 4,
+    rechargeCostGp: 500, // per charge — proposed, tune freely
     stats: { defence: 3 },
     actions: ["equip", "drop", "examine", "teleport"],
   },
   {
     id: "dragon-scimitar",
+    assetFolder: "Weapons/Dragon",
     name: "Dragon Scimitar",
     description: "A fearsome curved blade, prized by adventurers.",
     category: "weapon",
@@ -262,10 +372,12 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     weaponType: "slash",
     attackSpeedMs: 2400, // medium-fast, medium-high damage
     equipRequirement: { kind: "skillLevel", skill: "attack", atLeast: 60 },
+    specialAttack: "sever",
     actions: ["equip", "drop", "examine"],
   },
   {
     id: "shark",
+    assetFolder: "Fish",
     name: "Shark",
     description: "A cooked shark. A reliable source of food.",
     category: "consumable",
@@ -273,16 +385,143 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     stackable: true,
     value: 300,
     healAmount: 20,
-    actions: ["eat", "drop", "examine"],
+    equipSlot: "food",
+    actions: ["eat", "equip", "drop", "examine"],
   },
   {
-    id: "bones",
-    name: "Bones",
-    description: "The bones of a defeated enemy.",
+    id: "birds-nest",
+    assetFolder: "Materials",
+    name: "Bird's Nest",
+    description: "A nest that fell out of a tree. Something might be inside one day.",
+    category: "material",
+    rarity: "uncommon",
+    stackable: true,
+    value: 50,
+    actions: ["drop", "examine"],
+  },
+  {
+    id: "ashes",
+    assetFolder: "Materials",
+    name: "Ashes",
+    description: "A heap of ashes, left over from a fire. Can be scattered for Prayer XP.",
     category: "material",
     rarity: "common",
     stackable: true,
     value: 2,
+    prayerXp: 2, // proposed; OSRS's plain ashes give none
+    actions: ["bury", "drop", "examine"],
+  },
+  {
+    id: "bones",
+    assetFolder: "Bones",
+    name: "Bones",
+    description: "The bones of a defeated enemy. Bury them for Prayer XP.",
+    category: "material",
+    rarity: "common",
+    stackable: true,
+    value: 2,
+    prayerXp: 4.5,
+    actions: ["bury", "drop", "examine"],
+  },
+  ...TOOL_ITEMS,
+  ...FISH_ITEMS,
+  ...MINING_ITEMS,
+  ...RUNE_ITEMS,
+  {
+    id: "oak-logs",
+    assetFolder: "Logs",
+    name: "Oak Logs",
+    description: "Logs cut from an oak tree.",
+    category: "material",
+    rarity: "common",
+    stackable: true,
+    value: 20,
+    actions: ["drop", "examine"],
+  },
+  {
+    id: "air-staff",
+    assetFolder: "Weapons",
+    name: "Air Staff",
+    description: "A magical staff that provides unlimited air runes.",
+    category: "weapon",
+    rarity: "uncommon",
+    stackable: false,
+    value: 1500,
+    equipSlot: "weapon",
+    attackStyle: "magic",
+    attackSpeedMs: 3000,
+    stats: { magic: 10, attack: 2, defence: 2 },
+    infiniteRunes: ["air-rune"],
+    weaponType: "crush",
+    actions: ["equip", "drop", "examine"],
+  },
+  {
+    id: "dragon-dagger",
+    assetFolder: "Weapons/Dragon",
+    name: "Dragon Dagger",
+    description: "A powerful dagger. Its special attack, Puncture, strikes twice.",
+    category: "weapon",
+    rarity: "rare",
+    stackable: false,
+    value: 30000,
+    equipSlot: "weapon",
+    stats: { attack: 40, strength: 40 },
+    weaponType: "stab",
+    attackSpeedMs: 2400,
+    equipRequirement: { kind: "skillLevel", skill: "attack", atLeast: 60 },
+    specialAttack: "puncture",
+    actions: ["equip", "drop", "examine"],
+  },
+  {
+    id: "bronze-platelegs",
+    assetFolder: "Armor/Bronze",
+    name: "Bronze Platelegs",
+    description: "Bronze leg armour.",
+    category: "armor",
+    rarity: "common",
+    stackable: false,
+    value: 80,
+    equipSlot: "legs",
+    stats: { defence: 10 },
+    actions: ["equip", "drop", "examine"],
+  },
+  {
+    // The degrading-gear example: Barrows-style, it wears down with every
+    // attack and breaks into "Dharok's Greataxe 0", which Bob repairs.
+    // No drop source yet; spawn it from the dev tools to test.
+    id: "dharoks-greataxe",
+    assetFolder: "Weapons/Barrows",
+    name: "Dharok's Greataxe",
+    description: "A huge axe once wielded by Dharok the Wretched. It degrades with use.",
+    category: "weapon",
+    rarity: "legendary",
+    stackable: false,
+    value: 100000,
+    equipSlot: "weapon",
+    stats: { attack: 103, strength: 105 },
+    weaponType: "slash",
+    attackSpeedMs: 4200,
+    equipRequirement: {
+      kind: "all",
+      conditions: [
+        { kind: "skillLevel", skill: "attack", atLeast: 70 },
+        { kind: "skillLevel", skill: "strength", atLeast: 70 },
+      ],
+    },
+    maxDurability: 10000, // attacks until it breaks
+    brokenItemId: "dharoks-greataxe-0",
+    repairCostGp: 100000,
+    actions: ["equip", "drop", "examine"],
+  },
+  {
+    id: "dharoks-greataxe-0",
+    assetFolder: "Weapons/Barrows",
+    name: "Dharok's Greataxe 0",
+    description: "Broken. It can't be wielded until Bob repairs it.",
+    category: "misc",
+    rarity: "legendary",
+    stackable: false,
+    repairsTo: "dharoks-greataxe",
     actions: ["drop", "examine"],
   },
 ];

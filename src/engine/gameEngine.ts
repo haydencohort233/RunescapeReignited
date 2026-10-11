@@ -3,7 +3,6 @@ import type {
   BuildingDefinition,
   GameContent,
   Modifier,
-  WeaponType,
   ItemDefinition,
   ItemInstance,
   MapLocation,
@@ -15,15 +14,21 @@ import type {
   CraftingRecipe,
   ActiveCombatSession,
   EnemyDefinition,
+  AttackStyle,
+  SpellDefinition,
+  NpcDefinition,
+  EquipSlot,
+  ToolType,
 } from "./types";
 import { NotificationQueue } from "./notificationQueue";
 import { levelForXp, xpForLevel, MAX_LEVEL, calculateCombatLevel } from "./xpCurve";
 import { isUnlocked } from "./unlockConditions";
 import { formatDuration, capitalize } from "./format";
-import { SHOP_SELL_PRICE_FRACTION, EAT_ATTACK_DELAY_MS, BASE_HP_REGEN_PER_SECOND } from "./tuning";
+import { SHOP_SELL_PRICE_FRACTION, BASE_HP_REGEN_PER_SECOND, SPECIAL_ENERGY_REGEN_PER_MS } from "./tuning";
+import { computeEquipmentBonuses, type EquipmentBonuses } from "./equipmentBonuses";
 import { createInitialState } from "./state";
 import { migrateSave } from "./migrations";
-import { countOwned, isWholeQuantity } from "./ledger";
+import { countOwned, isWholeQuantity, stackEquipId } from "./ledger";
 import { describeAction, getActiveCombat } from "./activeAction";
 import { BuildingSystem } from "./systems/buildings";
 import { CraftingSystem } from "./systems/crafting";
@@ -69,6 +74,7 @@ export class GameEngine {
    *  existing players on their next load. */
   readonly content: GameContent;
   readonly itemsById: Map<string, ItemDefinition>;
+  private readonly spellsById: Map<string, SpellDefinition>;
   private readonly buildingSystem: BuildingSystem;
   private readonly craftingSystem: CraftingSystem;
   private readonly travelSystem: TravelSystem;
@@ -86,6 +92,7 @@ export class GameEngine {
   ) {
     this.content = content;
     this.itemsById = new Map(content.items.map((i) => [i.id, i]));
+    this.spellsById = new Map((content.spells ?? []).map((s) => [s.id, s]));
     this.buildingSystem = new BuildingSystem(this);
     this.craftingSystem = new CraftingSystem(this);
     this.travelSystem = new TravelSystem(this);
@@ -96,6 +103,47 @@ export class GameEngine {
     this.state = opts?.state ?? createInitialState(this.clock());
     this.notifications = opts?.notifications ?? new NotificationQueue();
     this.grantStartingBuildings();
+    this.stackInstancesOfStackableItems();
+    this.backfillItemCharges();
+    this.grantStarterKit(content.starterKit ?? []);
+  }
+
+  /** A copy of a charged item (Amulet of Glory) from before charges existed
+   *  starts full. Content-driven, so it lives here, not in migrations. */
+  private backfillItemCharges(): void {
+    for (const instance of Object.values(this.state.inventory)) {
+      const def = this.itemsById.get(instance.itemDefId);
+      if (def?.maxCharges !== undefined && instance.charges === undefined) instance.charges = def.maxCharges;
+      if (def?.maxDurability !== undefined && instance.durability === undefined) instance.durability = def.maxDurability;
+    }
+  }
+
+  /** Gives the starting tools once per save (new games, and older saves
+   *  the first time they load with tools in content), so gathering that now
+   *  needs a tool doesn't lock anyone out. A flag, not a check for "has an
+   *  axe", so dropping or selling one never conjures a new one. */
+  private grantStarterKit(itemIds: string[]): void {
+    if (this.getFlag("starterKitGranted")) return;
+    for (const id of itemIds) if (this.itemsById.has(id)) this.addItem(id, 1);
+    this.setFlag("starterKitGranted", true);
+  }
+
+  /** An item that became stackable in content (arrows) may still exist as
+   *  separate instances in an older save: fold them into the stack, and a
+   *  worn one becomes the worn stack. Content-driven, so it lives here
+   *  rather than in the content-agnostic migrations. */
+  private stackInstancesOfStackableItems(): void {
+    for (const instance of Object.values(this.state.inventory)) {
+      if (!this.itemsById.get(instance.itemDefId)?.stackable) continue;
+      for (const [slot, id] of Object.entries(this.state.equipment)) {
+        if (id === instance.instanceId) {
+          this.state.equipment[slot as keyof GameState["equipment"]] = stackEquipId(instance.itemDefId);
+        }
+      }
+      delete this.state.inventory[instance.instanceId];
+      this.ensureResourceExists(instance.itemDefId);
+      this.state.resources[instance.itemDefId].amount += 1;
+    }
   }
 
   /** Seeds startingQuantity for any building the save has never had an
@@ -144,6 +192,10 @@ export class GameEngine {
    *  (crafting refunds, travel returns you to your origin, combat counts
    *  as fleeing and can be refused). Returns false if it couldn't stop. */
   stopActiveAction(): boolean {
+    // Catch up first: the action may have finished since the last tick (a
+    // trip that already arrived, a fight already won or lost), and stopping
+    // it from stale progress would undo that.
+    this.catchUpToNow();
     const action = this.state.activeAction;
     if (!action) return true;
     switch (action.kind) {
@@ -266,6 +318,18 @@ export class GameEngine {
    * through too, rather than inventing its own scaling logic.
    */
   getModifiedValue(target: string, base: number): number {
+    const { additiveSum, multiplicativeProduct } = this.sumModifiers(target);
+    return (base + additiveSum) * multiplicativeProduct;
+  }
+
+  /** Just the multiplicative part for `target` — what scales one
+   *  building's own output. Additive bonuses belong to the resource as a
+   *  whole, not to any one building. */
+  getModifierMultiplier(target: string): number {
+    return this.sumModifiers(target).multiplicativeProduct;
+  }
+
+  private sumModifiers(target: string): { additiveSum: number; multiplicativeProduct: number } {
     const namespace = target.includes(":") ? target.split(":")[0] : target;
     const namespaceWildcard = `${namespace}:all`;
 
@@ -281,7 +345,7 @@ export class GameEngine {
         multiplicativeProduct *= modifier.value;
       }
     }
-    return (base + additiveSum) * multiplicativeProduct;
+    return { additiveSum, multiplicativeProduct };
   }
 
   /**
@@ -375,9 +439,8 @@ export class GameEngine {
       );
     }
 
-    // Resolve modifier expiry using the SAME capped horizon as everything
-    // else, not the real `now` — see class doc comment.
-    const expired = this.pruneExpiredModifiers(effectiveNow);
+    // Anything that had already run out before this window started.
+    const expired = this.pruneExpiredModifiers(from);
 
     // Snapshot holdings so the away summary can report everything gained
     // (production, gathering, crafting, loot), not just building output.
@@ -388,19 +451,18 @@ export class GameEngine {
       levelsBefore[skillId] = this.getSkillLevel(skillId);
     }
 
+    // Production runs in segments split wherever a modifier expires, so a
+    // buff that lasted the first 30 minutes of an hour away pays for those
+    // 30 minutes instead of nothing. Expiry uses the SAME capped horizon as
+    // everything else, not the real `now` (see class doc comment). Crafting
+    // XP and travel speed below still see only the modifiers left at the
+    // end of the window.
     const gains: Record<ResourceId, number> = {};
-    // Only things something produces: building outputs, plus anything an
-    // additive modifier targets directly (a "+1 GP/s" buff with no
-    // building). Iterating every stack would also let a future modifier
-    // targeting "all" mint bones and food each second.
-    const producedResources = new Set(this.content.buildings.map((b) => b.resource));
-    for (const m of Object.values(this.state.modifiers)) {
-      if (m.type === "additive" && m.target !== "all" && !m.target.includes(":")) producedResources.add(m.target);
-    }
-    for (const resourceId of producedResources) {
-      const rate = this.getEffectiveRatePerSecond(resourceId);
-      const gained = rate * (cappedMs / 1000);
-      if (gained > 0) gains[resourceId] = gained;
+    let segmentStart = from;
+    for (const boundary of this.modifierExpiriesWithin(from, effectiveNow)) {
+      this.addProduction(gains, boundary - segmentStart);
+      segmentStart = boundary;
+      expired.push(...this.pruneExpiredModifiers(boundary));
     }
 
     for (const [resourceId, gained] of Object.entries(gains)) {
@@ -419,6 +481,7 @@ export class GameEngine {
     const wasInCombatThisTick = this.combatSession !== null;
     this.combatSystem.resolveCombatSession(effectiveNow);
     if (!wasInCombatThisTick) this.resolveHpRegen(cappedMs);
+    this.state.specialEnergy = Math.min(100, this.state.specialEnergy + cappedMs * SPECIAL_ENERGY_REGEN_PER_MS);
     this.jobBoardSystem.resolveJobExpiry(now);
     this.questSystem.checkQuests();
     this.syncDerivedStatistics();
@@ -467,6 +530,33 @@ export class GameEngine {
     this.catchUp = null;
   }
 
+  /** Sorted expiry times inside (from, to), then `to` itself: the
+   *  boundaries of resolveElapsed's production segments. */
+  private modifierExpiriesWithin(from: number, to: number): number[] {
+    const times = new Set<number>([to]);
+    for (const m of Object.values(this.state.modifiers)) {
+      if (m.expiresAt !== undefined && m.expiresAt > from && m.expiresAt < to) times.add(m.expiresAt);
+    }
+    return [...times].sort((a, b) => a - b);
+  }
+
+  /** Adds `ms` worth of production at the current rates into `gains`.
+   *  Only things something produces: building outputs, plus anything an
+   *  additive modifier targets directly (a "+1 GP/s" buff with no
+   *  building). Iterating every stack would also let a future modifier
+   *  targeting "all" mint bones and food each second. */
+  private addProduction(gains: Record<ResourceId, number>, ms: number): void {
+    if (ms <= 0) return;
+    const producedResources = new Set(this.content.buildings.map((b) => b.resource));
+    for (const m of Object.values(this.state.modifiers)) {
+      if (m.type === "additive" && m.target !== "all" && !m.target.includes(":")) producedResources.add(m.target);
+    }
+    for (const resourceId of producedResources) {
+      const gained = this.getEffectiveRatePerSecond(resourceId) * (ms / 1000);
+      if (gained > 0) gains[resourceId] = (gains[resourceId] ?? 0) + gained;
+    }
+  }
+
   private shiftActionAnchors(ms: number): void {
     const action = this.state.activeAction;
     if (!action) return;
@@ -483,6 +573,7 @@ export class GameEngine {
         action.playerStartedAt += ms;
         action.enemyStartedAt += ms;
         if (action.lastPlayerAttackAt !== undefined) action.lastPlayerAttackAt += ms;
+        if (action.bleed) action.bleed.startedAt += ms;
         break;
     }
   }
@@ -523,9 +614,12 @@ export class GameEngine {
     }
 
     if (parts.length === 0) return;
+    // Say when the cap kicked in, or "away for 9h" paying 1h looks like a bug.
+    const counted =
+      elapsedMs > this.state.offlineCapMs ? ` (only ${formatDuration(this.state.offlineCapMs)} counted)` : "";
     this.notifications.push(
       "offline-summary",
-      `While you were away for ${duration}, you earned ${parts.join(", ")}.`,
+      `While you were away for ${duration}${counted}, you earned ${parts.join(", ")}.`,
       { replaceKey: "offline-summary" }
     );
   }
@@ -569,10 +663,27 @@ export class GameEngine {
     const ids: string[] = [];
     for (let i = 0; i < Math.floor(quantity); i++) {
       const instanceId = this.newInstanceId();
-      this.state.inventory[instanceId] = { instanceId, itemDefId };
+      this.state.inventory[instanceId] = {
+        instanceId,
+        itemDefId,
+        ...(def?.maxDurability !== undefined ? { durability: def.maxDurability } : {}),
+        ...(def?.maxCharges !== undefined ? { charges: def.maxCharges } : {}),
+      };
       ids.push(instanceId);
     }
     return ids;
+  }
+
+  /** Whether `quantity` more of an item can be taken: false for a second
+   *  copy of a `unique` item, which addItem would refuse. Warns if not. */
+  canReceive(itemDefId: string, quantity: number): boolean {
+    const def = this.itemsById.get(itemDefId);
+    if (!def?.unique) return true;
+    if (quantity > 1 || this.getResourceAmount(itemDefId) > 0 || Object.values(this.state.inventory).some((i) => i.itemDefId === itemDefId)) {
+      this.notifications.push("status", `You can only own one ${def.name}.`, { severity: "warning" });
+      return false;
+    }
+    return true;
   }
 
   private newInstanceId(): string {
@@ -589,10 +700,18 @@ export class GameEngine {
 
   /** Equips an item, unequipping whatever was already in that slot (if anything).
    *  Refuses if the item has an unmet equipRequirement (e.g. an Attack level) —
-   *  same "engine enforces it, not just the UI" pattern as purchaseBuilding. */
-  equipItem(def: ItemDefinition, instanceId: string): boolean {
-    const instance = this.state.inventory[instanceId];
-    if (!instance || instance.itemDefId !== def.id || !def.equipSlot) return false;
+   *  same "engine enforces it, not just the UI" pattern as purchaseBuilding.
+   *  A stackable item (arrows) is worn as a whole stack and needs no
+   *  instanceId. */
+  equipItem(def: ItemDefinition, instanceId?: string): boolean {
+    if (!def.equipSlot) return false;
+    if (!this.canChangeSlot(def.equipSlot)) return false;
+    if (def.stackable) {
+      if (this.getResourceAmount(def.id) < 1) return false;
+    } else {
+      const instance = instanceId ? this.state.inventory[instanceId] : undefined;
+      if (!instance || instance.itemDefId !== def.id) return false;
+    }
 
     if (def.equipRequirement && !isUnlocked(def.equipRequirement, this.state)) {
       this.notifications.push("status", `You don't meet the requirements to equip ${def.name}.`, {
@@ -601,7 +720,7 @@ export class GameEngine {
       return false;
     }
 
-    this.state.equipment[def.equipSlot] = instanceId;
+    this.state.equipment[def.equipSlot] = def.stackable ? stackEquipId(def.id) : instanceId;
     this.notifications.push("status", `Equipped ${def.name}.`);
     return true;
   }
@@ -609,6 +728,7 @@ export class GameEngine {
   unequipSlot(slot: string): void {
     const def = this.state.equipment[slot as keyof GameState["equipment"]];
     if (!def) return;
+    if (!this.canChangeSlot(slot as EquipSlot)) return;
     delete this.state.equipment[slot as keyof GameState["equipment"]];
     this.notifications.push("status", `Unequipped item.`);
   }
@@ -617,6 +737,10 @@ export class GameEngine {
    *  its equipment slot. Stacks use dropStack. */
   dropItem(def: ItemDefinition, instanceId: string): void {
     if (!this.state.inventory[instanceId]) return;
+    if (this.combatSession && this.isEquipped(instanceId)) {
+      this.notifications.push("status", "You can't change gear mid-fight.", { severity: "warning" });
+      return;
+    }
     for (const [slot, id] of Object.entries(this.state.equipment)) {
       if (id === instanceId) delete this.state.equipment[slot as keyof GameState["equipment"]];
     }
@@ -624,33 +748,225 @@ export class GameEngine {
     this.notifications.push("status", `Dropped ${def.name}.`);
   }
 
-  /** Drops a whole stack (no partial-quantity drop yet — a "drop X"
-   *  prompt is a fine future addition). Not counted as spending. */
-  dropStack(itemDefId: string): void {
-    const amount = Math.floor(this.getResourceAmount(itemDefId));
+  /** Drops `quantity` from a stack, or the whole stack when omitted.
+   *  Clamped to what's held. Not counted as spending. */
+  dropStack(itemDefId: string, quantity?: number): void {
+    // A worn stack has to come off first, as worn gear does in OSRS.
+    if (this.isEquipped(stackEquipId(itemDefId))) return;
+    const held = Math.floor(this.getResourceAmount(itemDefId));
+    if (quantity !== undefined && !isWholeQuantity(quantity)) return;
+    const amount = Math.min(held, quantity ?? held);
     if (amount <= 0) return;
     this.state.resources[itemDefId].amount -= amount;
     this.notifications.push("status", `Dropped ${amount.toLocaleString()}x ${this.nameOf(itemDefId)}.`);
   }
 
   /** Eats one unit of a food item, healing its healAmount (scaled by
-   *  "healing" modifiers). Works mid-fight, at the cost of delaying your
-   *  next attack by EAT_ATTACK_DELAY_MS. */
+   *  "healing" modifiers). Works mid-fight, at the cost of restarting your
+   *  attack timer. The player-facing entry point. */
   eatItem(itemDefId: string): boolean {
+    this.catchUpToNow();
+    return this.consumeFood(itemDefId, this.now());
+  }
+
+  /** eatItem at a given time. Internal: auto-eat calls this mid-resolve
+   *  with the event's own timestamp, where catching up would recurse. */
+  consumeFood(itemDefId: string, at: number): boolean {
     const def = this.itemsById.get(itemDefId);
-    if (!def?.healAmount || this.getOwnedCount(itemDefId) < 1) return false;
-    this.removeOwned(itemDefId, 1);
+    if (!def?.healAmount || this.getFoodCount(itemDefId) < 1) return false;
+    if (def.stackable) this.spendWornStack(itemDefId, 1);
+    else this.removeOwned(itemDefId, 1);
     const before = this.getCurrentHp();
     this.healHp(this.getModifiedValue("healing", def.healAmount));
     const healed = Math.floor(this.getCurrentHp() - before);
 
-    const session = this.combatSession;
-    if (session) session.playerStartedAt += EAT_ATTACK_DELAY_MS;
+    this.combatSystem.restartPlayerAttackTimer(at);
 
     this.incrementStatistic(`eaten:${itemDefId}`, 1);
     if (this.catchUp) this.catchUp.eaten++;
     else this.notifications.push("status", `You eat the ${def.name}. It heals ${healed} HP.`);
     return true;
+  }
+
+  /** Gear is locked for the length of a fight (decided: no mid-fight
+   *  swaps), except food, which can be switched any time. */
+  private canChangeSlot(slot: EquipSlot): boolean {
+    if (!this.combatSession || slot === "food") return true;
+    this.notifications.push("status", "You can't change gear mid-fight.", { severity: "warning" });
+    return false;
+  }
+
+  /** How much of a food the player can eat: a stack counts whether it's in
+   *  the inventory or worn in the food slot. */
+  getFoodCount(itemDefId: string): number {
+    const def = this.itemsById.get(itemDefId);
+    if (!def) return 0;
+    return def.stackable ? Math.floor(this.getResourceAmount(itemDefId)) : this.getOwnedCount(itemDefId);
+  }
+
+  /** Uses up part of a stack that may be worn (arrows, food), counted as
+   *  spending, and takes an emptied stack out of its slot. */
+  spendWornStack(itemDefId: string, amount: number): void {
+    this.spendResource(itemDefId, amount);
+    this.clearEmptyWornStacks();
+  }
+
+  /** A worn stack that has run out comes out of its slot. */
+  clearEmptyWornStacks(): void {
+    for (const [slot, value] of Object.entries(this.state.equipment)) {
+      if (!value?.startsWith("stack:")) continue;
+      const itemDefId = value.slice("stack:".length);
+      if (this.getResourceAmount(itemDefId) < 1) delete this.state.equipment[slot as EquipSlot];
+    }
+  }
+
+  /** Bonuses from what's worn right now (see equipmentBonuses.ts). */
+  getEquipmentBonuses(): EquipmentBonuses {
+    return computeEquipmentBonuses(this.state, (id) => this.itemsById.get(id));
+  }
+
+  getSpell(spellId: string | undefined): SpellDefinition | undefined {
+    return spellId ? this.spellsById.get(spellId) : undefined;
+  }
+
+  /** Picks the spell a magic weapon casts. Locked in when a fight starts. */
+  selectSpell(spellId: string): boolean {
+    const spell = this.getSpell(spellId);
+    if (!spell) return false;
+    if (this.getSkillLevel("magic") < spell.levelRequired) {
+      this.notifications.push("status", `${spell.name} needs Magic level ${spell.levelRequired}.`, { severity: "warning" });
+      return false;
+    }
+    this.state.selectedSpellId = spellId;
+    return true;
+  }
+
+  /** Every worn degrading item (Barrows-style, has maxDurability) loses one
+   *  point. At 0 it turns into its broken item, unworn, or dissolves.
+   *  Returns true if anything broke, so a fight can re-read its gear. */
+  wearDegradableGear(): boolean {
+    let broke = false;
+    for (const [slot, value] of Object.entries(this.state.equipment)) {
+      if (!value || value.startsWith("stack:")) continue;
+      const instance = this.state.inventory[value];
+      const def = instance ? this.itemsById.get(instance.itemDefId) : undefined;
+      if (!instance || def?.maxDurability === undefined) continue;
+      instance.durability = (instance.durability ?? def.maxDurability) - 1;
+      if (instance.durability > 0) continue;
+      broke = true;
+      delete this.state.equipment[slot as EquipSlot];
+      if (def.brokenItemId && this.itemsById.has(def.brokenItemId)) {
+        instance.itemDefId = def.brokenItemId;
+        delete instance.durability;
+        this.notifications.push("status", `Your ${def.name} has broken. Bob can repair it.`, { severity: "warning" });
+      } else {
+        delete this.state.inventory[value];
+        this.notifications.push("status", `Your ${def.name} crumbles to dust.`, { severity: "warning" });
+      }
+    }
+    return broke;
+  }
+
+  /** GP to fully repair one copy: a broken item costs its full item's
+   *  repairCostGp, a worn one its share. 0 when there's nothing to fix. */
+  getRepairCost(instanceId: string): number {
+    const instance = this.state.inventory[instanceId];
+    const def = instance ? this.itemsById.get(instance.itemDefId) : undefined;
+    if (!instance || !def) return 0;
+    if (def.repairsTo) return this.itemsById.get(def.repairsTo)?.repairCostGp ?? 0;
+    if (def.maxDurability === undefined || !def.repairCostGp) return 0;
+    const missing = def.maxDurability - (instance.durability ?? def.maxDurability);
+    return missing <= 0 ? 0 : Math.max(1, Math.ceil((def.repairCostGp * missing) / def.maxDurability));
+  }
+
+  /** Repairs one copy at a shop that repairs (Bob), for gold. */
+  repairItem(shopId: string, instanceId: string): boolean {
+    const shop = this.content.shops.find((s) => s.id === shopId);
+    if (!shop?.repairs) return false;
+    if (this.state.currentLocationId !== shop.locationId) {
+      this.notifications.push("status", `You need to be at ${shop.title} to have something repaired.`, { severity: "warning" });
+      return false;
+    }
+    const instance = this.state.inventory[instanceId];
+    const def = instance ? this.itemsById.get(instance.itemDefId) : undefined;
+    const cost = this.getRepairCost(instanceId);
+    if (!instance || !def || cost <= 0) return false;
+    if (this.combatSession && this.isEquipped(instanceId)) return false;
+    if (this.getOwnedCount("gp") < cost) {
+      this.notifications.push("status", `Repairing ${def.name} costs ${cost.toLocaleString()} GP.`, { severity: "warning" });
+      return false;
+    }
+    this.spendResource("gp", cost);
+    const fixedDef = def.repairsTo ? this.itemsById.get(def.repairsTo)! : def;
+    instance.itemDefId = fixedDef.id;
+    instance.durability = fixedDef.maxDurability;
+    this.incrementStatistic("itemsRepaired", 1);
+    this.notifications.push("status", `${shop.npcName} repairs your ${fixedDef.name} for ${cost.toLocaleString()} GP.`);
+    return true;
+  }
+
+  /** GP to refill one charged item (Amulet of Glory). */
+  getRechargeCost(instanceId: string): number {
+    const instance = this.state.inventory[instanceId];
+    const def = instance ? this.itemsById.get(instance.itemDefId) : undefined;
+    if (!instance || def?.maxCharges === undefined) return 0;
+    return Math.max(0, def.maxCharges - (instance.charges ?? 0)) * (def.rechargeCostGp ?? 0);
+  }
+
+  /** Refills a charged item at an NPC who recharges (Aggie), for gold. */
+  rechargeItem(npc: NpcDefinition, instanceId: string): boolean {
+    if (!npc.services?.includes("recharge")) return false;
+    if (this.state.currentLocationId !== npc.locationId) {
+      this.notifications.push("status", `You need to be with ${npc.name} to recharge that.`, { severity: "warning" });
+      return false;
+    }
+    const instance = this.state.inventory[instanceId];
+    const def = instance ? this.itemsById.get(instance.itemDefId) : undefined;
+    if (!instance || def?.maxCharges === undefined) return false;
+    if ((instance.charges ?? 0) >= def.maxCharges) {
+      this.notifications.push("status", `Your ${def.name} is already fully charged.`);
+      return false;
+    }
+    const cost = this.getRechargeCost(instanceId);
+    if (this.getOwnedCount("gp") < cost) {
+      this.notifications.push("status", `Recharging ${def.name} costs ${cost.toLocaleString()} GP.`, { severity: "warning" });
+      return false;
+    }
+    this.spendResource("gp", cost);
+    instance.charges = def.maxCharges;
+    this.notifications.push("status", `${npc.name} recharges your ${def.name} for ${cost.toLocaleString()} GP.`);
+    return true;
+  }
+
+  /** Buries bones or scatters ashes for Prayer XP. Instant. */
+  buryItem(itemDefId: string, quantity = 1): boolean {
+    const def = this.itemsById.get(itemDefId);
+    if (!def?.prayerXp || !isWholeQuantity(quantity) || this.getOwnedCount(itemDefId) < quantity) return false;
+    this.removeOwned(itemDefId, quantity);
+    this.addSkillXp("prayer", def.prayerXp * quantity);
+    this.incrementStatistic(`buried:${itemDefId}`, quantity);
+    this.notifications.push(
+      "status",
+      `You ${itemDefId === "ashes" ? "scatter" : "bury"} ${quantity.toLocaleString()}x ${def.name} (+${(def.prayerXp * quantity).toLocaleString()} Prayer XP).`,
+      { replaceKey: "bury" }
+    );
+    return true;
+  }
+
+  /** Dev tool: every worn-down item back to full, broken ones repaired,
+   *  and every charged item refilled. */
+  devRestoreAllGear(): void {
+    for (const instance of Object.values(this.state.inventory)) {
+      let def = this.itemsById.get(instance.itemDefId);
+      if (def?.repairsTo && this.itemsById.has(def.repairsTo)) {
+        instance.itemDefId = def.repairsTo;
+        def = this.itemsById.get(def.repairsTo);
+      }
+      if (def?.maxDurability !== undefined) instance.durability = def.maxDurability;
+      if (def?.maxCharges !== undefined) instance.charges = def.maxCharges;
+    }
+    this.state.specialEnergy = 100;
+    this.notifications.push("status", "Restored all gear, charges and special attack energy.");
   }
 
   // ── Shops ────────────────────────────────────────────────────────────
@@ -669,21 +985,19 @@ export class GameEngine {
     return Number.isFinite(max) ? Math.max(0, max) : 0;
   }
 
-  /** Buys `quantity` of an item from a shop. Enforces that the player is
+  /** Buys `quantity` of an item from a shop, at the shop's own price from
+   *  content. Enforces that the shop stocks it and that the player is
    *  actually AT the shop's location (not just a UI-hidden check) — same
    *  "engine enforces it, not just the UI" pattern as purchaseBuilding and
-   *  equipItem. `price` is a RecipeInput[] (almost always just GP today,
-   *  but works unchanged for a resource-priced item or, later, trading). */
-  buyFromShop(
-    shopLocationId: string,
-    itemDefId: string,
-    price: RecipeInput[],
-    quantity: number
-  ): boolean {
+   *  equipItem. */
+  buyFromShop(shopId: string, itemDefId: string, quantity: number): boolean {
     if (!isWholeQuantity(quantity)) return false;
+    const shop = this.content.shops.find((s) => s.id === shopId);
+    const price = shop?.items.find((i) => i.itemDefId === itemDefId)?.price;
+    if (!shop || !price) return false;
     const itemName = this.nameOf(itemDefId);
 
-    if (this.state.currentLocationId !== shopLocationId) {
+    if (this.state.currentLocationId !== shop.locationId) {
       this.notifications.push("status", "You need to be at the shop to buy from it.", {
         severity: "warning",
       });
@@ -700,6 +1014,10 @@ export class GameEngine {
       return false;
     }
 
+    // Checked before paying: addItem refuses extra copies of a unique item,
+    // and the money would already be gone.
+    if (!this.canReceive(itemDefId, quantity)) return false;
+
     this.payFor(price, quantity);
     this.addItem(itemDefId, quantity);
     this.incrementStatistic(`shopPurchases:${itemDefId}`, quantity);
@@ -715,11 +1033,14 @@ export class GameEngine {
     return Math.max(1, Math.floor(value * SHOP_SELL_PRICE_FRACTION));
   }
 
-  /** Sells `quantity` of an item to the shop the player is standing at.
-   *  Worn equipment is never sold (getOwnedCount excludes it). */
-  sellToShop(shopLocationId: string, itemDefId: string, quantity: number): boolean {
+  /** Sells `quantity` of an item to a shop that buys items, if the player
+   *  is standing at it. Worn equipment is never sold (getOwnedCount
+   *  excludes it). */
+  sellToShop(shopId: string, itemDefId: string, quantity: number): boolean {
     if (!isWholeQuantity(quantity)) return false;
-    if (this.state.currentLocationId !== shopLocationId) {
+    const shop = this.content.shops.find((s) => s.id === shopId);
+    if (!shop?.buysItems) return false;
+    if (this.state.currentLocationId !== shop.locationId) {
       this.notifications.push("status", "You need to be at the shop to sell to it.", { severity: "warning" });
       return false;
     }
@@ -789,6 +1110,18 @@ export class GameEngine {
     this.state.currentHp = Math.max(0, Math.min(this.getMaxHp(), hp));
   }
 
+  /** Dev tool: moves the player anywhere instantly, ignoring unlock
+   *  requirements. Stops the current action first (forcibly, if it's a
+   *  fight that can't be fled). First visits still count as discoveries. */
+  devTeleport(destination: MapLocation): void {
+    this.catchUpToNow();
+    // A fight just ends: stopping it would flee, which a boss refuses with
+    // a "can't flee" warning right before the teleport happens anyway.
+    if (this.combatSession) this.state.activeAction = null;
+    else this.stopActiveAction();
+    this.travelSystem.arriveDirectly(destination);
+  }
+
   // ── Save-data management (settings tab) ─────────────────────────────────
 
   clearResource(resourceId: ResourceId): void {
@@ -807,6 +1140,7 @@ export class GameEngine {
   resetAll(): void {
     this.state = createInitialState(this.clock());
     this.grantStartingBuildings();
+    this.grantStarterKit(this.content.starterKit ?? []);
     this.notifications.clear();
     this.notifications.push("status", "Save data cleared — starting fresh.");
   }
@@ -826,6 +1160,16 @@ export class GameEngine {
     this.ensureResourceExists(resourceId);
     this.state.resources[resourceId].amount += amount;
     if (opts?.countAsEarned !== false) this.state.resources[resourceId].lifetimeEarned += amount;
+  }
+
+  /** Deducts a resource that was lost rather than spent (death), recorded
+   *  under `${resourceId}:lostOnDeath` so it never counts toward spending
+   *  milestones. */
+  loseResource(resourceId: ResourceId, amount: number): void {
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    this.ensureResourceExists(resourceId);
+    this.state.resources[resourceId].amount -= amount;
+    this.incrementStatistic(`${resourceId}:lostOnDeath`, amount);
   }
 
   /** Deducts a resource AND records it under `${resourceId}:spent` in
@@ -985,6 +1329,20 @@ export class GameEngine {
     return this.craftingSystem.keepGatherSessionAlive();
   }
 
+  /** Time per item this player would get now (level and tool bonuses). */
+  getEffectiveTimePerItem(recipe: CraftingRecipe): number {
+    return this.craftingSystem.getEffectiveTimePerItem(recipe);
+  }
+
+  /** Why a recipe can't start right now (tool, station, unlock), or null. */
+  getRecipeStartBlocker(recipe: CraftingRecipe): string | null {
+    return this.craftingSystem.getStartBlocker(recipe);
+  }
+
+  getBestTool(type: ToolType): ItemDefinition | null {
+    return this.craftingSystem.getBestTool(type).def;
+  }
+
   // TravelSystem (systems/travel.ts)
 
   getTravelSpeedMultiplier(): number {
@@ -1011,16 +1369,18 @@ export class GameEngine {
 
   startCombat(
     enemy: EnemyDefinition,
-    equipmentBonus: {
-      attack: number;
-      strength: number;
-      defence: number;
-      attackSpeedMs?: number;
-      weaponType?: WeaponType;
-    },
+    equipmentBonus?: Partial<EquipmentBonuses>,
     opts?: { autoRepeat?: boolean; autoEatItemId?: string }
   ): boolean {
     return this.combatSystem.startCombat(enemy, equipmentBonus, opts);
+  }
+
+  toggleSpecialAttack(): boolean {
+    return this.combatSystem.toggleSpecialAttack();
+  }
+
+  setCombatStyle(attackStyle: AttackStyle, styleId: string): void {
+    this.combatSystem.setCombatStyle(attackStyle, styleId);
   }
 
   fleeCombat(): boolean {
@@ -1029,6 +1389,14 @@ export class GameEngine {
 
   attackNow(): boolean {
     return this.combatSystem.attackNow();
+  }
+
+  setCombatFood(itemDefId: string): void {
+    this.combatSystem.setCombatFood(itemDefId);
+  }
+
+  setAutoEat(enabled: boolean): void {
+    this.combatSystem.setAutoEat(enabled);
   }
 
   // JobBoardSystem (systems/jobs.ts)

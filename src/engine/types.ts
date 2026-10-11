@@ -41,6 +41,8 @@ export interface BuildingDefinition {
   /** Owned from the start of a new game (or granted to an older save the
    *  first time it loads with this building in content). */
   startingQuantity?: number;
+  /** Construction XP per unit bought. */
+  constructionXp?: number;
 }
 
 /** Everything static the engine needs to look up at runtime. Passed in at
@@ -49,6 +51,65 @@ export interface GameContent {
   buildings: BuildingDefinition[];
   items: ItemDefinition[];
   quests: QuestDefinition[];
+  shops: ShopDefinition[];
+  /** NPCs that offer a service (recharging jewellery). Optional so test
+   *  content can leave it out. */
+  npcs?: NpcDefinition[];
+  /** Combat spells a magic weapon can cast. */
+  spells?: SpellDefinition[];
+  /** Station type -> the location ids that have one, so the engine can
+   *  check a station recipe is started where its station is. */
+  stationLocations?: Partial<Record<StationType, string[]>>;
+  /** Tools every save is given once. */
+  starterKit?: string[];
+}
+
+/** A combat spell: fixed max hit, runes used up per cast. */
+export interface SpellDefinition {
+  id: string;
+  name: string;
+  levelRequired: number;
+  maxHit: number;
+  /** Magic XP per cast, on top of the per-kill combat XP. */
+  baseXp: number;
+  runes: RecipeInput[];
+}
+
+/** A character at a location who talks and may offer a paid service. */
+export interface NpcDefinition {
+  id: string;
+  name: string;
+  locationId: string;
+  /** Lines said when talked to, one picked at random. */
+  dialogue: string[];
+  services?: ("recharge" | "repair")[];
+}
+
+export interface ShopItem {
+  itemDefId: string;
+  /** Cost per unit. Almost always just GP, but this is a RecipeInput[] (the
+   *  same shape building/recipe costs use) rather than a single number, so
+   *  a resource-priced or multi-resource-priced item — or trading — works
+   *  without changing this shape later. */
+  price: RecipeInput[];
+}
+
+export interface ShopDefinition {
+  id: string;
+  npcName: string;
+  title: string;
+  /** The MapLocation id this shop is accessible from — you have to
+   *  physically be there, checked inside GameEngine.buyFromShop and
+   *  sellToShop (so it's enforced, not just hidden). */
+  locationId: string;
+  items: ShopItem[];
+  /** Whether the shop buys items from the player (anything with a value,
+   *  at SHOP_SELL_PRICE_FRACTION of it — see engine/tuning.ts). */
+  buysItems?: boolean;
+  /** Lines the shopkeeper says when talked to, one picked at random. */
+  dialogue?: string[];
+  /** Repairs worn and broken gear for gold (Bob, as in OSRS). */
+  repairs?: boolean;
 }
 
 /**
@@ -123,11 +184,30 @@ export type EquipSlot =
   | "hands"
   | "feet"
   | "ring"
-  | "ammo";
+  | "ammo"
+  /** Food worn here is what fights eat from (Melvor-style). A whole stack,
+   *  like ammo. */
+  | "food";
+
+/** Which family of combat a weapon fights with. Unarmed and any weapon
+ *  without one fight in melee. */
+export type AttackStyle = "melee" | "ranged" | "magic";
+
+/** What a gathering recipe needs in hand. */
+export type ToolType = "axe" | "pickaxe" | "net" | "rod" | "harpoon" | "tinderbox";
+
+/** A tool's effect: the best usable one the player owns sets the speed. */
+export interface ToolStats {
+  type: ToolType;
+  /** Multiplies time per item; 0.9 = 10% faster. Bronze is 1. */
+  speedMultiplier: number;
+  /** Gates USING the tool (not owning it), e.g. Woodcutting 41 for a rune axe. */
+  requirement?: UnlockCondition;
+}
 
 export type ItemRarity = "common" | "uncommon" | "rare" | "legendary";
 
-export type ItemActionId = "equip" | "unequip" | "drop" | "examine" | "eat" | "craft" | "teleport";
+export type ItemActionId = "equip" | "unequip" | "drop" | "examine" | "eat" | "craft" | "teleport" | "bury";
 
 /**
  * Static content definition for an inventory item — lives in content/items.ts,
@@ -142,7 +222,7 @@ export interface ItemDefinition {
   description: string; // examine text
   /** Placeholder for real art later — an emoji or short code is fine for now. */
   image?: string;
-  category: "weapon" | "armor" | "consumable" | "material" | "misc";
+  category: "weapon" | "armor" | "consumable" | "material" | "tool" | "misc";
   rarity?: ItemRarity;
   /** Stackable items are a plain count in the ledger (GameState.resources),
    *  same as currencies. Non-stackable items (equipment) get one instance
@@ -187,9 +267,32 @@ export interface ItemDefinition {
    *  Omit for items no shop will buy. */
   value?: number;
   /** Teleports the player directly to this location id when the "teleport"
-   *  action is used — bypasses normal travel time entirely. Not charge-
-   *  limited yet (see maxDurability note above). */
+   *  action is used — bypasses normal travel time entirely. Uses a charge
+   *  when the item has maxCharges. */
   teleportTo?: string;
+  /** Jewellery charges (Amulet of Glory: 4). Kept per copy on
+   *  ItemInstance.charges; an NPC recharges them for gold. */
+  maxCharges?: number;
+  /** GP per charge to recharge (see content/npcs.ts). */
+  rechargeCostGp?: number;
+  /** Weapon-only: melee (default), ranged (needs ammo) or magic (casts the
+   *  selected spell). */
+  attackStyle?: AttackStyle;
+  /** Weapon-only: id of its special attack (engine/specialAttacks.ts). */
+  specialAttack?: string;
+  /** Rune ids this item supplies without limit while worn (Air Staff: air). */
+  infiniteRunes?: string[];
+  /** Makes this item a gathering tool. */
+  tool?: ToolStats;
+  /** Prayer XP for burying or scattering one. Gives "bury" its meaning. */
+  prayerXp?: number;
+  /** Degrading gear (Barrows-style), with maxDurability: when durability
+   *  reaches 0 the copy turns into this item. Omit to have it dissolve. */
+  brokenItemId?: string;
+  /** On a broken item: the item a repair turns it back into. */
+  repairsTo?: string;
+  /** GP for a full repair from 0; partial wear costs its share. */
+  repairCostGp?: number;
   /** Which actions show up in the click-panel / right-click quick-menu for
    *  this item. Adding a new action to an item is just adding its id here —
    *  no new component code needed unless the action itself is brand new.
@@ -207,6 +310,7 @@ export interface ItemInstance {
   instanceId: string;
   itemDefId: string;
   durability?: number; // present only if the definition has maxDurability
+  charges?: number; // present only if the definition has maxCharges
 }
 
 /**
@@ -274,11 +378,11 @@ export const DEFAULT_NOTIFICATION_DURATIONS: Record<NotificationType, number | n
   reward: 6000,
   production: 6000,
   status: 5000,
-  quest: null,
-  "offline-summary": null,
-  achievement: null, // stays until dismissed — it's a big deal, don't auto-clear it
-  debug: null,
-  error: null,
+  quest: 10000,
+  "offline-summary": 20000,
+  achievement: null, // the only kind that stays until dismissed: it's a big deal
+  debug: 10000,
+  error: 12000,
 };
 
 export interface GameState {
@@ -303,6 +407,14 @@ export interface GameState {
    *  stored separately. Not clamped on read by the type system; the
    *  engine clamps to [0, maxHp] whenever it mutates this. */
   currentHp: number;
+  /** The food last picked for a fight, preselected for the next one. */
+  lastCombatFoodId?: string;
+  /** Special attack energy, 0 to 100. Regenerates over time. */
+  specialEnergy: number;
+  /** The chosen combat style id per attack style (see engine/combatStyles.ts). */
+  combatStyles: Record<AttackStyle, string>;
+  /** The combat spell a magic weapon casts (engine/spells.ts). */
+  selectedSpellId?: string;
   jobs: JobBoardState;
   /** questId -> progress, for quests the player has started. */
   quests: Record<string, QuestProgress>;
@@ -348,7 +460,9 @@ export interface RecipeInput {
  */
 export type UnlockCondition =
   | { kind: "skillLevel"; skill: string; atLeast: number }
-  | { kind: "flag"; flag: string; equals?: boolean } // equals defaults to true
+  // equals defaults to true. `label` is what to tell the player while it's
+  // unmet ("Complete the quest The Overgrown Den"); flags are internal ids.
+  | { kind: "flag"; flag: string; equals?: boolean; label?: string }
   | { kind: "resourceAtLeast"; resource: ResourceId; amount: number }
   | { kind: "resourceLifetimeAtLeast"; resource: ResourceId; amount: number } // milestone — never re-locks
   | { kind: "buildingOwned"; buildingId: string; atLeast: number }
@@ -442,6 +556,13 @@ export interface JobBoardState {
  * Static content definition for a craftable item — lives in your content/data
  * layer (not GameState). Passed into engine.startCraftJob() by the caller.
  */
+export interface BonusDrop {
+  resource: ResourceId;
+  amount: number;
+  /** 0-1, rolled once per item made. */
+  chance: number;
+}
+
 export interface CraftingRecipe {
   id: string;
   name: string;
@@ -450,12 +571,25 @@ export interface CraftingRecipe {
   timePerItemMs: number;
   inputs: RecipeInput[];
   output: RecipeInput;
+  /** What the player is shown as doing while this runs ("Burning Logs",
+   *  "Chopping Willows"). Omit to use the skill's own (see SkillDefinition). */
+  activityLabel?: string;
+  /** Extra chance-based rewards per item made, rolled separately for each
+   *  item (e.g. burning a log: 10% chance of coal). */
+  bonusDrops?: BonusDrop[];
   /** Gates STARTING this recipe (batch craft or gather session) — e.g.
    *  Woodcutting level 30 for Willow Trees. Enforced by the engine itself
    *  in startCraftJob/startGatherSession, same "engine enforces it, not
    *  just the UI" pattern as equipRequirement/purchaseBuilding. */
   unlockCondition?: UnlockCondition;
+  /** A gathering recipe that needs a tool (axe, net...) owned to start.
+   *  The best usable one speeds it up. */
+  tool?: ToolType;
+  /** Only startable at an amenity of this station type (a range, a furnace). */
+  station?: StationType;
 }
+
+export type StationType = "range" | "furnace" | "anvil";
 
 /**
  * The live, in-progress job — denormalized from whatever CraftingRecipe
@@ -470,6 +604,7 @@ export interface ActiveCraftJob {
   xpPerItem: number;
   timePerItemMs: number;
   output: RecipeInput;
+  bonusDrops?: BonusDrop[];
   /** What was actually deducted at start — used to compute a refund if cancelled early. */
   inputsPerItem: RecipeInput[];
   startedAt: number;
@@ -495,6 +630,7 @@ export interface ActiveGatherSession {
   timePerItemMs: number;
   output: RecipeInput;
   startedAt: number;
+  bonusDrops?: BonusDrop[];
   /** Running total granted so far this session. */
   quantityGathered: number;
   /** Hard cap — the session ends on its own after this much elapsed time,
@@ -526,6 +662,9 @@ export interface ActiveCombatSession {
   enemyAttackBonus: number;
   enemyStrengthBonus: number;
   enemyDefenceBonus: number;
+  /** Magic level, which defends against spells. Optional for sessions
+   *  saved before Magic combat; falls back to enemyDefence. */
+  enemyMagic?: number;
   enemyWeakness?: WeaponType;
   canFlee: boolean;
   xpReward: number;
@@ -542,6 +681,24 @@ export interface ActiveCombatSession {
   playerStrengthBonus: number;
   playerDefenceBonus: number;
   playerWeaponType?: WeaponType;
+  /** Fields below are optional for sessions saved before they existed:
+   *  missing means a melee fight with no ranged/magic bonuses. */
+  attackStyle?: AttackStyle;
+  playerRangedBonus?: number;
+  playerRangedStrength?: number;
+  playerMagicBonus?: number;
+  /** Ranged: the arrow stack used up one per shot. */
+  ammoItemId?: string;
+  /** Magic: the spell cast every attack, locked in at the start. */
+  spellId?: string;
+  /** Runes the worn staff supplies, locked in with the spell. */
+  infiniteRunes?: string[];
+  /** The weapon's special attack, if it has one. */
+  specialAttackId?: string;
+  /** The next swing is a special attack (armed by the player). */
+  specArmed?: boolean;
+  /** Damage over time on the enemy, resolved on its own timer. */
+  bleed?: BleedState;
   /**
    * Player and enemy attack on INDEPENDENT timers — not one shared "round."
    * A fast dagger and a slow warhammer genuinely swing at different rates,
@@ -591,8 +748,18 @@ export interface CombatLogEntry {
    *  splat) despite being mechanically different rolls — kept as distinct
    *  categories here anyway since it costs nothing and gives a future UI
    *  more to work with than OSRS itself exposes. */
-  outcome: "miss" | "block" | "hit";
+  outcome: "miss" | "block" | "hit" | "bleed";
   damage: number;
+  /** Part of a special attack. */
+  special?: boolean;
+}
+
+export interface BleedState {
+  damagePerHit: number;
+  hitsLeft: number;
+  intervalMs: number;
+  startedAt: number;
+  resolved: number;
 }
 
 export interface LootEntry {

@@ -2,7 +2,7 @@
 // and condition text, so every screen says "1,000 GP" and "Goblin kills"
 // the same way instead of each formatting raw ids its own way.
 import type { ConditionLabels } from "../engine/unlockConditions";
-import type { RecipeInput } from "../engine/types";
+import type { ActiveAction, RecipeInput } from "../engine/types";
 import { formatDuration, formatNumber } from "../engine/format";
 import { getResourceMeta } from "./resources";
 import { BUILDING_CATALOG } from "./buildings";
@@ -14,6 +14,7 @@ import { getJob } from "./jobs";
 
 const BUILDING_NAMES = new Map(BUILDING_CATALOG.map((b) => [b.id, b.name]));
 const SKILL_NAMES = new Map(SKILL_CATALOG.map((s) => [s.id, s.name]));
+const SKILL_ACTIVITY = new Map(SKILL_CATALOG.map((s) => [s.id, s.activity]));
 
 export function resourceName(id: string): string {
   return getResourceMeta(id).name;
@@ -64,7 +65,10 @@ const STAT_LABELS: Record<string, string> = {
   "buildingsSold:total": "Buildings sold",
   "jobCompletions:total": "Jobs completed",
   "kills:total": "Enemies defeated",
+  deaths: "Deaths",
+  "gp:lostOnDeath": "GP lost on death",
   questsCompleted: "Quests completed",
+  itemsRepaired: "Items repaired",
 };
 
 /** "Goblin kills", "Wooden Bow (u) made", "GP spent". */
@@ -78,6 +82,7 @@ export function statisticName(key: string): string {
     if (kind === "buildingsBought") return `${buildingName(id)} bought`;
     if (kind === "traveledTo") return `Trips to ${getLocation(id)?.name ?? id}`;
     if (kind === "jobCompletions") return `"${getJob(id)?.title ?? id}" completed`;
+    if (kind === "buried") return `${resourceName(id)} ${id === "ashes" ? "scattered" : "buried"}`;
     if (id === "spent") return `${resourceName(kind)} spent`;
   }
   return key;
@@ -96,3 +101,18 @@ export const CONDITION_LABELS: ConditionLabels = {
   statistic: statisticName,
   statisticValue: formatStatisticValue,
 };
+
+/** What the player is doing, for status lines: the recipe's own label
+ *  ("Burning Logs"), else the skill's ("Fletching"), "Traveling to Lake
+ *  Shore" or "Fighting Goblin". */
+export function activityLabel(action: ActiveAction): string {
+  switch (action.kind) {
+    case "craft":
+    case "gather":
+      return getRecipe(action.recipeId)?.activityLabel ?? SKILL_ACTIVITY.get(action.skill) ?? action.recipeName;
+    case "travel":
+      return `Traveling to ${action.destinationName}`;
+    case "combat":
+      return `Fighting ${action.enemyName}`;
+  }
+}

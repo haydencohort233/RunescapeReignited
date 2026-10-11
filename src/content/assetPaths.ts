@@ -2,12 +2,16 @@
 // in exactly one place. Files go under /public/assets/, which Vite serves
 // from the site root.
 //
-//   /assets/items/<Category/Sub>/<slug>.png     (.gif when animated)
+//   /assets/items/<Category>[/<Sub>]/<slug>.png   (.gif when animated)
 //        e.g. /assets/items/Armor/Bronze/bronze_full_helm.png
-//        Category comes from ItemDefinition.assetFolder — category folders
-//        keep this browsable at 1,000+ items, but each item is a single
-//        FILE, not its own folder (a per-item folder doubles the directory
-//        count for no gain when there's only ever one file in it).
+//             /assets/items/Fish/raw_shrimps.png
+//        The folder is ItemDefinition.assetFolder (every item sets one).
+//        Category first (Armor, Weapons, Fish, Logs, Ores, Tools...), then
+//        an optional tier/material subfolder where a category gets big
+//        (Armor/Bronze, Weapons/Dragon). Each item is a single FILE, not
+//        its own folder. File names are the lowercased item name with
+//        underscores (slugify below); itemArt.test.ts fails if a file
+//        exists but sits somewhere the game won't look.
 //   /assets/npcs/<slug>/<slug>.png              base art
 //   /assets/npcs/<slug>/<slug>_<pct>_hurt.png   optional degrade stages
 //        (npcs DO get a folder each, because they legitimately have
@@ -114,6 +118,6 @@ export const HP_BAR_BACKGROUND = `${ASSET_ROOT}/ui/hpbar/background.png`;
 export const HP_BAR_FILL = `${ASSET_ROOT}/ui/hpbar/bar.png`;
 export const HP_BAR_POISONED_FILL = `${ASSET_ROOT}/ui/hpbar/poisoned_bar.png`;
 
-export function hitsplatIconPath(outcome: "hit" | "block" | "miss"): string {
+export function hitsplatIconPath(outcome: "hit" | "block" | "miss" | "bleed"): string {
   return `${ASSET_ROOT}/ui/hitsplats/${outcome}.png`;
 }

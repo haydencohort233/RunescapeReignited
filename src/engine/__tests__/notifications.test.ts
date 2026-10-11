@@ -10,7 +10,7 @@ describe("crafting notifications", () => {
     for (let i = 0; i < 60; i++) g.advance(SECOND);
     const production = g.engine.notifications.getAll().filter((n) => n.type === "production");
     expect(production).toHaveLength(1);
-    expect(production[0].message).toContain("Made x30");
+    expect(production[0].message).toContain("all 30 done");
   });
 });
 

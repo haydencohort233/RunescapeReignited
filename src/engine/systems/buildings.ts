@@ -117,6 +117,7 @@ export class BuildingSystem {
     this.state.buildings[buildingId] = owned + quantity;
     this.engine.incrementStatistic("buildingsBought:total", quantity);
     this.engine.incrementStatistic(`buildingsBought:${buildingId}`, quantity);
+    if (def.constructionXp) this.engine.addSkillXp("construction", def.constructionXp * quantity);
     this.notifications.push("status", `Purchased ${quantity}x ${def.name}.`);
     return true;
   }

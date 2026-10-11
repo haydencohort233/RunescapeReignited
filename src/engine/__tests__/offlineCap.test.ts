@@ -5,10 +5,17 @@ import { CHOP_NORMAL_TREE_RECIPE, WOODEN_BOW_RECIPE } from "../../content/recipe
 
 // Regression: the offline cap used to apply only to the catch-up tick
 // itself. Every action measured from an absolute startedAt, so the NEXT
-// live tick paid out everything the cap had just withheld.
+// live tick paid out everything the cap had just withheld. These pin the
+// cap at 1 hour so the numbers stay readable; the default is 8.
+function cappedEngine() {
+  const g = makeEngine();
+  g.engine.setOfflineCapMs(HOUR);
+  return g;
+}
+
 describe("offline cap", () => {
   it("caps a gathering session across the catch-up tick and the tick after it", () => {
-    const g = makeEngine();
+    const g = cappedEngine();
     g.engine.startGatherSession("trees", CHOP_NORMAL_TREE_RECIPE);
     g.advance(10 * HOUR);
     const afterCatchUp = g.engine.getResourceAmount("wood");
@@ -18,7 +25,7 @@ describe("offline cap", () => {
   });
 
   it("caps a crafting job across the catch-up tick and the tick after it", () => {
-    const g = makeEngine();
+    const g = cappedEngine();
     g.state().resources.wood = { amount: 100_000, lifetimeEarned: 0 };
     g.engine.startCraftJob(WOODEN_BOW_RECIPE, 50_000);
     g.advance(10 * HOUR);
@@ -29,7 +36,7 @@ describe("offline cap", () => {
   });
 
   it("does not shorten a keep-alive window with time beyond the cap", () => {
-    const g = makeEngine();
+    const g = cappedEngine();
     g.engine.startGatherSession("willows", CHOP_NORMAL_TREE_RECIPE, { requiresKeepAliveEveryMs: 2 * HOUR });
     g.advance(10 * HOUR); // only 1h counts, so the 2h keep-alive hasn't lapsed
     g.advance(SECOND);
@@ -37,7 +44,7 @@ describe("offline cap", () => {
   });
 
   it("live ticks under the cap are unaffected", () => {
-    const g = makeEngine();
+    const g = cappedEngine();
     g.engine.startGatherSession("trees", CHOP_NORMAL_TREE_RECIPE);
     for (let i = 0; i < 30; i++) g.advance(SECOND);
     expect(g.engine.getResourceAmount("wood")).toBe(10);

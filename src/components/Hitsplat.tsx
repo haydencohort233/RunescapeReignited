@@ -1,10 +1,11 @@
 import { hitsplatIconPath } from "../content/assetPaths";
 import { isImageLoaded } from "../lib/imagePreloader";
 
-const SPLAT_COLOR: Record<"hit" | "block" | "miss", string> = {
+const SPLAT_COLOR: Record<"hit" | "block" | "miss" | "bleed", string> = {
   hit: "#b91c1c", // red — real damage, matches OSRS
   block: "#2563eb", // blue — landed but rolled 0
   miss: "#9ca3af", // gray — didn't land at all
+  bleed: "#9f1239", // dark crimson — damage over time
 };
 
 /**
@@ -18,7 +19,7 @@ export default function Hitsplat({
   damage,
   offsetIndex,
 }: {
-  outcome: "hit" | "block" | "miss";
+  outcome: "hit" | "block" | "miss" | "bleed";
   damage: number;
   /** Staggers multiple simultaneous splats so they don't fully overlap. */
   offsetIndex: number;

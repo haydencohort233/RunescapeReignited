@@ -1,4 +1,4 @@
-import type { UnlockCondition } from "../engine/types";
+import type { StationType, UnlockCondition } from "../engine/types";
 
 /**
  * Something present AT a location that the player can interact with —
@@ -45,8 +45,13 @@ export interface ResourceNodeAmenity extends BaseAmenity {
 
 export interface CraftingStationAmenity extends BaseAmenity {
   kind: "craftingStation";
-  // Placeholder — no station-gated recipes exist yet (Fletching doesn't
-  // require one currently). This proves the shape exists for when it does.
+  /** Which recipes run here: every recipe with this `station`. */
+  station: StationType;
+}
+
+export interface NpcAmenity extends BaseAmenity {
+  kind: "npc";
+  npcId: string; // references content/npcs.ts
 }
 
 export interface DungeonEntranceAmenity extends BaseAmenity {
@@ -71,7 +76,8 @@ export type Amenity =
   | CraftingStationAmenity
   | DungeonEntranceAmenity
   | JobBoardAmenity
-  | CombatEncounterAmenity;
+  | CombatEncounterAmenity
+  | NpcAmenity;
 
 export const AMENITY_CATALOG: Amenity[] = [
   {
@@ -91,11 +97,44 @@ export const AMENITY_CATALOG: Amenity[] = [
     boardId: "town-board",
   },
   {
+    id: "town-armoury",
+    locationId: "town",
+    kind: "shop",
+    name: "Riverside Armoury",
+    description: "Weapons, armour and arrows.",
+    shopId: "riverside-armoury",
+  },
+  {
+    id: "aubury-runes",
+    locationId: "town",
+    kind: "shop",
+    name: "Aubury's Rune Shop",
+    description: "Runes and staves for aspiring mages.",
+    shopId: "aubury-runes",
+  },
+  {
+    id: "town-range",
+    locationId: "town",
+    kind: "craftingStation",
+    name: "Range",
+    description: "A cooking range. Raw fish cooks here.",
+    station: "range",
+  },
+  {
     id: "town-furnace",
     locationId: "town",
     kind: "craftingStation",
     name: "Furnace",
-    description: "A stone furnace for smithing. Nothing usable here yet.",
+    description: "A stone furnace. Smelt ore into bars here.",
+    station: "furnace",
+  },
+  {
+    id: "town-anvil",
+    locationId: "town",
+    kind: "craftingStation",
+    name: "Anvil",
+    description: "Hammer bars into weapons, armour and tools.",
+    station: "anvil",
   },
   {
     id: "lake-shore-flax-field",
@@ -107,13 +146,13 @@ export const AMENITY_CATALOG: Amenity[] = [
     recipeId: "pick-flax",
     gatherMode: "batch",
   },
-  // Normal Trees: same recipe at TWO locations — proves a resource can be
+  // Regular Trees: same recipe at TWO locations — proves a resource can be
   // available in multiple areas without any special-casing.
   {
     id: "town-trees",
     locationId: "town",
     kind: "resourceNode",
-    name: "Trees",
+    name: "Regular Trees",
     description: "A stand of ordinary trees.",
     actionLabel: "Chop Tree",
     recipeId: "chop-normal-tree",
@@ -123,7 +162,7 @@ export const AMENITY_CATALOG: Amenity[] = [
     id: "dark-forest-trees",
     locationId: "dark-forest",
     kind: "resourceNode",
-    name: "Trees",
+    name: "Regular Trees",
     description: "More of the same trees, deeper in.",
     actionLabel: "Chop Tree",
     recipeId: "chop-normal-tree",
@@ -160,6 +199,115 @@ export const AMENITY_CATALOG: Amenity[] = [
     description: "A goblin, spoiling for a fight.",
     enemyId: "goblin",
   },
+  // ── Lake Shore fishing ──
+  {
+    id: "lake-shore-net-spot",
+    locationId: "lake-shore",
+    kind: "resourceNode",
+    name: "Net Fishing Spot",
+    description: "Shallow water full of shrimps.",
+    actionLabel: "Net Shrimps",
+    recipeId: "fish-shrimps",
+    gatherMode: "session",
+  },
+  {
+    id: "lake-shore-rod-spot",
+    locationId: "lake-shore",
+    kind: "resourceNode",
+    name: "Rod Fishing Spot",
+    description: "Trout rise here in the current.",
+    actionLabel: "Catch Trout",
+    recipeId: "fish-trout",
+    gatherMode: "session",
+  },
+  {
+    id: "lake-shore-tuna-spot",
+    locationId: "lake-shore",
+    kind: "resourceNode",
+    name: "Harpoon Fishing Spot",
+    description: "Deeper water. Tuna swim here.",
+    actionLabel: "Harpoon Tuna",
+    recipeId: "fish-tuna",
+    gatherMode: "session",
+  },
+  {
+    id: "lake-shore-shark-spot",
+    locationId: "lake-shore",
+    kind: "resourceNode",
+    name: "Shark Fishing Spot",
+    description: "Something large circles out past the drop-off.",
+    actionLabel: "Harpoon Sharks",
+    recipeId: "fish-shark",
+    gatherMode: "session",
+  },
+  {
+    id: "lake-shore-fishing-shop",
+    locationId: "lake-shore",
+    kind: "shop",
+    name: "Gerrant's Fishy Business",
+    description: "Fishing gear.",
+    shopId: "gerrants-fishing",
+  },
+  // ── Lumber Camp ──
+  {
+    id: "lumber-camp-trees",
+    locationId: "lumber-camp",
+    kind: "resourceNode",
+    name: "Regular Trees",
+    description: "Trees the camp hasn't got to yet.",
+    actionLabel: "Chop Tree",
+    recipeId: "chop-normal-tree",
+    gatherMode: "session",
+  },
+  {
+    id: "lumber-camp-bandit",
+    locationId: "lumber-camp",
+    kind: "combatEncounter",
+    name: "Bandit",
+    description: "A bandit who preys on the woodcutters.",
+    enemyId: "bandit",
+  },
+  // ── Hidden Grove ──
+  {
+    id: "hidden-grove-oaks",
+    locationId: "hidden-grove",
+    kind: "resourceNode",
+    name: "Oak Trees",
+    description: "Old oaks in a quiet clearing.",
+    actionLabel: "Chop Oak",
+    recipeId: "chop-oak-tree",
+    gatherMode: "session",
+  },
+  // ── Quarry ──
+  {
+    id: "quarry-copper",
+    locationId: "quarry",
+    kind: "resourceNode",
+    name: "Copper Rocks",
+    description: "Rocks streaked with copper.",
+    actionLabel: "Mine Copper",
+    recipeId: "mine-copper",
+    gatherMode: "session",
+  },
+  {
+    id: "quarry-tin",
+    locationId: "quarry",
+    kind: "resourceNode",
+    name: "Tin Rocks",
+    description: "Rocks with a dull grey tin seam.",
+    actionLabel: "Mine Tin",
+    recipeId: "mine-tin",
+    gatherMode: "session",
+  },
+  // ── Draynor Village ──
+  {
+    id: "draynor-aggie",
+    locationId: "draynor-village",
+    kind: "npc",
+    name: "Aggie",
+    description: "A witch who knows how to put the magic back into jewellery.",
+    npcId: "aggie",
+  },
 ];
 
 /** One icon per amenity kind, used wherever amenities are listed. */
@@ -170,6 +318,7 @@ export const AMENITY_ICON: Record<Amenity["kind"], string> = {
   dungeonEntrance: "🕳️",
   jobBoard: "📋",
   combatEncounter: "⚔️",
+  npc: "💬",
 };
 
 export function getAmenitiesAtLocation(locationId: string): Amenity[] {

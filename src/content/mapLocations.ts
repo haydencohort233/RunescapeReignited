@@ -42,7 +42,21 @@ export const MAP_LOCATIONS: MapLocation[] = [
     x: 1400,
     y: 600,
     // Chained-unlock example: only reachable after discovering Lake Shore.
-    unlockCondition: { kind: "flag", flag: "discoveredLakeShore" },
+    unlockCondition: { kind: "flag", flag: "discoveredLakeShore", label: "Discover Lake Shore first" },
+  },
+  {
+    // Mining: copper and tin rocks.
+    id: "quarry",
+    name: "Quarry",
+    x: 1250,
+    y: 1180,
+  },
+  {
+    // Aggie the witch lives here and recharges jewellery.
+    id: "draynor-village",
+    name: "Draynor Village",
+    x: 720,
+    y: 920,
   },
 ];
 

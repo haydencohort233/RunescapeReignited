@@ -11,7 +11,7 @@ export const QUEST_CATALOG: QuestDefinition[] = [
     stages: [
       {
         description: "Travel to the Dark Forest.",
-        objective: { kind: "flag", flag: "visited:dark-forest" },
+        objective: { kind: "flag", flag: "visited:dark-forest", label: "Travel to the Dark Forest" },
       },
       {
         description: "Defeat 3 goblins near the den.",

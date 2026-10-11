@@ -4,17 +4,20 @@ import { ITEM_CATALOG } from "../content/items";
 import { SKILL_CATALOG } from "../content/skills";
 import { MAX_LEVEL } from "../engine/xpCurve";
 import { BUILDING_CATALOG } from "../content/buildings";
+import { MAP_LOCATIONS, getLocation } from "../content/mapLocations";
 import { getThemeChoice, setThemeChoice, type ThemeChoice } from "../lib/theme";
 import { Page, Section } from "./ui/Page";
 import { requestConfirm } from "../lib/dialog";
+import RichText from "./Richtext";
 
 export default function SettingsPanel() {
-  const { engine, autosaveMs, actions } = useGame();
+  const { engine, state, autosaveMs, actions } = useGame();
   const importInputRef = useRef<HTMLInputElement>(null);
   const [spawnItemId, setSpawnItemId] = useState(ITEM_CATALOG[0].id);
   const [levelInputs, setLevelInputs] = useState<Record<string, number>>({});
   const [theme, setTheme] = useState<ThemeChoice>(getThemeChoice);
   const [pastedSave, setPastedSave] = useState("");
+  const [teleportId, setTeleportId] = useState(MAP_LOCATIONS[0].id);
 
   // Dev actions don't all notify, so re-render explicitly afterwards.
   const dev = (fn: () => void) => () => {
@@ -192,6 +195,37 @@ export default function SettingsPanel() {
             </span>
           </div>
           <div className="row row-between">
+            <span>
+              Gear <span className="text-faint">· repairs all wear, refills charges and special energy</span>
+            </span>
+            <button type="button" className="btn" onClick={dev(() => engine.devRestoreAllGear())}>
+              Restore all gear
+            </button>
+          </div>
+          <div className="row row-between">
+            <span>
+              Teleport <span className="text-faint">· ignores requirements, ends any fight</span>
+            </span>
+            <span className="btn-row">
+              <select id="dev-teleport" value={teleportId} onChange={(e) => setTeleportId(e.target.value)}>
+                {MAP_LOCATIONS.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name}
+                    {location.id === state.currentLocationId ? " (here)" : ""}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn"
+                disabled={teleportId === state.currentLocationId}
+                onClick={dev(() => engine.devTeleport(getLocation(teleportId)!))}
+              >
+                Go
+              </button>
+            </span>
+          </div>
+          <div className="row row-between">
             <select id="spawn-item" value={spawnItemId} onChange={(e) => setSpawnItemId(e.target.value)}>
               {ITEM_CATALOG.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -246,7 +280,9 @@ export default function SettingsPanel() {
               key={n.id}
               className={`data-row text-small${n.severity === "error" ? " text-danger" : ""}`}
             >
-              <span>{n.message}</span>
+              <span>
+                <RichText text={n.message} />
+              </span>
               <span className="text-faint">{new Date(n.timestamp).toLocaleTimeString()}</span>
             </div>
           ))}

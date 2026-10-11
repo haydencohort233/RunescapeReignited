@@ -17,6 +17,7 @@ describe("buildings", () => {
   it("a rebalanced building rate reaches an existing save", () => {
     const before = new GameEngine(GAME_CONTENT, { clock });
     before.getState().resources.gp = { amount: 1000, lifetimeEarned: 1000 };
+    before.getState().resources.wood = { amount: 1000, lifetimeEarned: 1000 };
     before.purchaseBuilding("lumbermill", 2);
     const after = GameEngine.deserialize(before.serialize(), withLumbermillRate(99), { clock });
     expect(after.getBuildingQuantity("lumbermill")).toBe(2);
@@ -33,6 +34,7 @@ describe("buildings", () => {
   it("selling refunds half of what the last units cost and lowers the next price", () => {
     const engine = new GameEngine(GAME_CONTENT, { clock });
     engine.getState().resources.gp = { amount: 1000, lifetimeEarned: 1000 };
+    engine.getState().resources.wood = { amount: 1000, lifetimeEarned: 1000 };
     const firstPrice = engine.getBuildingPurchaseCost("lumbermill", 1)![0].amount;
     engine.purchaseBuilding("lumbermill", 1);
     const gpAfterBuy = engine.getResourceAmount("gp");
@@ -49,6 +51,7 @@ describe("buildings", () => {
     };
     const engine = new GameEngine(content, { clock });
     engine.getState().resources.gp = { amount: 10_000, lifetimeEarned: 10_000 };
+    engine.getState().resources.wood = { amount: 1000, lifetimeEarned: 1000 };
     expect(engine.purchaseBuilding("lumbermill", 3)).toBe(false);
     expect(engine.purchaseBuilding("lumbermill", 2)).toBe(true);
     expect(engine.purchaseBuilding("lumbermill", 1)).toBe(false);

@@ -79,7 +79,7 @@ export function describeUnmetCondition(
     case "skillLevel":
       return `Requires ${l.skill(condition.skill)} level ${condition.atLeast}`;
     case "flag":
-      return `Not unlocked yet`;
+      return condition.label ?? `Not unlocked yet`;
     case "resourceAtLeast":
       return `Requires ${condition.amount.toLocaleString()} ${l.resource(condition.resource)}`;
     case "resourceLifetimeAtLeast":

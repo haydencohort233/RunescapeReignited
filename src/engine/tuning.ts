@@ -19,10 +19,6 @@ export const ENEMY_RESPAWN_MS = 2400;
  *  toward a death while the player is away. */
 export const AUTO_EAT_BELOW_HP_FRACTION = 0.5;
 
-/** Eating during a fight pushes your next attack back by this much
- *  (OSRS: 3 ticks). Food is a tradeoff, not a free heal. */
-export const EAT_ATTACK_DELAY_MS = 1800;
-
 // ── Combat ──
 
 /** Fastest anything can attack (one OSRS game tick). Also a safety floor:
@@ -48,10 +44,19 @@ export const UNARMED_ATTACK_SPEED_MS = 4000;
  *  hits harder, it doesn't make you hit more often. */
 export const WEAKNESS_DAMAGE_MULTIPLIER = 1.25;
 
-/** Share of GP and of every other stack lost on death, unless the enemy
- *  overrides it (EnemyDefinition.deathPenalty). */
+/** Share of GP lost on death, unless the enemy overrides it
+ *  (EnemyDefinition.deathPenalty). Decided: death takes only GP, so other
+ *  stacks default to 0. */
 export const DEFAULT_DEATH_GP_LOSS_PERCENT = 0.1;
-export const DEFAULT_DEATH_RESOURCE_LOSS_PERCENT = 0.05;
+export const DEFAULT_DEATH_RESOURCE_LOSS_PERCENT = 0;
+
+/** Of a kill's combat XP, the share Hitpoints gets; the rest goes to the
+ *  skills the combat style trains. */
+export const HITPOINTS_XP_SHARE = 0.25;
+
+/** Special attack energy regained per millisecond: 10% every 30 seconds,
+ *  as in OSRS. */
+export const SPECIAL_ENERGY_REGEN_PER_MS = 10 / 30_000;
 
 // ── Hitpoints, travel, offline ──
 
@@ -68,10 +73,20 @@ export const DEFAULT_MS_PER_DISTANCE_UNIT = 50;
 /** Default cap on how much real-world absence counts toward production and
  *  crafting rewards. Stored per-save (state.offlineCapMs), not hardcoded, so
  *  a future upgrade/item can extend it — this is just the starting value. */
-export const DEFAULT_OFFLINE_CAP_MS = 60 * 60 * 1000; // 1 hour
+export const DEFAULT_OFFLINE_CAP_MS = 8 * 60 * 60 * 1000; // 8 hours
 
 /** Default hard cap on a single open-ended gathering session (Woodcutting
  *  etc.) — separate constant from DEFAULT_OFFLINE_CAP_MS on purpose, since
  *  they answer different questions ("how much away-time counts at all" vs
  *  "how long can one continuous gathering session run"). */
 export const DEFAULT_GATHER_MAX_DURATION_MS = 8 * 60 * 60 * 1000; // 8 hours
+
+// ── Gathering ──
+
+/** Gathering gets up to this much faster with level: 0 at level 1, the
+ *  full amount at 99. Kept small on purpose so tools and buffs can stack
+ *  on top without actions dropping to fractions of a second. */
+export const MAX_GATHER_LEVEL_SPEED_BONUS = 0.1;
+
+/** No gathering action ever gets faster than this, whatever stacks. */
+export const MIN_GATHER_TIME_MS = 600;

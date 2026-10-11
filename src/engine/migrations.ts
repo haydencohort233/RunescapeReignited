@@ -2,6 +2,7 @@ import type { GameState } from "./types";
 import { getDailyPeriodNumber } from "./time";
 import { DEFAULT_OFFLINE_CAP_MS } from "./tuning";
 import { SCHEMA_VERSION, STARTING_HITPOINTS_XP, STARTING_LOCATION_ID } from "./state";
+import { DEFAULT_COMBAT_STYLES } from "./combatStyles";
 
 /**
  * Migration chain: each entry transforms the state shape from version N to
@@ -216,6 +217,18 @@ const MIGRATIONS: Record<number, (old: any, now: number) => any> = {
   },
   // v19 -> v20: quests added.
   19: (old) => ({ ...old, quests: old.quests ?? {} }),
+  // v20 -> v21: the food picked for a fight is remembered for the next one.
+  // Nothing to carry over; older saves just start with none remembered.
+  20: (old) => old,
+  // v21 -> v22: combat styles, special attack energy and spells. The
+  // offline cap went from 1 hour to 8; it's stored per save, so raise
+  // existing saves too (never lower one a future upgrade already raised).
+  21: (old) => ({
+    ...old,
+    offlineCapMs: Math.max(typeof old.offlineCapMs === "number" ? old.offlineCapMs : 0, DEFAULT_OFFLINE_CAP_MS),
+    specialEnergy: 100,
+    combatStyles: { ...DEFAULT_COMBAT_STYLES },
+  }),
 };
 
 /** Brings a parsed save of any version up to the current GameState shape:
@@ -258,6 +271,14 @@ export function migrateSave(parsed: any, now: number): GameState {
     activeAction: sanitizeAction(parsed.activeAction),
     currentLocationId: typeof parsed.currentLocationId === "string" ? parsed.currentLocationId : STARTING_LOCATION_ID,
     currentHp: finiteOr(parsed.currentHp, 10, 0),
+    lastCombatFoodId: typeof parsed.lastCombatFoodId === "string" ? parsed.lastCombatFoodId : undefined,
+    specialEnergy: Math.min(100, finiteOr(parsed.specialEnergy, 100, 0)),
+    combatStyles: {
+      melee: typeof parsed.combatStyles?.melee === "string" ? parsed.combatStyles.melee : DEFAULT_COMBAT_STYLES.melee,
+      ranged: typeof parsed.combatStyles?.ranged === "string" ? parsed.combatStyles.ranged : DEFAULT_COMBAT_STYLES.ranged,
+      magic: typeof parsed.combatStyles?.magic === "string" ? parsed.combatStyles.magic : DEFAULT_COMBAT_STYLES.magic,
+    },
+    selectedSpellId: typeof parsed.selectedSpellId === "string" ? parsed.selectedSpellId : undefined,
     jobs: {
       accepted: isRecord(parsed.jobs?.accepted) ? parsed.jobs.accepted : {},
       lastCompletedPeriod: isRecord(parsed.jobs?.lastCompletedPeriod) ? parsed.jobs.lastCompletedPeriod : {},
@@ -269,9 +290,12 @@ export function migrateSave(parsed: any, now: number): GameState {
     offlineCapMs: finiteOr(parsed.offlineCapMs, DEFAULT_OFFLINE_CAP_MS, 0),
     version: SCHEMA_VERSION,
   };
-  // Equipment may only point at instances that still exist.
+  // Equipment may only point at instances that still exist, or at a worn
+  // stack (`stack:<id>`, see ledger.ts) that still has something in it.
   for (const [slot, instanceId] of Object.entries(isRecord(parsed.equipment) ? parsed.equipment : {})) {
-    if (typeof instanceId === "string" && withDefaults.inventory[instanceId]) {
+    if (typeof instanceId !== "string") continue;
+    const stackId = instanceId.startsWith("stack:") ? instanceId.slice("stack:".length) : null;
+    if (stackId ? (withDefaults.resources[stackId]?.amount ?? 0) >= 1 : withDefaults.inventory[instanceId]) {
       (withDefaults.equipment as Record<string, string>)[slot] = instanceId;
     }
   }
@@ -330,13 +354,28 @@ function sanitizeAction(raw: unknown): GameState["activeAction"] {
     case "travel":
       return finite(raw.startedAt) && finite(raw.durationMs) ? (raw as GameState["activeAction"]) : null;
     case "combat":
-      return positive(raw.playerAttackSpeedMs) &&
-        positive(raw.enemyAttackSpeedMs) &&
-        finite(raw.playerStartedAt) &&
-        finite(raw.enemyStartedAt) &&
-        Array.isArray(raw.log)
-        ? (raw as GameState["activeAction"])
-        : null;
+      if (
+        !positive(raw.playerAttackSpeedMs) ||
+        !positive(raw.enemyAttackSpeedMs) ||
+        !finite(raw.playerStartedAt) ||
+        !finite(raw.enemyStartedAt) ||
+        !Array.isArray(raw.log)
+      ) {
+        return null;
+      }
+      // A missing counter would make every "next attack" time NaN, and the
+      // fight would resolve thousands of enemy attacks on the first tick.
+      for (const key of ["playerAttacksResolved", "enemyAttacksResolved", "kills"] as const) {
+        if (!finite(raw[key])) raw[key] = 0;
+      }
+      // Same for a bleed: any bad timing field and it's dropped.
+      if (raw.bleed !== undefined) {
+        const b = raw.bleed;
+        if (!isRecord(b) || !positive(b.intervalMs) || !finite(b.startedAt) || !finite(b.resolved) || !finite(b.hitsLeft) || !finite(b.damagePerHit)) {
+          delete raw.bleed;
+        }
+      }
+      return raw as GameState["activeAction"];
     default:
       return null;
   }

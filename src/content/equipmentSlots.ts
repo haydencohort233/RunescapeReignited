@@ -13,4 +13,5 @@ export const EQUIPMENT_SLOTS: { id: EquipSlot; label: string }[] = [
   { id: "feet", label: "Boots" },
   { id: "ring", label: "Ring" },
   { id: "ammo", label: "Ammo" },
+  { id: "food", label: "Food" },
 ];

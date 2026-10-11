@@ -13,8 +13,8 @@ describe("bad input is rejected, not half-applied", () => {
     expect(g.engine.startCraftJob(WOODEN_BOW_RECIPE, q)).toBe(false);
     expect(g.engine.purchaseBuilding("lumbermill", q)).toBe(false);
     expect(g.engine.sellBuilding("lumbermill", q)).toBe(false);
-    expect(g.engine.buyFromShop("town", "bronze-dagger", [{ resource: "gp", amount: 50 }], q)).toBe(false);
-    expect(g.engine.sellToShop("town", "bones", q)).toBe(false);
+    expect(g.engine.buyFromShop("bobs-famous-axes", "bronze-dagger", q)).toBe(false);
+    expect(g.engine.sellToShop("bobs-famous-axes", "bones", q)).toBe(false);
     expect(JSON.stringify(g.state())).toBe(before);
   });
 
