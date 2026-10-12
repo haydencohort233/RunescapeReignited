@@ -74,7 +74,7 @@ describe("combat styles", () => {
 });
 
 describe("Ranged", () => {
-  it("uses one arrow per shot and stops when they run out", () => {
+  it("uses one arrow per shot; out of arrows, the fight goes on but you can't attack", () => {
     const g = fighter();
     equip(g, "wooden-bow");
     g.engine.addItem("bronze-arrow", 3);
@@ -84,7 +84,22 @@ describe("Ranged", () => {
     g.advance(2400 * 3);
     expect(g.engine.getResourceAmount("bronze-arrow")).toBe(0);
     expect(g.state().equipment.ammo).toBeUndefined();
-    g.advance(2400);
+    const hp = combat(g).enemyCurrentHp;
+    g.advance(2400 * 5);
+    expect(combat(g).outOfSupplies).toBe(true);
+    expect(combat(g).enemyCurrentHp).toBe(hp);
+    expect(g.engine.attackNow()).toBe(false);
+    expect(g.engine.fleeCombat()).toBe(true);
+  });
+
+  it("keep fighting doesn't respawn the enemy once the arrows are gone", () => {
+    const g = fighter();
+    equip(g, "wooden-bow");
+    g.engine.addItem("bronze-arrow", 1);
+    equip(g, "bronze-arrow");
+    g.engine.startCombat({ ...DUMMY, maxHp: 1, defence: 1, defenceBonus: -200 }, undefined, { autoRepeat: true });
+    for (let i = 0; i < 20 && g.state().activeAction; i++) g.advance(2400);
+    expect(g.state().statistics["kills:goblin"]).toBe(1);
     expect(g.state().activeAction).toBeNull();
   });
 
@@ -107,7 +122,8 @@ describe("Magic", () => {
     expect(g.engine.getResourceAmount("mind-rune")).toBe(1);
     expect(g.engine.getSkillXp("magic") - magicXp).toBeCloseTo(5.5);
     g.advance(3000 * 2);
-    expect(g.state().activeAction).toBeNull();
+    expect(g.engine.getResourceAmount("mind-rune")).toBe(0);
+    expect(combat(g).outOfSupplies).toBe(true);
   });
 
   it("needs a spell and the level for it", () => {
@@ -334,12 +350,18 @@ describe("gathering", () => {
     expect(g.engine.startCraftJob(getRecipe("cook-shrimps")!, 1)).toBe(true);
   });
 
-  it("burying bones gives Prayer XP", () => {
+  it("burying bones takes a second each and gives Prayer XP", () => {
     const g = makeEngine();
     g.engine.addItem("bones", 10);
-    expect(g.engine.buryItem("bones", 10)).toBe(true);
-    expect(g.engine.getSkillXp("prayer")).toBeCloseTo(45);
+    expect(g.engine.startCraftJob(getRecipe("bury-bones")!, 10)).toBe(true);
     expect(g.engine.getOwnedCount("bones")).toBe(0);
+    g.advance(5 * SECOND);
+    expect(g.engine.getSkillXp("prayer")).toBeCloseTo(4.5 * 5);
+    g.advance(5 * SECOND);
+    expect(g.engine.getSkillXp("prayer")).toBeCloseTo(45);
+    // Grave Digger still counts buried bones.
+    expect(g.state().statistics["buried:bones"]).toBe(10);
+    expect(g.state().activeAction).toBeNull();
   });
 });
 
@@ -399,18 +421,23 @@ describe("Overgrown Den dungeon", () => {
     return g;
   }
 
-  it("needs the quest done and limits the loadout to 6 slots", () => {
+  it("needs the quest done and limits the loadout to 6 pieces of gear", () => {
     const g = atDen();
+    const daggers = g.engine.addItem("bronze-dagger", 7).map((instanceId) => ({ itemDefId: "bronze-dagger", instanceId, quantity: 1 }));
+    expect(g.engine.getDungeonEnterBlocker("overgrown-den", daggers)).toMatch(/only bring 6/);
+    expect(g.engine.getDungeonEnterBlocker("overgrown-den", daggers.slice(0, 6))).toBeNull();
+    // Food never takes a slot.
     g.engine.addItem("shark", 20);
-    expect(g.engine.getDungeonEnterBlocker("overgrown-den", [{ itemDefId: "shark", quantity: 7 }])).toMatch(/only bring 6/);
+    expect(g.engine.getLoadoutSlotsUsed([...daggers.slice(0, 6), { itemDefId: "shark", quantity: 20 }])).toBe(6);
     g.engine.setFlag("investigatedDen", false);
-    expect(g.engine.enterDungeon("overgrown-den", [{ itemDefId: "shark", quantity: 2 }])).toBe(false);
+    expect(g.engine.enterDungeon("overgrown-den", [])).toBe(false);
   });
 
   it("runs the waves, stops to regear before the boss, then clears it", () => {
     const g = atDen();
     g.engine.addItem("shark", 20);
-    expect(g.engine.enterDungeon("overgrown-den", [{ itemDefId: "shark", quantity: 4 }])).toBe(true);
+    equip(g, "shark");
+    expect(g.engine.enterDungeon("overgrown-den", [])).toBe(true);
     for (let i = 0; i < 300 && !g.state().dungeonRun?.awaitingBoss; i++) g.advance(SECOND);
     const run = g.state().dungeonRun!;
     expect(run.awaitingBoss).toBe(true);
@@ -426,22 +453,24 @@ describe("Overgrown Den dungeon", () => {
     expect(g.state().statistics["dungeonClears:overgrown-den"]).toBe(1);
   });
 
-  it("only loadout food is eaten inside, and only loadout gear can be equipped", () => {
+  it("the worn food comes in free, other food stays out, and only loadout gear can be equipped", () => {
     const g = atDen();
-    g.engine.addItem("shark", 10);
-    equip(g, "shark"); // worn food doesn't come in by itself
+    g.engine.addItem("shark", 2);
+    g.engine.addItem("trout", 10);
+    equip(g, "shark");
     const [dagger] = g.engine.addItem("bronze-dagger", 1);
     const [dds] = g.engine.addItem("dragon-dagger", 1);
     g.engine.enterDungeon("overgrown-den", [
-      { itemDefId: "shark", quantity: 2 },
+      { itemDefId: "trout", quantity: 5 }, // food can't be packed; ignored
       { itemDefId: "dragon-dagger", instanceId: dds, quantity: 1 },
     ]);
     expect(g.engine.getFoodCount("shark")).toBe(2);
+    expect(g.engine.getFoodCount("trout")).toBe(0);
     g.engine.devSetCurrentHp(1);
     g.engine.eatItem("shark");
     g.engine.eatItem("shark");
     expect(g.engine.eatItem("shark")).toBe(false);
-    expect(g.engine.getResourceAmount("shark")).toBe(8);
+    expect(g.engine.eatItem("trout")).toBe(false);
 
     for (let i = 0; i < 300 && !g.state().dungeonRun?.awaitingBoss && g.state().dungeonRun; i++) g.advance(SECOND);
     expect(g.state().dungeonRun?.awaitingBoss).toBe(true);
@@ -450,6 +479,24 @@ describe("Overgrown Den dungeon", () => {
     expect(g.engine.equipItem(g.engine.itemsById.get("dragon-dagger")!, dds)).toBe(true);
     // The scimitar taken off can go back on.
     expect(g.engine.equipItem(g.engine.itemsById.get("dragon-scimitar")!, Object.values(g.state().inventory).find((i) => i.itemDefId === "dragon-scimitar")!.instanceId)).toBe(true);
+  });
+
+  it("a saved loadout skips copies no longer owned and survives a save", () => {
+    const g = atDen();
+    const [dds, dagger] = [...g.engine.addItem("dragon-dagger", 1), ...g.engine.addItem("bronze-dagger", 1)];
+    expect(
+      g.engine.setSavedLoadout("overgrown-den", [
+        { itemDefId: "dragon-dagger", instanceId: dds, quantity: 1 },
+        { itemDefId: "bronze-dagger", instanceId: dagger, quantity: 1 },
+        { itemDefId: "shark", quantity: 5 },
+      ])
+    ).toBe(true);
+    g.engine.dropItem(g.engine.itemsById.get("bronze-dagger")!, dagger);
+    expect(g.engine.getSavedLoadout("overgrown-den")).toEqual([{ itemDefId: "dragon-dagger", instanceId: dds, quantity: 1 }]);
+    const loaded = GameEngine.deserialize(g.engine.serialize(), GAME_CONTENT, { clock: () => g.now() });
+    expect(loaded.getSavedLoadout("overgrown-den")).toHaveLength(1);
+    const seven = g.engine.addItem("bronze-dagger", 7).map((instanceId) => ({ itemDefId: "bronze-dagger", instanceId, quantity: 1 }));
+    expect(g.engine.setSavedLoadout("overgrown-den", seven)).toBe(false);
   });
 
   it("leaving or dying ends the run, and a run survives a save", () => {

@@ -1,7 +1,9 @@
 import type { ShopDefinition, ShopItem } from "../engine/types";
+import { ITEM_CATALOG } from "./items";
 export type { ShopDefinition, ShopItem };
 
 const gp = (amount: number) => [{ resource: "gp", amount }];
+const ITEM_VALUE = new Map(ITEM_CATALOG.map((i) => [i.id, i.value]));
 
 // Shop names, NPCs and prices beyond Bob's are proposed. Tool prices
 // follow OSRS.
@@ -42,6 +44,14 @@ export const SHOP_CATALOG: ShopDefinition[] = [
       { itemDefId: "wooden-shield", price: gp(20) },
       { itemDefId: "bronze-full-helm", price: gp(60) },
       { itemDefId: "bronze-arrow", price: gp(2) },
+      // Every metal tier (added Oct 11, proposed): armour and arrows at
+      // their item value; Defence and Ranged levels gate wearing them.
+      ...["iron", "steel", "mithril", "adamant", "rune"].flatMap((m) =>
+        ["full-helm", "platebody", "platelegs", "kiteshield", "arrow"].map((piece) => ({
+          itemDefId: `${m}-${piece}`,
+          price: gp(ITEM_VALUE.get(`${m}-${piece}`) ?? 1),
+        }))
+      ),
     ],
     buysItems: true,
     dialogue: ["A bow's no use without arrows. I sell those too.", "Bronze won't stop a dragon, but it'll stop a goblin."],

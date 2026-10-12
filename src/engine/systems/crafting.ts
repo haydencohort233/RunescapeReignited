@@ -127,6 +127,7 @@ export class CraftingSystem {
       xpPerItem: recipe.xpPerItem,
       timePerItemMs,
       output: recipe.output,
+      extraStatistic: recipe.extraStatistic,
       bonusDrops: recipe.bonusDrops,
       inputsPerItem: recipe.inputs,
       // The real current time, not the last tick: the tick can be stale
@@ -165,7 +166,7 @@ export class CraftingSystem {
   /** The output of `count` finished items, plus each bonus drop rolled
    *  once per item. Shared by crafting jobs and gathering sessions. */
   private grantOutput(output: CraftingRecipe["output"], bonusDrops: BonusDrop[] | undefined, count: number): void {
-    this.engine.addItem(output.resource, output.amount * count);
+    if (output) this.engine.addItem(output.resource, output.amount * count);
     for (const drop of bonusDrops ?? []) {
       let hits = 0;
       for (let i = 0; i < count; i++) if (Math.random() < drop.chance) hits++;
@@ -190,6 +191,7 @@ export class CraftingSystem {
 
     this.engine.addSkillXp(job.skill, job.xpPerItem * newCompletions);
     this.engine.incrementStatistic(`crafted:${job.recipeId}`, newCompletions);
+    if (job.extraStatistic) this.engine.incrementStatistic(job.extraStatistic, newCompletions);
 
     job.quantityCompleted = completedByNow;
 
@@ -230,6 +232,7 @@ export class CraftingSystem {
     }
 
     if (!this.engine.ensureIdle()) return false;
+    if (!recipe.output) return false;
 
     const now = this.engine.now();
     this.state.activeAction = {

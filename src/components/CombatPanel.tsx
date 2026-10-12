@@ -12,7 +12,8 @@ import Hitsplat from "./Hitsplat";
 import GameImage from "./GameImage";
 import { SpecialAttackBar } from "./CombatControls";
 import { getSpell } from "../content/spells";
-import { formatAmounts } from "../content/display";
+import { formatAmounts, WEAKNESS_LABEL } from "../content/display";
+import { npcCombatLevel } from "../engine/combatMath";
 
 interface ActiveSplat {
   id: string;
@@ -90,8 +91,16 @@ export default function CombatPanel({ enemyId, inDungeon = false }: { enemyId: s
   const bossTag = enemy.isBoss ? <span className="tag tag-gold">Boss</span> : null;
   const title = (
     <>
-      ⚔️ {enemy.name} {bossTag}
+      ⚔️ {enemy.name} <span className="text-muted">(Level {npcCombatLevel(enemy)})</span> {bossTag}
     </>
+  );
+  // What the player can learn about the enemy before and during a fight.
+  const enemyInfo = (
+    <span className="row text-small" style={{ gap: 6 }}>
+      <span className="tag">Max HP {enemy.maxHp}</span>
+      {enemy.weakness && <span className="tag tag-info">Weak to {WEAKNESS_LABEL[enemy.weakness]}</span>}
+      {enemy.canFlee === false && <span className="tag tag-danger">No fleeing</span>}
+    </span>
   );
 
   // Food counts whether it's in the inventory or worn in the food slot.
@@ -132,11 +141,14 @@ export default function CombatPanel({ enemyId, inDungeon = false }: { enemyId: s
     return (
       <ActionCard
         title={title}
-        meta={`Max HP ${enemy.maxHp}`}
+        meta={enemy.weakness ? `Weak to ${WEAKNESS_LABEL[enemy.weakness]}` : `Max HP ${enemy.maxHp}`}
         description={
-          <span className="text-small">
-            Your gear is locked once the fight starts. Set it up in the Equipment tab first.
-            {supplies && <> {supplies}.</>}
+          <span className="stack-sm">
+            {enemyInfo}
+            <span className="text-small">
+              Your gear is locked once the fight starts. Set it up in the Equipment tab first.
+              {supplies && <> {supplies}.</>}
+            </span>
           </span>
         }
         actions={[
@@ -210,6 +222,8 @@ export default function CombatPanel({ enemyId, inDungeon = false }: { enemyId: s
         {
           label: "Attack now",
           variant: "primary",
+          disabled: !!session.outOfSupplies,
+          reason: "You have nothing to attack with",
           onClick: () => {
             engine.attackNow();
             actions.refresh();
@@ -285,6 +299,13 @@ export default function CombatPanel({ enemyId, inDungeon = false }: { enemyId: s
         </label>
       </div>
 
+      {enemyInfo}
+      {session.outOfSupplies && (
+        <p className="combat-alert text-small">
+          Out of {session.attackStyle === "magic" ? "runes" : "arrows"}: you can't attack.{" "}
+          {session.canFlee ? "Flee, or keep eating to hold on." : "There's no fleeing this fight."}
+        </p>
+      )}
       {session.specialAttackId && <SpecialAttackBar />}
       {supplies && <p className="text-muted text-small">{supplies}</p>}
 

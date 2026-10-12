@@ -4,154 +4,123 @@ import { getDungeon } from "../content/dungeons";
 import { getEnemy } from "../content/enemies";
 import { getItemDef } from "../content/items";
 import { AMENITY_ICON } from "../content/amenities";
-import { CONDITION_LABELS } from "../content/display";
+import { CONDITION_LABELS, dungeonDescription, enemyLabel, itemName } from "../content/display";
+import { getEquipmentBonuses } from "../content/combatStats";
 import { describeUnmetCondition } from "../engine/unlockConditions";
 import { getActiveCombat } from "../engine/activeAction";
-import type { ItemDefinition, LoadoutEntry } from "../engine/types";
+import type { DungeonDefinition, LoadoutEntry } from "../engine/types";
 import { ActionCard, LockedCard } from "./ui/ActionCard";
 import ItemIcon from "./ItemIcon";
 import HpBar from "./HpBar";
 import CombatPanel from "./CombatPanel";
+import LoadoutPicker from "./LoadoutPicker";
 
-/** What can be brought: unworn gear (one slot each), food (one slot per
- *  piece) and ammo or runes (one slot for the whole stack). */
-function loadoutCandidates(state: ReturnType<typeof useGame>["state"], owned: (id: string) => number) {
-  const worn = new Set(Object.values(state.equipment));
-  const gear: { def: ItemDefinition; instanceId: string }[] = [];
-  for (const instance of Object.values(state.inventory)) {
-    const def = getItemDef(instance.itemDefId);
-    if (def?.equipSlot && !worn.has(instance.instanceId)) gear.push({ def, instanceId: instance.instanceId });
-  }
-  const stacks: { def: ItemDefinition; amount: number }[] = [];
-  for (const [id, r] of Object.entries(state.resources)) {
-    const def = getItemDef(id);
-    if (!def || r.amount < 1) continue;
-    // Worn ammo already comes along; worn food doesn't (only loadout food is eaten).
-    if (!def.healAmount && worn.has(`stack:${id}`)) continue;
-    if (def.healAmount || def.equipSlot === "ammo" || id.endsWith("-rune")) stacks.push({ def, amount: Math.floor(owned(id)) });
-  }
-  return { gear, stacks };
+/** "Goblin (Level 6)" for a wave or the boss, by stage index. */
+function stageLabel(dungeon: DungeonDefinition, stage: number): string {
+  const id = stage < dungeon.waves.length ? dungeon.waves[stage] : dungeon.bossId;
+  const enemy = getEnemy(id);
+  if (!enemy) return id;
+  return stage < dungeon.waves.length ? enemyLabel(enemy) : `${enemyLabel(enemy)}, the boss`;
 }
 
-export default function DungeonCard({ dungeonId, description }: { dungeonId: string; description: string }) {
+/** The saved loadout as small chips, with the worn food. */
+function LoadoutSummary({ loadout, slots }: { loadout: LoadoutEntry[]; slots: number }) {
+  const { state } = useGame();
+  const food = getEquipmentBonuses(state).foodItemId;
+  const foodDef = food ? getItemDef(food) : undefined;
+  return (
+    <div className="stack-sm">
+      <span className="text-small">
+        Loadout {loadout.length}/{slots}
+        {foodDef && (
+          <span className="text-faint">
+            {" "}
+            · plus your food: {foodDef.name} x{Math.floor(state.resources[foodDef.id]?.amount ?? 0)}
+          </span>
+        )}
+      </span>
+      {loadout.length === 0 ? (
+        <span className="text-faint text-small">Nothing packed yet. Worn gear comes along for free.</span>
+      ) : (
+        <div className="row" style={{ gap: 6 }}>
+          {loadout.map((e) => {
+            const def = getItemDef(e.itemDefId);
+            if (!def) return null;
+            return (
+              <span key={e.instanceId ?? e.itemDefId} className="item-chip loadout-chip" title={def.name}>
+                <ItemIcon def={def} size={20} />
+                <span className="text-small">{itemName(def, e.instanceId ? state.inventory[e.instanceId] : undefined)}</span>
+              </span>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function DungeonCard({ dungeonId, description }: { dungeonId: string; description?: string }) {
   const { engine, state, actions } = useGame();
-  const [picked, setPicked] = useState<Record<string, LoadoutEntry>>({});
+  const [picking, setPicking] = useState(false);
   const dungeon = getDungeon(dungeonId);
   if (!dungeon) return null;
 
   const boss = getEnemy(dungeon.bossId);
-  const plan = `${dungeon.waves.map((id) => getEnemy(id)?.name ?? id).join(", ")}, then ${boss?.name ?? "the boss"}`;
   const run = state.dungeonRun?.dungeonId === dungeonId ? state.dungeonRun : null;
   const icon = AMENITY_ICON.dungeonEntrance;
+  const picker = picking && <LoadoutPicker dungeonId={dungeonId} onClose={() => setPicking(false)} />;
 
   if (!run) {
     const lock = dungeon.unlockCondition ? describeUnmetCondition(dungeon.unlockCondition, state, CONDITION_LABELS) : null;
     if (lock) return <LockedCard icon={icon} title={dungeon.name} reason={lock} />;
 
-    const loadout = Object.values(picked).filter((e) => e.quantity > 0);
-    const used = engine.getLoadoutSlotsUsed(loadout);
+    const loadout = engine.getSavedLoadout(dungeonId);
     const blocker = engine.getDungeonEnterBlocker(dungeonId, loadout);
-    const { gear, stacks } = loadoutCandidates(state, (id) => engine.getResourceAmount(id));
-    const set = (key: string, entry: LoadoutEntry | null) =>
-      setPicked((prev) => {
-        const next = { ...prev };
-        if (entry) next[key] = entry;
-        else delete next[key];
-        return next;
-      });
+    const plan = [...dungeon.waves.map((_, i) => stageLabel(dungeon, i)), stageLabel(dungeon, dungeon.waves.length)];
 
     return (
-      <ActionCard
-        icon={icon}
-        title={dungeon.name}
-        meta={`${dungeon.waves.length} waves + boss`}
-        description={
-          <>
-            {description} You fight {plan}. Before the boss you can regear from what you brought. Worn gear comes along
-            for free; everything else has to fit in {dungeon.loadoutSlots} slots.
-          </>
-        }
-        actions={[
-          {
-            label: `Enter (${used}/${dungeon.loadoutSlots} slots)`,
-            variant: "primary",
-            disabled: !!blocker,
-            reason: blocker ?? undefined,
-            onClick: () => {
-              if (engine.enterDungeon(dungeonId, loadout)) setPicked({});
-              actions.refresh();
+      <>
+        <ActionCard
+          icon={icon}
+          title={dungeon.name}
+          meta={`${dungeon.waves.length} waves + boss`}
+          description={
+            <>
+              {description ?? dungeonDescription(dungeonId)} Before the boss you can regear from what you brought.
+              <ol className="dungeon-plan text-small">
+                {plan.map((label, i) => (
+                  <li key={i}>{label}</li>
+                ))}
+              </ol>
+            </>
+          }
+          actions={[
+            {
+              label: "Enter",
+              variant: "primary",
+              disabled: !!blocker,
+              reason: blocker ?? undefined,
+              onClick: () => {
+                engine.enterDungeon(dungeonId, loadout);
+                actions.refresh();
+              },
             },
-          },
-        ]}
-      >
-        <div className="stack-sm">
-          <span className="text-small">Loadout</span>
-          {gear.length === 0 && stacks.length === 0 && <span className="text-faint text-small">Nothing to bring.</span>}
-          {stacks.map(({ def, amount }) => {
-            const perPiece = !!def.healAmount;
-            const qty = picked[def.id]?.quantity ?? 0;
-            return (
-              <div key={def.id} className="row row-between text-small">
-                <span className="row" style={{ gap: 6 }}>
-                  <ItemIcon def={def} size={20} />
-                  {def.name} <span className="text-faint">x{amount}</span>
-                </span>
-                {perPiece ? (
-                  <span className="btn-row">
-                    <button type="button" className="btn" disabled={qty <= 0} onClick={() => set(def.id, qty > 1 ? { itemDefId: def.id, quantity: qty - 1 } : null)}>
-                      -
-                    </button>
-                    <span>{qty}</span>
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={qty >= amount || used >= dungeon.loadoutSlots}
-                      onClick={() => set(def.id, { itemDefId: def.id, quantity: qty + 1 })}
-                    >
-                      +
-                    </button>
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn"
-                    aria-pressed={qty > 0}
-                    disabled={qty === 0 && used >= dungeon.loadoutSlots}
-                    onClick={() => set(def.id, qty > 0 ? null : { itemDefId: def.id, quantity: amount })}
-                  >
-                    {qty > 0 ? "Brought" : "Bring"}
-                  </button>
-                )}
-              </div>
-            );
-          })}
-          {gear.map(({ def, instanceId }) => {
-            const on = !!picked[instanceId];
-            return (
-              <div key={instanceId} className="row row-between text-small">
-                <span className="row" style={{ gap: 6 }}>
-                  <ItemIcon def={def} size={20} />
-                  {def.name}
-                </span>
-                <button
-                  type="button"
-                  className="btn"
-                  aria-pressed={on}
-                  disabled={!on && used >= dungeon.loadoutSlots}
-                  onClick={() => set(instanceId, on ? null : { itemDefId: def.id, instanceId, quantity: 1 })}
-                >
-                  {on ? "Brought" : "Bring"}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </ActionCard>
+            { label: "Select loadout", onClick: () => setPicking(true) },
+          ]}
+        >
+          <LoadoutSummary loadout={loadout} slots={dungeon.loadoutSlots} />
+        </ActionCard>
+        {picker}
+      </>
     );
   }
 
   const session = getActiveCombat(state);
-  const stage = run.wavesCleared < dungeon.waves.length ? `Wave ${run.wavesCleared + 1} of ${dungeon.waves.length}` : boss?.name ?? "Boss";
+  const stageIndex = run.wavesCleared;
+  const onBoss = stageIndex >= dungeon.waves.length;
+  const stage = onBoss ? `Boss: ${boss?.name ?? "Boss"}` : `Wave ${stageIndex + 1} of ${dungeon.waves.length}`;
+  // What comes after the fight going on now (or, at the regear stop, the boss).
+  const next = run.awaitingBoss ? stageLabel(dungeon, dungeon.waves.length) : !onBoss ? stageLabel(dungeon, stageIndex + 1) : null;
 
   if (!run.awaitingBoss) {
     return (
@@ -162,6 +131,12 @@ export default function DungeonCard({ dungeonId, description }: { dungeonId: str
           icon={icon}
           title={dungeon.name}
           meta={stage}
+          description={
+            <span className="dungeon-next">
+              {session?.dungeonId === dungeonId && <span>Now: {stageLabel(dungeon, stageIndex)}</span>}
+              {next && <span>Next: {next}</span>}
+            </span>
+          }
           actions={[{ label: "Leave dungeon", variant: "danger", onClick: () => engine.leaveDungeon() }]}
         />
         {session?.dungeonId === dungeonId && <CombatPanel enemyId={session.enemyId} inDungeon />}
@@ -178,7 +153,12 @@ export default function DungeonCard({ dungeonId, description }: { dungeonId: str
       icon={icon}
       title={dungeon.name}
       meta="Before the boss"
-      description={`All ${dungeon.waves.length} waves cleared. Regear from what you brought, then face ${boss?.name ?? "the boss"}. Once the fight starts there's no fleeing.`}
+      description={
+        <>
+          All {dungeon.waves.length} waves cleared. Regear from what you brought, then face {next}. Once the fight starts
+          there's no fleeing.
+        </>
+      }
       actions={[
         {
           label: `Continue to ${boss?.name ?? "the boss"}`,
@@ -205,7 +185,7 @@ export default function DungeonCard({ dungeonId, description }: { dungeonId: str
             <div key={e.instanceId ?? e.itemDefId} className="row row-between text-small">
               <span className="row" style={{ gap: 6 }}>
                 <ItemIcon def={def} size={20} />
-                {def.name}
+                {itemName(def, e.instanceId ? state.inventory[e.instanceId] : undefined)}
                 {food && <span className="text-faint">x{engine.getFoodCount(def.id)}</span>}
                 {worn && <span className="text-faint">(worn)</span>}
               </span>

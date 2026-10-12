@@ -5,7 +5,7 @@ import { DEFAULT_COMBAT_STYLES } from "./combatStyles";
 
 /** Bump when GameState's shape changes, and add a matching entry to
  *  MIGRATIONS in migrations.ts. */
-export const SCHEMA_VERSION = 23;
+export const SCHEMA_VERSION = 24;
 
 /** OSRS-authentic: Hitpoints starts pre-leveled at 10 (unlike every other
  *  skill, which starts at 1) — this is the XP threshold for level 10. */
@@ -32,6 +32,7 @@ export function createInitialState(now: number = Date.now()): GameState {
     specialEnergy: 100,
     combatStyles: { ...DEFAULT_COMBAT_STYLES },
     dungeonRun: null,
+    savedLoadouts: {},
     jobs: { accepted: {}, lastCompletedPeriod: {}, completedOnce: {} },
     quests: {},
     currentLocationId: STARTING_LOCATION_ID,

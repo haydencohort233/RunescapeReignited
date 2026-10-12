@@ -57,4 +57,22 @@ describe("job board", () => {
     g.engine.turnInJob(job, "town");
     expect(Object.keys(g.state().statistics).some((k) => k.startsWith("jobCompletedPeriod:"))).toBe(false);
   });
+
+  it("a job with a level requirement can't be accepted until it's met", () => {
+    const g = makeEngine();
+    const job = getJob("oak-order")!;
+    g.state().currentLocationId = "lumber-camp";
+    expect(g.engine.acceptJob(job, "lumber-camp")).toBe(false);
+    g.engine.setSkillLevel("woodcutting", 15);
+    expect(g.engine.acceptJob(job, "lumber-camp")).toBe(true);
+  });
+
+  it("one-time jobs stay accepted across the daily reset; daily ones expire", () => {
+    const g = makeEngine();
+    g.engine.acceptJob(getJob("reach-woodcutting-15")!, "town");
+    g.engine.acceptJob(getJob("deliver-wood")!, "town");
+    g.advance(DAY);
+    expect(g.engine.isJobAccepted("reach-woodcutting-15")).toBe(true);
+    expect(g.engine.isJobAccepted("deliver-wood")).toBe(false);
+  });
 });

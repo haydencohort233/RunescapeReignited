@@ -57,10 +57,17 @@ export class JobBoardSystem {
       });
       return false;
     }
+    if (job.requirement && !isUnlocked(job.requirement, this.state)) {
+      this.notifications.push("status", `You don't meet the requirements for "${job.title}" yet.`, {
+        severity: "warning",
+      });
+      return false;
+    }
     this.state.jobs.accepted[job.id] = {
       acceptedAt: this.engine.now(),
       acceptedPeriod: getDailyPeriodNumber(this.engine.now()),
       baselines: captureBaselines(job.objective, this.state),
+      expiresAtReset: (job.frequency ?? "daily") === "daily",
     };
     this.notifications.push("status", `Accepted job: ${job.title}.`);
     return true;
@@ -157,8 +164,9 @@ export class JobBoardSystem {
     this.notifications.push("status", "Dev: job board reset forced.", { severity: "warning" });
   }
 
-  /** Cancels any accepted-but-unfinished job whose acceptance period no
-   *  longer matches today — the shift reset, so the job posting is gone,
+  /** Cancels any accepted-but-unfinished daily job whose acceptance
+   *  period no longer matches today (one-time and repeatable jobs stay
+   *  accepted) — the shift reset, so the job posting is gone,
    *  same flavor as it being picked up by someone else. Uses the REAL
    *  current day (the raw `now` resolveElapsed received, not the
    *  offline-capped effectiveNow) since job resets are wall-clock-based,
@@ -167,7 +175,7 @@ export class JobBoardSystem {
     const currentPeriod = getDailyPeriodNumber(now);
     let expiredCount = 0;
     for (const [jobId, record] of Object.entries(this.state.jobs.accepted)) {
-      if (record.acceptedPeriod !== currentPeriod) {
+      if (record.expiresAtReset !== false && record.acceptedPeriod !== currentPeriod) {
         delete this.state.jobs.accepted[jobId];
         expiredCount++;
       }

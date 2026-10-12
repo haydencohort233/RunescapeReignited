@@ -1,4 +1,4 @@
-import type { GameState } from "./types";
+import type { GameState, LoadoutEntry } from "./types";
 import { getDailyPeriodNumber } from "./time";
 import { DEFAULT_OFFLINE_CAP_MS } from "./tuning";
 import { SCHEMA_VERSION, STARTING_HITPOINTS_XP, STARTING_LOCATION_ID } from "./state";
@@ -231,6 +231,8 @@ const MIGRATIONS: Record<number, (old: any, now: number) => any> = {
   }),
   // v22 -> v23: dungeon runs. Nobody is in one yet.
   22: (old) => ({ ...old, dungeonRun: null }),
+  // v23 -> v24: dungeon loadouts can be saved from the Equipment tab.
+  23: (old) => ({ ...old, savedLoadouts: old.savedLoadouts ?? {} }),
 };
 
 /** Brings a parsed save of any version up to the current GameState shape:
@@ -282,6 +284,7 @@ export function migrateSave(parsed: any, now: number): GameState {
     },
     selectedSpellId: typeof parsed.selectedSpellId === "string" ? parsed.selectedSpellId : undefined,
     dungeonRun: sanitizeDungeonRun(parsed.dungeonRun),
+    savedLoadouts: sanitizeSavedLoadouts(parsed.savedLoadouts),
     jobs: {
       accepted: isRecord(parsed.jobs?.accepted) ? parsed.jobs.accepted : {},
       lastCompletedPeriod: isRecord(parsed.jobs?.lastCompletedPeriod) ? parsed.jobs.lastCompletedPeriod : {},
@@ -318,18 +321,32 @@ function finiteOr(value: unknown, fallback: number, min = Number.NEGATIVE_INFINI
   return typeof value === "number" && Number.isFinite(value) ? Math.max(min, value) : fallback;
 }
 
-/** A run missing its id, counters or loadout list is dropped (the loadout
- *  items were never removed from the ledger, so nothing is lost). */
-function sanitizeDungeonRun(raw: unknown): GameState["dungeonRun"] {
-  if (!isRecord(raw) || typeof raw.dungeonId !== "string" || !Array.isArray(raw.loadout)) return null;
-  const wavesCleared = typeof raw.wavesCleared === "number" && Number.isFinite(raw.wavesCleared) ? Math.max(0, Math.floor(raw.wavesCleared)) : 0;
-  const loadout = raw.loadout
+function sanitizeLoadout(raw: unknown[]): LoadoutEntry[] {
+  return raw
     .filter((e: unknown) => isRecord(e) && typeof e.itemDefId === "string" && typeof e.quantity === "number" && Number.isFinite(e.quantity))
     .map((e: any) => ({
       itemDefId: e.itemDefId,
       quantity: Math.max(0, Math.floor(e.quantity)),
       ...(typeof e.instanceId === "string" ? { instanceId: e.instanceId } : {}),
     }));
+}
+
+/** Saved loadouts per dungeon id; anything malformed is dropped. Stale
+ *  entries (an item since sold) are trimmed when the loadout is read. */
+function sanitizeSavedLoadouts(raw: unknown): GameState["savedLoadouts"] {
+  const loadouts: GameState["savedLoadouts"] = {};
+  for (const [id, entries] of Object.entries(isRecord(raw) ? raw : {})) {
+    if (Array.isArray(entries)) loadouts[id] = sanitizeLoadout(entries);
+  }
+  return loadouts;
+}
+
+/** A run missing its id, counters or loadout list is dropped (the loadout
+ *  items were never removed from the ledger, so nothing is lost). */
+function sanitizeDungeonRun(raw: unknown): GameState["dungeonRun"] {
+  if (!isRecord(raw) || typeof raw.dungeonId !== "string" || !Array.isArray(raw.loadout)) return null;
+  const wavesCleared = typeof raw.wavesCleared === "number" && Number.isFinite(raw.wavesCleared) ? Math.max(0, Math.floor(raw.wavesCleared)) : 0;
+  const loadout = sanitizeLoadout(raw.loadout);
   return { dungeonId: raw.dungeonId, wavesCleared, awaitingBoss: raw.awaitingBoss === true, loadout };
 }
 

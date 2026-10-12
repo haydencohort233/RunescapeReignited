@@ -80,3 +80,20 @@ export function resolveAttack(
   const damage = maxHit <= 0 ? 0 : Math.floor(rand() * (maxHit + 1));
   return { hit: true, damage };
 }
+/** An NPC's combat level, the OSRS way: a quarter of Defence plus
+ *  Hitpoints, plus the best of melee, Ranged or Magic. Computed from the
+ *  enemy's stats so it can't drift from them. */
+export function npcCombatLevel(enemy: {
+  maxHp: number;
+  attack: number;
+  strength: number;
+  defence: number;
+  ranged: number;
+  magic: number;
+}): number {
+  const base = 0.25 * (enemy.defence + enemy.maxHp);
+  const melee = 0.325 * (enemy.attack + enemy.strength);
+  const ranged = 0.325 * Math.floor(enemy.ranged * 1.5);
+  const magic = 0.325 * Math.floor(enemy.magic * 1.5);
+  return Math.max(1, Math.floor(base + Math.max(melee, ranged, magic)));
+}

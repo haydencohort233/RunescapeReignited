@@ -8,15 +8,13 @@ const ACTION_LABEL: Record<ItemActionId, string> = {
   equip: "Equip",
   unequip: "Unequip",
   drop: "Drop",
-  examine: "Examine",
   eat: "Eat",
   craft: "Craft",
   teleport: "Teleport",
-  bury: "Bury",
 };
 
-/** An item's actions as card actions — the same list powers the inline
- *  panel and the right-click menu, in the Inventory and Equipment tabs. */
+/** An item's actions as card actions — the same list powers the item
+ *  details, the right-click menu and the Equipment tab. */
 export function itemActions(
   engine: GameEngine,
   def: ItemDefinition,
@@ -32,6 +30,7 @@ export function itemActions(
   }
 ): CardAction[] {
   const { instanceId, equipped, exclude, quantity = 1 } = opts;
+  const instance = instanceId ? engine.getState().inventory[instanceId] : undefined;
   const handlers: Partial<Record<ItemActionId, () => void>> = {
     equip: () => engine.equipItem(def, instanceId),
     unequip: () => def.equipSlot && engine.unequipSlot(def.equipSlot),
@@ -43,29 +42,16 @@ export function itemActions(
           (n) => n !== null && engine.dropStack(def.id, n)
         );
     },
-    examine: () => {
-      const statEntries = Object.entries(def.stats ?? {});
-      const statText =
-        statEntries.length > 0
-          ? " (" + statEntries.map(([s, v]) => `${STAT_LABEL[s] ?? capitalize(s)}: ${v >= 0 ? "+" : ""}${v}`).join(", ") + ")"
-          : "";
-      engine.notifications.push("status", `${def.description}${statText}`, { durationMs: 10000 });
-    },
     eat: () => engine.eatItem(def.id),
-    bury: () => {
-      const owned = Math.floor(engine.getOwnedCount(def.id));
-      if (owned <= 1) engine.buryItem(def.id, 1);
-      else
-        void requestQuantity(`${def.id === "ashes" ? "Scatter" : "Bury"} how many ${def.name}?`, owned, {
-          confirmLabel: def.id === "ashes" ? "Scatter" : "Bury",
-        }).then((n) => n !== null && engine.buryItem(def.id, n));
-    },
     craft: () => engine.notifications.push("status", "Nothing to craft with this yet.", { severity: "warning" }),
     teleport: () => {
       const destination = def.teleportTo ? getLocation(def.teleportTo) : undefined;
       if (destination && instanceId) engine.teleportTo(def, instanceId, destination);
     },
   };
+
+  // Out of charges: the teleport stays visible but greyed out.
+  const uncharged = def.maxCharges !== undefined && (instance?.charges ?? 0) <= 0;
 
   // "equip" becomes "unequip" once worn. A worn stack can't be dropped
   // (it comes off first, like any worn gear).
@@ -75,12 +61,14 @@ export function itemActions(
     .map((a) => (a === "equip" && equipped ? "unequip" : a))
     .map((action) => ({
       label:
-        action === "bury" && def.id === "ashes"
-          ? "Scatter"
-          : action === "equip" && def.equipSlot === "food"
-            ? "Equip as food"
+        action === "equip" && def.equipSlot === "food"
+          ? "Equip as food"
+          : action === "teleport" && def.teleportTo
+            ? `Teleport to ${getLocation(def.teleportTo)?.name ?? "town"}`
             : ACTION_LABEL[action],
       variant: action === "drop" ? ("danger" as const) : undefined,
+      disabled: action === "teleport" && uncharged,
+      reason: action === "teleport" && uncharged ? "No charges left. Aggie in Draynor Village can recharge it." : undefined,
       onClick: () => handlers[action]?.(),
     }));
 }

@@ -25,7 +25,7 @@ function tool(id: string, name: string, type: ToolType, speed: number, value: nu
     stackable: false,
     value,
     tool: { type, speedMultiplier: speed, requirement },
-    actions: ["drop", "examine"],
+    actions: ["drop"],
   };
 }
 
@@ -45,10 +45,10 @@ const TOOL_ITEMS: ItemDefinition[] = [
 // ── Fish ── Raw catches and the food they cook into. Shark (cooked) is
 // defined above with the other food.
 function rawFish(id: string, name: string, value: number): ItemDefinition {
-  return { id, assetFolder: "Fish", name, description: `A raw ${name.slice(4).toLowerCase()}. Cook it at a range.`, category: "material", rarity: "common", stackable: true, value, actions: ["drop", "examine"] };
+  return { id, assetFolder: "Fish", name, description: `A raw ${name.slice(4).toLowerCase()}. Cook it at a range.`, category: "material", rarity: "common", stackable: true, value, actions: ["drop"] };
 }
 function cookedFish(id: string, name: string, heal: number, value: number): ItemDefinition {
-  return { id, assetFolder: "Fish", name, description: `Cooked ${name.toLowerCase()}. Heals ${heal} HP.`, category: "consumable", rarity: "common", stackable: true, value, healAmount: heal, equipSlot: "food", actions: ["eat", "equip", "drop", "examine"] };
+  return { id, assetFolder: "Fish", name, description: `Cooked ${name.toLowerCase()}. Heals ${heal} HP.`, category: "consumable", rarity: "common", stackable: true, value, healAmount: heal, equipSlot: "food", actions: ["eat", "equip", "drop"] };
 }
 
 const FISH_ITEMS: ItemDefinition[] = [
@@ -63,16 +63,16 @@ const FISH_ITEMS: ItemDefinition[] = [
 
 // ── Mining and Smithing ──
 const MINING_ITEMS: ItemDefinition[] = [
-  { id: "copper-ore", assetFolder: "Ores", name: "Copper Ore", description: "Smelt it with tin ore to make bronze.", category: "material", rarity: "common", stackable: true, value: 5, actions: ["drop", "examine"] },
-  { id: "tin-ore", assetFolder: "Ores", name: "Tin Ore", description: "Smelt it with copper ore to make bronze.", category: "material", rarity: "common", stackable: true, value: 5, actions: ["drop", "examine"] },
-  { id: "bronze-bar", assetFolder: "Bars", name: "Bronze Bar", description: "Smith it into bronze gear at an anvil.", category: "material", rarity: "common", stackable: true, value: 12, actions: ["drop", "examine"] },
+  { id: "copper-ore", assetFolder: "Ores", name: "Copper Ore", description: "Smelt it with tin ore to make bronze.", category: "material", rarity: "common", stackable: true, value: 5, actions: ["drop"] },
+  { id: "tin-ore", assetFolder: "Ores", name: "Tin Ore", description: "Smelt it with copper ore to make bronze.", category: "material", rarity: "common", stackable: true, value: 5, actions: ["drop"] },
+  { id: "bronze-bar", assetFolder: "Bars", name: "Bronze Bar", description: "Smith it into bronze gear at an anvil.", category: "material", rarity: "common", stackable: true, value: 12, actions: ["drop"] },
 ];
 
 // ── Runes ── Bought from Aubury until Runecrafting exists. Values are
 // proposed, roughly OSRS shop prices.
 function rune(element: string, value: number): ItemDefinition {
   const name = `${element[0].toUpperCase()}${element.slice(1)} Rune`;
-  return { id: `${element}-rune`, assetFolder: "Runes", name, description: `Used to cast spells.`, category: "material", rarity: "common", stackable: true, value, actions: ["drop", "examine"] };
+  return { id: `${element}-rune`, assetFolder: "Runes", name, description: `Used to cast spells.`, category: "material", rarity: "common", stackable: true, value, actions: ["drop"] };
 }
 
 const RUNE_ITEMS: ItemDefinition[] = [
@@ -85,6 +85,68 @@ const RUNE_ITEMS: ItemDefinition[] = [
   rune("death", 180),
   rune("blood", 400),
 ];
+
+// ── Metal armour and arrows, iron to rune ── Added with their wiki art.
+// Defence and ranged strength are rough OSRS values (one aggregate
+// defence number, like the bronze set); levels follow OSRS, prices are
+// OSRS shop values. The bronze set is defined further down.
+const ARMOUR_TIERS = [
+  { metal: "iron", name: "Iron", level: 1, helm: [6, 154], body: [21, 560], legs: [11, 280], kite: [8, 238] },
+  { metal: "steel", name: "Steel", level: 5, helm: [9, 550], body: [32, 2000], legs: [17, 1000], kite: [12, 850] },
+  { metal: "mithril", name: "Mithril", level: 20, helm: [13, 1430], body: [46, 5200], legs: [24, 2600], kite: [17, 2210] },
+  { metal: "adamant", name: "Adamant", level: 30, helm: [19, 3520], body: [65, 12800], legs: [33, 6400], kite: [24, 5440] },
+  { metal: "rune", name: "Rune", level: 40, helm: [30, 35200], body: [82, 65000], legs: [51, 64000], kite: [35, 54400] },
+];
+
+function armour(metal: string, name: string, piece: string, slot: ItemDefinition["equipSlot"], [defence, value]: number[], defenceLevel: number): ItemDefinition {
+  return {
+    id: `${metal}-${piece.toLowerCase().replace(/ /g, "-")}`,
+    assetFolder: `Armor/${name}`,
+    name: `${name} ${piece}`,
+    description: `${piece === "Kiteshield" ? "A large" : "Solid"} ${name.toLowerCase()} ${piece.toLowerCase()}.`,
+    category: "armor",
+    rarity: "common",
+    stackable: false,
+    value,
+    equipSlot: slot,
+    stats: { defence },
+    equipRequirement: level("defence", defenceLevel),
+    actions: ["equip", "drop"],
+  };
+}
+
+const ARMOUR_ITEMS: ItemDefinition[] = [
+  armour("bronze", "Bronze", "Kiteshield", "shield", [5, 68], 1),
+  ...ARMOUR_TIERS.flatMap((t) => [
+    armour(t.metal, t.name, "Full Helm", "head", t.helm, t.level),
+    armour(t.metal, t.name, "Platebody", "body", t.body, t.level),
+    armour(t.metal, t.name, "Platelegs", "legs", t.legs, t.level),
+    armour(t.metal, t.name, "Kiteshield", "shield", t.kite, t.level),
+  ]),
+];
+
+const ARROW_TIERS = [
+  { metal: "iron", name: "Iron", strength: 10, value: 3, level: 1 },
+  { metal: "steel", name: "Steel", strength: 16, value: 12, level: 5 },
+  { metal: "mithril", name: "Mithril", strength: 22, value: 32, level: 20 },
+  { metal: "adamant", name: "Adamant", strength: 31, value: 80, level: 30 },
+  { metal: "rune", name: "Rune", strength: 49, value: 200, level: 40 },
+];
+
+const ARROW_ITEMS: ItemDefinition[] = ARROW_TIERS.map((t) => ({
+  id: `${t.metal}-arrow`,
+  assetFolder: "Ammo",
+  name: `${t.name} Arrow`,
+  description: "Ammunition for a bow.",
+  category: "weapon",
+  rarity: "common",
+  stackable: true,
+  value: t.value,
+  equipSlot: "ammo",
+  stats: { rangedStrength: t.strength },
+  equipRequirement: level("ranged", t.level),
+  actions: ["equip", "drop"],
+}));
 
 // Single source of truth for every item. `value` is the base GP value
 // shops pay a fraction of (engine/tuning.ts); items without one can't be
@@ -102,7 +164,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     rarity: "common",
     stackable: true,
     value: 4,
-    actions: ["drop", "examine"],
+    actions: ["drop"],
   },
   {
     id: "willow-logs",
@@ -113,7 +175,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     rarity: "common",
     stackable: true,
     value: 8,
-    actions: ["drop", "examine"],
+    actions: ["drop"],
   },
   {
     id: "coal",
@@ -124,7 +186,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     rarity: "common",
     stackable: true,
     value: 15,
-    actions: ["drop", "examine"],
+    actions: ["drop"],
   },
   {
     id: "raw-fish",
@@ -135,7 +197,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     rarity: "common",
     stackable: true,
     value: 5,
-    actions: ["drop", "examine"],
+    actions: ["drop"],
   },
   {
     id: "pelt",
@@ -146,7 +208,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     rarity: "common",
     stackable: true,
     value: 10,
-    actions: ["drop", "examine"],
+    actions: ["drop"],
   },
   {
     id: "flax",
@@ -157,7 +219,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     rarity: "common",
     stackable: true,
     value: 2,
-    actions: ["drop", "examine"],
+    actions: ["drop"],
   },
   {
     id: "bowstring",
@@ -168,7 +230,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     rarity: "common",
     stackable: true,
     value: 10,
-    actions: ["drop", "examine"],
+    actions: ["drop"],
   },
   {
     id: "cooked-fish",
@@ -181,7 +243,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     value: 8,
     healAmount: 5,
     equipSlot: "food",
-    actions: ["eat", "equip", "drop", "examine"],
+    actions: ["eat", "equip", "drop"],
   },
   {
     id: "wooden-bow-u",
@@ -192,7 +254,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     rarity: "common",
     stackable: true, // intermediate crafting material — most non-equipment items stack
     value: 10,
-    actions: ["drop", "examine"],
+    actions: ["drop"],
   },
   {
     id: "wooden-bow",
@@ -207,7 +269,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     attackStyle: "ranged",
     attackSpeedMs: 2400,
     stats: { ranged: 8 },
-    actions: ["equip", "drop", "examine"],
+    actions: ["equip", "drop"],
   },
   {
     id: "bronze-dagger",
@@ -222,7 +284,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     stats: { attack: 4, strength: 3 },
     weaponType: "stab",
     attackSpeedMs: 1800, // fast, low damage
-    actions: ["equip", "drop", "examine"],
+    actions: ["equip", "drop"],
   },
   {
     id: "bronze-warhammer",
@@ -237,7 +299,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     stats: { attack: 3, strength: 12 },
     weaponType: "crush",
     attackSpeedMs: 4800, // slow, high damage — the other end of the tradeoff
-    actions: ["equip", "drop", "examine"],
+    actions: ["equip", "drop"],
   },
   {
     id: "bronze-full-helm",
@@ -250,7 +312,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     value: 60,
     equipSlot: "head",
     stats: { defence: 5 },
-    actions: ["equip", "drop", "examine"],
+    actions: ["equip", "drop"],
   },
   {
     id: "bronze-platebody",
@@ -263,7 +325,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     value: 160,
     equipSlot: "body",
     stats: { defence: 15 },
-    actions: ["equip", "drop", "examine"],
+    actions: ["equip", "drop"],
   },
   {
     id: "wooden-shield",
@@ -276,7 +338,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     value: 20,
     equipSlot: "shield",
     stats: { defence: 4 },
-    actions: ["equip", "drop", "examine"],
+    actions: ["equip", "drop"],
   },
   {
     id: "leather-boots",
@@ -289,7 +351,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     value: 10,
     equipSlot: "feet",
     stats: { defence: 1 },
-    actions: ["equip", "drop", "examine"],
+    actions: ["equip", "drop"],
   },
   {
     id: "leather-gloves",
@@ -302,7 +364,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     value: 10,
     equipSlot: "hands",
     stats: { defence: 1 },
-    actions: ["equip", "drop", "examine"],
+    actions: ["equip", "drop"],
   },
   {
     id: "ardougne-cloak",
@@ -313,7 +375,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     rarity: "uncommon",
     stackable: false,
     equipSlot: "cape",
-    actions: ["equip", "drop", "examine"], // cosmetic — no combat stats
+    actions: ["equip", "drop"], // cosmetic — no combat stats
   },
   {
     id: "gold-ring",
@@ -325,7 +387,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     stackable: false,
     value: 350,
     equipSlot: "ring",
-    actions: ["equip", "drop", "examine"], // cosmetic — no combat stats
+    actions: ["equip", "drop"], // cosmetic — no combat stats
   },
   {
     id: "bronze-arrow",
@@ -339,7 +401,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     value: 2,
     equipSlot: "ammo",
     stats: { rangedStrength: 7 }, // only Ranged uses it, so melee ignores it
-    actions: ["equip", "drop", "examine"],
+    actions: ["equip", "drop"],
   },
   {
     id: "amulet-of-glory",
@@ -354,9 +416,10 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     // Each teleport uses a charge; Aggie in Draynor Village refills them.
     teleportTo: "town",
     maxCharges: 4,
+    unchargedDescription: "An uncharged amulet of glory. Maybe Aggie in Draynor Village can recharge it.",
     rechargeCostGp: 500, // per charge — proposed, tune freely
     stats: { defence: 3 },
-    actions: ["equip", "drop", "examine", "teleport"],
+    actions: ["equip", "drop", "teleport"],
   },
   {
     id: "dragon-scimitar",
@@ -373,7 +436,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     attackSpeedMs: 2400, // medium-fast, medium-high damage
     equipRequirement: { kind: "skillLevel", skill: "attack", atLeast: 60 },
     specialAttack: "sever",
-    actions: ["equip", "drop", "examine"],
+    actions: ["equip", "drop"],
   },
   {
     id: "shark",
@@ -386,7 +449,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     value: 300,
     healAmount: 20,
     equipSlot: "food",
-    actions: ["eat", "equip", "drop", "examine"],
+    actions: ["eat", "equip", "drop"],
   },
   {
     id: "birds-nest",
@@ -397,7 +460,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     rarity: "uncommon",
     stackable: true,
     value: 50,
-    actions: ["drop", "examine"],
+    actions: ["drop"],
   },
   {
     id: "ashes",
@@ -408,8 +471,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     rarity: "common",
     stackable: true,
     value: 2,
-    prayerXp: 2, // proposed; OSRS's plain ashes give none
-    actions: ["bury", "drop", "examine"],
+    actions: ["drop"],
   },
   {
     id: "bones",
@@ -420,13 +482,14 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     rarity: "common",
     stackable: true,
     value: 2,
-    prayerXp: 4.5,
-    actions: ["bury", "drop", "examine"],
+    actions: ["drop"],
   },
   ...TOOL_ITEMS,
   ...FISH_ITEMS,
   ...MINING_ITEMS,
   ...RUNE_ITEMS,
+  ...ARMOUR_ITEMS,
+  ...ARROW_ITEMS,
   {
     id: "oak-logs",
     assetFolder: "Logs",
@@ -436,7 +499,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     rarity: "common",
     stackable: true,
     value: 20,
-    actions: ["drop", "examine"],
+    actions: ["drop"],
   },
   {
     id: "air-staff",
@@ -453,7 +516,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     stats: { magic: 10, attack: 2, defence: 2 },
     infiniteRunes: ["air-rune"],
     weaponType: "crush",
-    actions: ["equip", "drop", "examine"],
+    actions: ["equip", "drop"],
   },
   {
     id: "dragon-dagger",
@@ -470,7 +533,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     attackSpeedMs: 2400,
     equipRequirement: { kind: "skillLevel", skill: "attack", atLeast: 60 },
     specialAttack: "puncture",
-    actions: ["equip", "drop", "examine"],
+    actions: ["equip", "drop"],
   },
   {
     id: "bronze-platelegs",
@@ -483,7 +546,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     value: 80,
     equipSlot: "legs",
     stats: { defence: 10 },
-    actions: ["equip", "drop", "examine"],
+    actions: ["equip", "drop"],
   },
   {
     // The degrading-gear example: Barrows-style, it wears down with every
@@ -511,7 +574,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     maxDurability: 10000, // attacks until it breaks
     brokenItemId: "dharoks-greataxe-0",
     repairCostGp: 100000,
-    actions: ["equip", "drop", "examine"],
+    actions: ["equip", "drop"],
   },
   {
     id: "dharoks-greataxe-0",
@@ -522,7 +585,7 @@ export const ITEM_CATALOG: ItemDefinition[] = [
     rarity: "legendary",
     stackable: false,
     repairsTo: "dharoks-greataxe",
-    actions: ["drop", "examine"],
+    actions: ["drop"],
   },
 ];
 

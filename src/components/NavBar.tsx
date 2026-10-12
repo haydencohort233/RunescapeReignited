@@ -1,27 +1,5 @@
-export type View =
-  | "home"
-  | "map"
-  | "quests"
-  | "buildings"
-  | "skills"
-  | "inventory"
-  | "equipment"
-  | "statistics"
-  | "achievements"
-  | "settings";
-
-const TABS: { id: View; label: string }[] = [
-  { id: "home", label: "Home" },
-  { id: "map", label: "Map" },
-  { id: "quests", label: "Quests" },
-  { id: "buildings", label: "Buildings" },
-  { id: "skills", label: "Skills" },
-  { id: "inventory", label: "Inventory" },
-  { id: "equipment", label: "Equipment" },
-  { id: "statistics", label: "Statistics" },
-  { id: "achievements", label: "Achievements" },
-  { id: "settings", label: "Settings" },
-];
+import { TABS, type View } from "./navTabs";
+export type { View };
 
 interface NavBarProps {
   activeView: View;
@@ -46,6 +24,28 @@ export default function NavBar({ activeView, onChange, alerts }: NavBarProps) {
           onClick={() => onChange(tab.id)}
         >
           {tab.label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+/** Phones: the main tabs as a bar along the bottom of the screen. */
+export function BottomNav({ activeView, onChange }: Pick<NavBarProps, "activeView" | "onChange">) {
+  return (
+    <nav className="bottom-nav" aria-label="Game sections">
+      {TABS.filter((t) => t.mobile).map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          className="bottom-tab"
+          aria-current={activeView === tab.id ? "page" : undefined}
+          onClick={() => onChange(tab.id)}
+        >
+          <span className="bottom-tab-icon" aria-hidden="true">
+            {tab.icon}
+          </span>
+          <span className="bottom-tab-label">{tab.label}</span>
         </button>
       ))}
     </nav>

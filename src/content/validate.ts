@@ -96,7 +96,6 @@ export function validateContent(): string[] {
       err(`${where}: only ammo and food can be stackable equipment`);
     }
     if (item.equipSlot === "food" && !item.healAmount) err(`${where}: worn as food but has no healAmount`);
-    if (item.actions.includes("bury") && !(item.prayerXp && item.prayerXp > 0)) err(`${where}: has "bury" but no prayerXp`);
     if (item.specialAttack && !getSpecialAttack(item.specialAttack)) err(`${where}: unknown special attack "${item.specialAttack}"`);
     if (item.specialAttack && item.equipSlot !== "weapon") err(`${where}: only weapons have special attacks`);
     for (const runeId of item.infiniteRunes ?? []) ledgerId(where, runeId);
@@ -126,7 +125,8 @@ export function validateContent(): string[] {
     if (!skills.has(r.skill)) err(`${where}: unknown skill "${r.skill}"`);
     if (!(r.timePerItemMs > 0)) err(`${where}: timePerItemMs must be > 0`);
     amounts(where, r.inputs);
-    amounts(where, [r.output]);
+    if (r.output) amounts(where, [r.output]);
+    else if (r.inputs.length === 0) err(`${where}: a gathering recipe needs an output`);
     for (const d of r.bonusDrops ?? []) {
       ledgerId(where, d.resource);
       if (!(d.amount > 0)) err(`${where}: bonus drop amount must be > 0`);
@@ -209,6 +209,7 @@ export function validateContent(): string[] {
   for (const job of JOB_CATALOG) {
     const where = `job "${job.id}"`;
     condition(where, job.objective);
+    if (job.requirement) condition(where, job.requirement);
     amounts(where, job.consumesOnTurnIn);
     rewardItems(where, job.reward?.items);
   }

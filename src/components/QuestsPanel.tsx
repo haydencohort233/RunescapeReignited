@@ -3,7 +3,8 @@ import { QUEST_CATALOG } from "../content/quests";
 import { CONDITION_LABELS, formatReward } from "../content/display";
 import { describeConditionProgress, describeUnmetCondition } from "../engine/unlockConditions";
 import type { QuestDefinition } from "../engine/types";
-import { Page } from "./ui/Page";
+import { Page, Section } from "./ui/Page";
+import { AcceptedJobsList } from "./JobBoardBrowsePanel";
 
 function QuestCard({ quest }: { quest: QuestDefinition }) {
   const { engine, state } = useGame();
@@ -89,6 +90,9 @@ export default function QuestsPanel() {
           <QuestCard key={quest.id} quest={quest} />
         ))}
       </div>
+      <Section title="Your jobs">
+        <AcceptedJobsList />
+      </Section>
     </Page>
   );
 }

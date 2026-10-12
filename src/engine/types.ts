@@ -245,7 +245,7 @@ export interface ToolStats {
 
 export type ItemRarity = "common" | "uncommon" | "rare" | "legendary";
 
-export type ItemActionId = "equip" | "unequip" | "drop" | "examine" | "eat" | "craft" | "teleport" | "bury";
+export type ItemActionId = "equip" | "unequip" | "drop" | "eat" | "craft" | "teleport";
 
 /**
  * Static content definition for an inventory item — lives in content/items.ts,
@@ -311,6 +311,8 @@ export interface ItemDefinition {
   /** Jewellery charges (Amulet of Glory: 4). Kept per copy on
    *  ItemInstance.charges; an NPC recharges them for gold. */
   maxCharges?: number;
+  /** Description once its charges are used up (shown per copy). */
+  unchargedDescription?: string;
   /** GP per charge to recharge (see content/npcs.ts). */
   rechargeCostGp?: number;
   /** Weapon-only: melee (default), ranged (needs ammo) or magic (casts the
@@ -322,8 +324,6 @@ export interface ItemDefinition {
   infiniteRunes?: string[];
   /** Makes this item a gathering tool. */
   tool?: ToolStats;
-  /** Prayer XP for burying or scattering one. Gives "bury" its meaning. */
-  prayerXp?: number;
   /** Degrading gear (Barrows-style), with maxDurability: when durability
    *  reaches 0 the copy turns into this item. Omit to have it dissolve. */
   brokenItemId?: string;
@@ -456,6 +456,9 @@ export interface GameState {
   /** The dungeon being run, if any. While set, only loadout items can be
    *  used and nothing else can be started. */
   dungeonRun: DungeonRun | null;
+  /** dungeonId -> the loadout picked ahead of time (Equipment tab), so it
+   *  doesn't have to be picked again before every run. */
+  savedLoadouts: Record<string, LoadoutEntry[]>;
   jobs: JobBoardState;
   /** questId -> progress, for quests the player has started. */
   quests: Record<string, QuestProgress>;
@@ -571,6 +574,9 @@ export interface JobDefinition {
    *  Objectives that count something (statisticAtLeast,
    *  resourceLifetimeAtLeast) always count from the moment of accepting. */
   frequency?: "daily" | "once" | "repeatable";
+  /** Needed to accept it (a skill level for the better-paying jobs).
+   *  Shown on the board while unmet. */
+  requirement?: UnlockCondition;
 }
 
 export interface AcceptedJob {
@@ -582,6 +588,9 @@ export interface AcceptedJob {
   /** Counter values at acceptance, so the objective measures progress made
    *  since then — see captureBaselines in unlockConditions.ts. */
   baselines: Record<string, number>;
+  /** False for one-time and repeatable jobs, which stay accepted across
+   *  the daily reset. Missing (older saves) means it expires. */
+  expiresAtReset?: boolean;
 }
 
 export interface JobBoardState {
@@ -611,7 +620,13 @@ export interface CraftingRecipe {
   xpPerItem: number;
   timePerItemMs: number;
   inputs: RecipeInput[];
-  output: RecipeInput;
+  /** What each item made gives. Omitted when making one only gives XP
+   *  (burying bones). Gathering recipes always have one. */
+  output?: RecipeInput;
+  /** The start button ("Bury 5"), when the skill's own verb doesn't fit. */
+  verb?: string;
+  /** A statistic counted per item on top of crafted:<id> (buried:bones). */
+  extraStatistic?: string;
   /** What the player is shown as doing while this runs ("Burning Logs",
    *  "Chopping Willows"). Omit to use the skill's own (see SkillDefinition). */
   activityLabel?: string;
@@ -644,7 +659,10 @@ export interface ActiveCraftJob {
   skill: string;
   xpPerItem: number;
   timePerItemMs: number;
-  output: RecipeInput;
+  /** Omitted for XP-only recipes (burying bones). */
+  output?: RecipeInput;
+  /** Counted per item on top of crafted:<id> (see CraftingRecipe). */
+  extraStatistic?: string;
   bonusDrops?: BonusDrop[];
   /** What was actually deducted at start — used to compute a refund if cancelled early. */
   inputsPerItem: RecipeInput[];
@@ -776,6 +794,9 @@ export interface ActiveCombatSession {
   logCount?: number;
   /** When the player last swung — rate-limits "Attack Now". */
   lastPlayerAttackAt?: number;
+  /** Out of arrows or runes: the player's swings do nothing until the
+   *  fight ends (flee or death). Optional for older sessions. */
+  outOfSupplies?: boolean;
 }
 
 export interface CombatLogEntry {

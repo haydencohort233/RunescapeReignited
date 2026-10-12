@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { GameEngineProvider } from "./engine/GameEngineContext";
 import { useGame } from "./engine/GameEngineContext";
-import NavBar, { type View } from "./components/NavBar";
+import NavBar, { BottomNav, type View } from "./components/NavBar";
 import HomeView from "./components/HomeView";
 import MapView from "./components/MapView";
 import QuestsPanel from "./components/QuestsPanel";
@@ -13,8 +13,10 @@ import StatisticsPanel from "./components/StatisticsPanel";
 import AchievementsPanel from "./components/AchievementsPanel";
 import SettingsPanel from "./components/SettingsPanel";
 import NotificationOverlay from "./components/NotificationOverlay";
-import PlayerSidebar, { PlayerStrip } from "./components/PlayerSidebar";
+import PlayerSidebar, { PlayerDrawer, PlayerStrip } from "./components/PlayerSidebar";
+import { CompactActionBar } from "./components/ActivityCard";
 import { applySidebarOpen, getSidebarOpen } from "./lib/sidebar";
+import { useTabTitle } from "./lib/useTabTitle";
 import { DialogHost } from "./components/ui/DialogHost";
 import { ACHIEVEMENT_CATALOG } from "./content/achivements";
 import { preloadImages } from "./lib/imagePreloader";
@@ -33,14 +35,17 @@ function AppContent() {
   const [activeView, setActiveView] = useState<View>("home");
   const [focusSkillId, setFocusSkillId] = useState<string | undefined>();
   const [sidebarOpen, setSidebarOpen] = useState(getSidebarOpen);
-  const { engine, suspended } = useGame();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const { engine, state, suspended } = useGame();
 
   useEffect(() => applySidebarOpen(sidebarOpen), [sidebarOpen]);
+  useTabTitle(engine, state.activeAction);
 
-  const changeView = (view: View) => {
+  const changeView = useCallback((view: View) => {
     setFocusSkillId(undefined);
     setActiveView(view);
-  };
+    window.scrollTo({ top: 0 });
+  }, []);
   // Combat skills open the combat hub (Equipment), as in Melvor.
   const openSkill = (skillId: string) => {
     if (COMBAT_SKILLS.has(skillId)) {
@@ -50,6 +55,17 @@ function AppContent() {
     setFocusSkillId(skillId);
     setActiveView("skills");
   };
+  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+
+  // Starting a fight (or a dungeon wave after the regear stop) switches to
+  // the Equipment tab, where the fight is. Not on load: a save reopened
+  // mid-fight stays wherever the player was.
+  const fighting = state.activeAction?.kind === "combat";
+  const wasFighting = useRef(fighting);
+  useEffect(() => {
+    if (fighting && !wasFighting.current) changeView("equipment");
+    wasFighting.current = fighting;
+  }, [fighting, changeView]);
 
   // Shared UI chrome (HP bar layers, hitsplat icons) is needed the moment
   // combat starts, so request it at app startup rather than mid-fight.
@@ -95,7 +111,17 @@ function AppContent() {
       </aside>
 
       <main className="shell-main">
-        <PlayerStrip />
+        <div className="shell-top">
+          <PlayerStrip
+            onOpen={() => {
+              // Wide screens have the sidebar for this; phones get the drawer.
+              if (window.matchMedia("(min-width: 1024px)").matches) setSidebarOpen(true);
+              else setDrawerOpen(true);
+            }}
+            alert={hasUnclaimedAchievement}
+          />
+          <CompactActionBar onOpenFight={() => changeView("equipment")} />
+        </div>
         {activeView === "home" && <HomeView />}
         {activeView === "map" && <MapView />}
         {activeView === "quests" && <QuestsPanel />}
@@ -120,6 +146,15 @@ function AppContent() {
         </button>
         {sidebarOpen && <PlayerSidebar onOpenSkill={openSkill} />}
       </aside>
+
+      <BottomNav activeView={activeView} onChange={changeView} />
+      <PlayerDrawer
+        open={drawerOpen}
+        onClose={closeDrawer}
+        onOpenSkill={openSkill}
+        onOpenView={changeView}
+        alerts={{ achievements: hasUnclaimedAchievement }}
+      />
     </div>
   );
 }

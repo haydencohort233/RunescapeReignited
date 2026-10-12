@@ -9,6 +9,7 @@ import { getThemeChoice, setThemeChoice, type ThemeChoice } from "../lib/theme";
 import { Page, Section } from "./ui/Page";
 import { requestConfirm } from "../lib/dialog";
 import RichText from "./Richtext";
+import { setPreferences, TOGGLEABLE_NOTIFICATIONS, usePreferences } from "../lib/preferences";
 
 export default function SettingsPanel() {
   const { engine, state, autosaveMs, actions } = useGame();
@@ -18,6 +19,7 @@ export default function SettingsPanel() {
   const [theme, setTheme] = useState<ThemeChoice>(getThemeChoice);
   const [pastedSave, setPastedSave] = useState("");
   const [teleportId, setTeleportId] = useState(MAP_LOCATIONS[0].id);
+  const prefs = usePreferences();
 
   // Dev actions don't all notify, so re-render explicitly afterwards.
   const dev = (fn: () => void) => () => {
@@ -29,7 +31,7 @@ export default function SettingsPanel() {
     <Page title="Settings">
       <Section title="Display">
         <div className="card">
-          <label className="row row-between">
+          <label className="row row-between setting-row">
             <span>Theme</span>
             <select
               id="theme"
@@ -45,12 +47,73 @@ export default function SettingsPanel() {
               <option value="dark">Dark</option>
             </select>
           </label>
+          <label className="row row-between setting-row">
+            <span>
+              Exact numbers <span className="text-faint text-small">· 1,234,567 GP instead of 1.23M</span>
+            </span>
+            <input
+              id="exact-numbers"
+              type="checkbox"
+              checked={prefs.exactNumbers}
+              onChange={(e) => {
+                setPreferences({ exactNumbers: e.target.checked });
+                actions.refresh();
+              }}
+            />
+          </label>
+        </div>
+      </Section>
+
+      <Section title="Notifications">
+        <div className="card">
+          <label className="row row-between setting-row">
+            <span>Show notifications</span>
+            <input
+              id="notifications-on"
+              type="checkbox"
+              checked={prefs.notifications}
+              onChange={(e) => setPreferences({ notifications: e.target.checked })}
+            />
+          </label>
+          {TOGGLEABLE_NOTIFICATIONS.map(({ type, label }) => (
+            <label key={type} className={`row row-between setting-row${prefs.notifications ? "" : " text-faint"}`}>
+              <span className="text-small">{label}</span>
+              <input
+                id={`notify-${type}`}
+                type="checkbox"
+                disabled={!prefs.notifications}
+                checked={!prefs.hiddenTypes.includes(type)}
+                onChange={(e) =>
+                  setPreferences({
+                    hiddenTypes: e.target.checked
+                      ? prefs.hiddenTypes.filter((t) => t !== type)
+                      : [...prefs.hiddenTypes, type],
+                  })
+                }
+              />
+            </label>
+          ))}
+          <p className="text-faint text-small">
+            Warnings and errors always show, so you know when something didn't work. Everything is still kept in the
+            history below.
+          </p>
+          <label className="row row-between setting-row">
+            <span>
+              ❗ in the tab title <span className="text-faint text-small">· for level ups and achievements while away</span>
+            </span>
+            <input
+              id="title-alert"
+              type="checkbox"
+              checked={prefs.titleAlert}
+              onChange={(e) => setPreferences({ titleAlert: e.target.checked })}
+            />
+          </label>
         </div>
       </Section>
 
       <Section title="Save data">
         <div className="card">
-          <label className="row row-between">
+          <label className="row row-between setting-row">
             <span>Autosave every</span>
             <select id="autosave" value={autosaveMs} onChange={(e) => actions.setAutosaveMs(Number(e.target.value))}>
               <option value={5000}>5s</option>

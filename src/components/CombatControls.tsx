@@ -85,8 +85,9 @@ export function CombatStylePicker() {
   );
 }
 
-/** Which spell a magic weapon casts. Locked in when a fight starts. */
-export function SpellPicker() {
+/** Which spell a magic weapon casts. Locked in when a fight starts, so
+ *  it's greyed out mid-fight. */
+export function SpellPicker({ locked = false }: { locked?: boolean }) {
   const { engine, state, actions } = useGame();
   const gear = getEquipmentBonuses(state);
   const magic = engine.getSkillLevel("magic");
@@ -99,6 +100,8 @@ export function SpellPicker() {
       <select
         id="spell-select"
         className="spell-select"
+        disabled={locked}
+        title={locked ? "Your spell is locked in until the fight ends" : undefined}
         value={state.selectedSpellId ?? ""}
         onChange={(e) => {
           engine.selectSpell(e.target.value);

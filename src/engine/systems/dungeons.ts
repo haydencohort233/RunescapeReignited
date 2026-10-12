@@ -34,15 +34,57 @@ export class DungeonSystem {
     return this.state.dungeonRun;
   }
 
-  /** Slots an entry takes: one per piece of gear or food, one per other stack. */
+  /** Slots a loadout takes: one per piece of gear, one per stack (arrows).
+   *  Food takes none: the food slot's stack comes in on its own. */
   slotsUsed(entries: LoadoutEntry[]): number {
     let slots = 0;
     for (const e of entries) {
       const def = this.engine.itemsById.get(e.itemDefId);
-      if (!def || e.quantity <= 0) continue;
-      slots += def.healAmount ? e.quantity : 1;
+      if (!def || e.quantity <= 0 || def.healAmount) continue;
+      slots += 1;
     }
     return slots;
+  }
+
+  /** Food is never picked for a loadout; the worn food is added on entry. */
+  private withoutFood(loadout: LoadoutEntry[]): LoadoutEntry[] {
+    return loadout.filter((e) => !this.engine.itemsById.get(e.itemDefId)?.healAmount);
+  }
+
+  /** The loadout saved for a dungeon, trimmed to what can still be brought:
+   *  copies still owned and not worn, stacks at what's held now. */
+  getSavedLoadout(dungeonId: string): LoadoutEntry[] {
+    const worn = new Set(Object.values(this.state.equipment));
+    const entries: LoadoutEntry[] = [];
+    for (const e of this.state.savedLoadouts[dungeonId] ?? []) {
+      const def = this.engine.itemsById.get(e.itemDefId);
+      if (!def?.equipSlot || def.healAmount) continue;
+      if (def.stackable) {
+        const held = Math.floor(this.engine.getResourceAmount(def.id));
+        if (held >= 1 && !worn.has(`stack:${def.id}`)) entries.push({ itemDefId: def.id, quantity: held });
+      } else if (e.instanceId && this.state.inventory[e.instanceId]?.itemDefId === def.id && !worn.has(e.instanceId)) {
+        entries.push({ itemDefId: def.id, instanceId: e.instanceId, quantity: 1 });
+      }
+    }
+    return entries;
+  }
+
+  /** Remembers a loadout for next time (set up from the Equipment tab).
+   *  Only gear and ammo; at most the dungeon's slot count. */
+  setSavedLoadout(dungeonId: string, loadout: LoadoutEntry[]): boolean {
+    const dungeon = this.getDungeon(dungeonId);
+    if (!dungeon) return false;
+    const entries = this.withoutFood(loadout).filter((e) => this.engine.itemsById.get(e.itemDefId)?.equipSlot && e.quantity > 0);
+    if (this.slotsUsed(entries) > dungeon.loadoutSlots) {
+      this.notifications.push("status", `You can only bring ${dungeon.loadoutSlots} items.`, { severity: "warning" });
+      return false;
+    }
+    this.state.savedLoadouts[dungeonId] = entries.map((e) => ({
+      itemDefId: e.itemDefId,
+      quantity: e.instanceId ? 1 : e.quantity,
+      ...(e.instanceId ? { instanceId: e.instanceId } : {}),
+    }));
+    return true;
   }
 
   /** Why the player can't enter with this loadout right now, or null. */
@@ -53,6 +95,7 @@ export class DungeonSystem {
     if (this.state.currentLocationId !== dungeon.locationId) return `You need to be at the ${dungeon.name}.`;
     if (dungeon.unlockCondition && !isUnlocked(dungeon.unlockCondition, this.state)) return "You can't enter yet.";
     if (this.engine.getCurrentHp() <= 0) return "You need to heal first.";
+    loadout = this.withoutFood(loadout);
     if (this.slotsUsed(loadout) > dungeon.loadoutSlots) return `You can only bring ${dungeon.loadoutSlots} items.`;
     const worn = new Set(Object.values(this.state.equipment));
     for (const e of loadout) {
@@ -69,8 +112,8 @@ export class DungeonSystem {
     return null;
   }
 
-  /** Enters with `loadout` (worn gear comes along without using slots) and
-   *  starts the first wave. */
+  /** Enters with `loadout` (worn gear and the food slot's stack come along
+   *  without using slots) and starts the first wave. */
   enterDungeon(dungeonId: string, loadout: LoadoutEntry[]): boolean {
     this.engine.catchUpToNow();
     const blocker = this.getEnterBlocker(dungeonId, loadout);
@@ -80,12 +123,12 @@ export class DungeonSystem {
     }
     if (!this.engine.ensureIdle()) return false;
     const dungeon = this.getDungeon(dungeonId)!;
-    this.state.dungeonRun = {
-      dungeonId,
-      wavesCleared: 0,
-      awaitingBoss: false,
-      loadout: loadout.map((e) => ({ ...e })),
-    };
+    const entries = this.withoutFood(loadout).map((e) => ({ ...e }));
+    const food = this.engine.getEquipmentBonuses().foodItemId;
+    if (food && this.engine.getResourceAmount(food) >= 1) {
+      entries.push({ itemDefId: food, quantity: Math.floor(this.engine.getResourceAmount(food)) });
+    }
+    this.state.dungeonRun = { dungeonId, wavesCleared: 0, awaitingBoss: false, loadout: entries };
     this.engine.incrementStatistic(`dungeonEntered:${dungeonId}`, 1);
     this.notifications.push("status", `You enter the ${dungeon.name}.`);
     this.startStage(this.engine.now());

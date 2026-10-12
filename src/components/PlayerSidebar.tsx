@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useGame } from "../engine/GameEngineContext";
 import type { GameEngine } from "../engine/gameEngine";
 import type { GameState } from "../engine/types";
@@ -150,19 +150,106 @@ export default function PlayerSidebar({ onOpenSkill }: { onOpenSkill: (skillId: 
 }
 
 /** The always-visible essentials on narrow screens, where there's no room
- *  for the full sidebar: health, gold and combat level. */
-export function PlayerStrip() {
+ *  for the full sidebar: health, gold and combat level. On phones it opens
+ *  the player drawer (status, skills, and the other tabs). */
+export function PlayerStrip({ onOpen, alert = false }: { onOpen?: () => void; alert?: boolean }) {
   const { engine } = useGame();
   const gpRate = engine.getEffectiveRatePerSecond("gp");
-  return (
-    <div className="player-strip card">
+  const body = (
+    <>
       <div className="row row-between text-small">
         <span className="text-gold">
           {formatNumber(engine.getResourceAmount("gp"))} GP <span className="text-faint">{rateText(gpRate)}</span>
         </span>
-        <span className="text-faint">Combat {engine.getCombatLevel()}</span>
+        <span className="text-faint">
+          Combat {engine.getCombatLevel()}
+          {onOpen && (
+            <span className={`strip-menu${alert ? " has-dot" : ""}`} aria-hidden="true">
+              {" "}
+              ☰
+            </span>
+          )}
+        </span>
       </div>
       <HpBar current={engine.getCurrentHp()} max={engine.getMaxHp()} label="Health" />
+    </>
+  );
+  if (!onOpen) return <div className="player-strip card">{body}</div>;
+  return (
+    <button type="button" className="player-strip card is-button" onClick={onOpen} aria-label="Open player menu">
+      {body}
+    </button>
+  );
+}
+
+/** Phones: player status and skills in a drawer that slides in from the
+ *  left, with Statistics, Achievements and Settings as icons in its
+ *  header. */
+export function PlayerDrawer({
+  open,
+  onClose,
+  onOpenSkill,
+  onOpenView,
+  alerts,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onOpenSkill: (skillId: string) => void;
+  onOpenView: (view: "statistics" | "achievements" | "settings") => void;
+  alerts?: { achievements?: boolean };
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  const views = [
+    { id: "statistics", icon: "📊", label: "Statistics" },
+    { id: "achievements", icon: "🏆", label: "Achievements" },
+    { id: "settings", icon: "⚙️", label: "Settings" },
+  ] as const;
+
+  return (
+    <div className={`drawer-root${open ? " is-open" : ""}`} aria-hidden={!open}>
+      <div className="drawer-backdrop" onClick={onClose} />
+      <aside className="drawer" aria-label="Player" role="dialog" aria-modal="true">
+        <div className="drawer-header">
+          <span className="app-title drawer-title">Idle Engine</span>
+          <span className="row" style={{ gap: 2 }}>
+            {views.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                className={`btn btn-ghost drawer-icon${v.id === "achievements" && alerts?.achievements ? " has-dot" : ""}`}
+                title={v.label}
+                aria-label={v.label}
+                tabIndex={open ? 0 : -1}
+                onClick={() => {
+                  onOpenView(v.id);
+                  onClose();
+                }}
+              >
+                {v.icon}
+              </button>
+            ))}
+            <button type="button" className="btn btn-ghost drawer-icon" aria-label="Close" tabIndex={open ? 0 : -1} onClick={onClose}>
+              ✕
+            </button>
+          </span>
+        </div>
+        {open && (
+          <PlayerSidebar
+            onOpenSkill={(id) => {
+              onOpenSkill(id);
+              onClose();
+            }}
+          />
+        )}
+      </aside>
     </div>
   );
 }

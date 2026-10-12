@@ -23,7 +23,7 @@ export function RecipeCard({ recipe }: { recipe: CraftingRecipe }) {
     ...recipe.inputs.map((input) => Math.floor(engine.getOwnedCount(input.resource) / input.amount))
   );
   const actions = quantityActions(
-    getSkill(recipe.skill)?.verb ?? "Make",
+    recipe.verb ?? getSkill(recipe.skill)?.verb ?? "Make",
     maxCraftable,
     (q) => confirmAndStartCraftJob(engine, recipe, q),
     `Needs ${formatAmounts(recipe.inputs, " + ")} each`

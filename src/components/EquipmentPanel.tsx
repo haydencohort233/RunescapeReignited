@@ -1,7 +1,11 @@
+import { useState } from "react";
 import { useGame } from "../engine/GameEngineContext";
 import { EQUIPMENT_SLOTS } from "../content/equipmentSlots";
 import { getItemDef } from "../content/items";
 import { getEquipmentBonuses } from "../content/combatStats";
+import { DUNGEON_CATALOG } from "../content/dungeons";
+import { dungeonDescription, itemDescription, itemName } from "../content/display";
+import { isUnlocked } from "../engine/unlockConditions";
 import { wornItemDefId } from "../engine/ledger";
 import { getActiveCombat } from "../engine/activeAction";
 import { formatNumber } from "../engine/format";
@@ -11,28 +15,34 @@ import { ActionCard } from "./ui/ActionCard";
 import { Page, Section } from "./ui/Page";
 import { CombatStats, CombatStylePicker, SpecialAttackBar, SpellPicker } from "./CombatControls";
 import CombatPanel from "./CombatPanel";
+import DungeonCard from "./DungeonCard";
+import LoadoutPicker from "./LoadoutPicker";
 
-/** The combat hub, Melvor-style: style, spell, special attack, stats,
- *  then everything worn, including the food fights eat from and the ammo
- *  a bow uses. Clicking a combat skill in the sidebar opens it. */
+/** The combat hub, Melvor-style: the fight itself, style, spell, special
+ *  attack, stats, then everything worn, including the food fights eat
+ *  from and the ammo a bow uses. Clicking a combat skill in the sidebar
+ *  opens it, and starting a fight switches here. */
 export default function EquipmentPanel() {
   const { engine, state } = useGame();
+  const [pickingFor, setPickingFor] = useState<string | null>(null);
   const gear = getEquipmentBonuses(state);
   const session = getActiveCombat(state);
   const fighting = !!session;
+  const run = state.dungeonRun;
 
   return (
     <Page title="Equipment">
-      {/* Melvor-style: the fight itself is right here too. */}
-      {session && <CombatPanel enemyId={session.enemyId} inDungeon={!!session.dungeonId} />}
+      {/* The fight is right here too. A dungeon run shows its own card
+          (waves, what's next, the regear stop) with the fight inside it. */}
+      {run ? (
+        <DungeonCard dungeonId={run.dungeonId} description={dungeonDescription(run.dungeonId)} />
+      ) : (
+        session && <CombatPanel enemyId={session.enemyId} />
+      )}
+
       <div className="card stack">
-        {fighting && (
-          <p className="text-warning text-small">
-            You're in a fight: gear is locked until it ends. You can still change style and swap food.
-          </p>
-        )}
         <CombatStylePicker />
-        {gear.attackStyle === "magic" && <SpellPicker />}
+        {gear.attackStyle === "magic" && <SpellPicker locked={fighting} />}
         {gear.attackStyle === "ranged" && !gear.ammoItemId && (
           <p className="text-warning text-small">Equip arrows in the Ammo slot to fight with a bow.</p>
         )}
@@ -41,18 +51,25 @@ export default function EquipmentPanel() {
       </div>
 
       <Section title="Worn">
-        <p className="text-faint text-small">
-          Equip food from your inventory to bring it into fights; auto-eat uses it. Gear can't be changed mid-fight.
-        </p>
+        {fighting ? (
+          <p className="combat-alert text-small">
+            🔒 You're fighting: weapons and armour are locked until the fight ends. Food can still be eaten and swapped.
+          </p>
+        ) : (
+          <p className="text-faint text-small">
+            Equip food from your inventory to bring it into fights; auto-eat uses it. Gear can't be changed mid-fight.
+          </p>
+        )}
         <div className="stack-sm">
           {EQUIPMENT_SLOTS.map((slot) => {
             const equipValue = state.equipment[slot.id];
             const itemDefId = equipValue ? wornItemDefId(state, equipValue) : undefined;
             const def = itemDefId ? getItemDef(itemDefId) : undefined;
+            const locked = fighting && slot.id !== "food";
 
             if (!def || !equipValue) {
               return (
-                <div key={slot.id} className="card">
+                <div key={slot.id} className={`card${locked ? " is-gear-locked" : ""}`}>
                   <div className="card-header">
                     <span className="card-title text-faint">{slot.label}</span>
                     <span className="card-meta">Empty</span>
@@ -65,20 +82,21 @@ export default function EquipmentPanel() {
             const wear =
               def.maxDurability !== undefined && instance
                 ? ` · ${Math.round(((instance.durability ?? def.maxDurability) / def.maxDurability) * 100)}% condition`
-                : def.maxCharges !== undefined && instance
-                  ? ` · ${instance.charges ?? 0}/${def.maxCharges} charges`
-                  : "";
+                : "";
             return (
               <ActionCard
                 key={slot.id}
+                className={locked ? "is-gear-locked" : ""}
                 icon={<ItemIcon def={def} size={24} />}
-                title={def.name}
+                title={itemName(def, instance)}
                 meta={
-                  (def.stackable ? `${slot.label} · x${formatNumber(engine.getResourceAmount(def.id))}` : slot.label) + wear
+                  (def.stackable ? `${slot.label} · x${formatNumber(engine.getResourceAmount(def.id))}` : slot.label) +
+                  wear +
+                  (locked ? " · 🔒" : "")
                 }
                 description={
                   <>
-                    {def.description}
+                    {itemDescription(def, instance)}
                     {stats && <div className="text-small">{stats}</div>}
                   </>
                 }
@@ -86,12 +104,55 @@ export default function EquipmentPanel() {
                   instanceId: def.stackable ? undefined : equipValue,
                   equipped: true,
                   exclude: ["drop"],
-                })}
+                }).map((a) => (locked && a.label === "Unequip" ? { ...a, disabled: true, reason: "Gear is locked mid-fight" } : a))}
               />
             );
           })}
         </div>
       </Section>
+
+      <Section title="Dungeon loadouts">
+        <p className="text-faint text-small">
+          Pack your dungeon gear ahead of time. Worn gear and your equipped food come along for free.
+        </p>
+        <div className="stack-sm">
+          {DUNGEON_CATALOG.map((dungeon) => {
+            const unlocked = !dungeon.unlockCondition || isUnlocked(dungeon.unlockCondition, state);
+            const loadout = engine.getSavedLoadout(dungeon.id);
+            return (
+              <div key={dungeon.id} className="card">
+                <div className="card-header">
+                  <span className="card-title">{dungeon.name}</span>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={!!run}
+                    title={run ? "Not while you're in a dungeon" : undefined}
+                    onClick={() => setPickingFor(dungeon.id)}
+                  >
+                    Select loadout ({loadout.length}/{dungeon.loadoutSlots})
+                  </button>
+                </div>
+                {!unlocked && <span className="text-faint text-small">You haven't unlocked this dungeon yet.</span>}
+                {loadout.length > 0 && (
+                  <div className="row" style={{ gap: 6 }}>
+                    {loadout.map((e) => {
+                      const def = getItemDef(e.itemDefId);
+                      return def ? (
+                        <span key={e.instanceId ?? e.itemDefId} className="item-chip loadout-chip" title={def.name}>
+                          <ItemIcon def={def} size={20} />
+                          <span className="text-small">{def.name}</span>
+                        </span>
+                      ) : null;
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </Section>
+      {pickingFor && <LoadoutPicker dungeonId={pickingFor} onClose={() => setPickingFor(null)} />}
     </Page>
   );
 }

@@ -44,6 +44,10 @@
   /* Outline for sprites; only needed against a dark background. */
   --icon-outline: none;
 
+  /* Inventory: worn items' outline, and OSRS-yellow stack counts. */
+  --equipped: #16a34a;
+  --stack-count: #a16207;
+
   --sans: system-ui, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
@@ -93,6 +97,8 @@
   --splat-bleed: #fb7185;
   --spec: #f59e0b;
   --icon-outline: drop-shadow(0 0 1px rgba(255, 255, 255, 0.55));
+  --equipped: #4ade80;
+  --stack-count: #facc15;
 
   color-scheme: dark;
 }
@@ -1059,4 +1065,494 @@ input[type="checkbox"] {
 
 .spell-select {
   max-width: 100%;
+}
+
+/* ── Inputs, chips ────────────────────────────────────────────────────── */
+
+.input {
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-strong);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip {
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--accent-bg);
+  border-color: var(--accent-bg);
+  color: var(--accent-fg);
+}
+
+.tag-info {
+  border-color: var(--info);
+  color: var(--info);
+}
+
+.tag-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* ── Inventory grid ───────────────────────────────────────────────────
+   Square slots like the OSRS inventory: icon, stack size in the corner,
+   the name underneath. Worn items get a green outline. */
+
+.inv-toolbar {
+  flex-wrap: nowrap;
+}
+
+.inv-search {
+  flex: 1;
+}
+
+.inv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 6px;
+}
+
+.inv-tile {
+  font: inherit;
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 4px 4px;
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-strong);
+  cursor: pointer;
+}
+
+.inv-tile:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--border);
+}
+
+.inv-tile:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.inv-tile.is-equipped {
+  border-color: var(--equipped);
+  box-shadow: inset 0 0 0 1px var(--equipped);
+}
+
+.inv-tile.is-selected {
+  border-color: var(--accent-bg);
+  box-shadow: inset 0 0 0 2px var(--accent-bg);
+}
+
+.inv-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  filter: var(--icon-outline);
+}
+
+.inv-name {
+  font-size: 10.5px;
+  line-height: 1.15;
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* OSRS draws stack sizes in yellow in the top-left corner. */
+.inv-qty {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--stack-count);
+  font-variant-numeric: tabular-nums;
+}
+
+.inv-badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--accent-bg);
+  color: var(--accent-fg);
+}
+
+.setting-row {
+  flex-wrap: nowrap;
+}
+
+.inv-detail-icon {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg);
+  filter: var(--icon-outline);
+}
+
+.loadout-chip {
+  padding: 2px 8px 2px 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+}
+
+/* ── Modal (item details, loadout picker) ─────────────────────────────── */
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  gap: 12px;
+}
+
+.modal.is-wide {
+  max-width: 560px;
+}
+
+.modal-body {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.modal-footer {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 10px;
+}
+
+.modal-close {
+  font-size: 16px;
+  padding: 2px 8px;
+}
+
+/* ── Combat additions ─────────────────────────────────────────────────── */
+
+.combat-alert {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+/* Worn gear mid-fight: greyed out and not clickable, except food. */
+.card.is-gear-locked {
+  opacity: 0.5;
+  filter: grayscale(0.8);
+  background: var(--bg);
+}
+
+.progress-track.is-enemy-hp .progress-fill {
+  background: var(--splat-hit);
+}
+
+.dungeon-plan {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.dungeon-next {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ── Job board ────────────────────────────────────────────────────────── */
+
+.job-card .progress-track {
+  height: 5px;
+}
+
+.job-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* ── Phone shell: bottom tab bar, player drawer, compact action bar ────
+   Below 1024px the left nav is replaced by a bar along the bottom; the
+   player strip at the top opens a drawer with status and skills, and a
+   thin bar under it shows the current action on every tab. */
+
+.bottom-nav,
+.drawer-root,
+.compact-action {
+  display: none;
+}
+
+.player-strip.is-button {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+}
+
+.has-dot {
+  position: relative;
+}
+
+.has-dot::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gold-border);
+}
+
+@media (max-width: 1023px) {
+  .shell {
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+
+  .shell-nav {
+    display: none;
+  }
+
+  .shell-top {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: -16px -16px 0;
+    padding: 10px 16px 8px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .shell-top .player-strip {
+    padding: 6px 10px;
+  }
+
+  .activity-card {
+    display: none;
+  }
+
+  .compact-action {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 10px;
+    border: 1px solid var(--accent-bg);
+    border-radius: 8px;
+    background: var(--surface);
+  }
+
+  .compact-action .progress-track {
+    height: 4px;
+  }
+
+  .compact-action-toggle {
+    font: inherit;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--text-strong);
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .compact-action-label {
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .compact-action-details {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 4px;
+  }
+
+  .bottom-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    padding: 4px 2px calc(4px + env(safe-area-inset-bottom));
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -2px 10px var(--shadow);
+  }
+
+  .bottom-tab {
+    font: inherit;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    min-width: 0;
+    padding: 4px 0;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .bottom-tab[aria-current="page"] {
+    color: var(--text-h);
+    background: var(--surface-hover);
+  }
+
+  .bottom-tab-icon {
+    font-size: 18px;
+    line-height: 1.2;
+  }
+
+  .bottom-tab-label {
+    font-size: 9.5px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .bottom-tab[aria-current="page"] .bottom-tab-label {
+    font-weight: 600;
+  }
+
+  .drawer-root {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    pointer-events: none;
+  }
+
+  .drawer-root.is-open {
+    pointer-events: auto;
+  }
+
+  .drawer-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .drawer-root.is-open .drawer-backdrop {
+    opacity: 1;
+  }
+
+  .drawer {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(320px, 86vw);
+    box-sizing: border-box;
+    overflow-y: auto;
+    padding: 12px 14px calc(24px + env(safe-area-inset-bottom));
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    transform: translateX(-100%);
+    transition: transform 0.2s ease-out;
+  }
+
+  .drawer-root.is-open .drawer {
+    transform: none;
+  }
+
+  .drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-bottom: 10px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .drawer-title {
+    font-size: 17px;
+    margin: 0;
+  }
+
+  .drawer-icon {
+    font-size: 18px;
+    padding: 4px 7px;
+  }
+
+  .toast-zone-status {
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    right: 12px;
+  }
+
+  /* Dialogs rise from the bottom as a sheet. */
+  .modal-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal-backdrop .modal {
+    max-width: none;
+    border-radius: 14px 14px 0 0;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+    max-height: 88dvh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer,
+  .drawer-backdrop {
+    transition: none;
+  }
 }

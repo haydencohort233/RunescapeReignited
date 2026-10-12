@@ -24,7 +24,7 @@ Any new `GameState` field must go in four places, or it is silently dropped on l
 1. `createInitialState` in engine/state.ts
 2. the `withDefaults` object in `migrateSave` (engine/migrations.ts), sanitized
 3. a migration entry for the old version in `MIGRATIONS`
-4. a bump of `SCHEMA_VERSION` (currently 23)
+4. a bump of `SCHEMA_VERSION` (currently 24)
 
 New fields on `ActiveCombatSession` should be optional, or handled in `sanitizeAction`, so a save made mid-fight still loads. Add a round-trip test (serialize, then deserialize).
 

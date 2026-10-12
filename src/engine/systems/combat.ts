@@ -97,7 +97,7 @@ export class CombatSystem {
 
   /** A dungeon wave or boss, started by the dungeon itself (possibly
    *  mid-resolve, offline): no idle check, current gear, auto-eat from the
-   *  loadout. Missing arrows or runes end it on the first swing. */
+   *  loadout. Without arrows or runes the player just can't attack. */
   startDungeonFight(enemy: EnemyDefinition, dungeonId: string, startAt: number, autoEatItemId?: string): void {
     const gear = this.engine.getEquipmentBonuses();
     const spell = gear.attackStyle === "magic" ? this.engine.getSpell(this.state.selectedSpellId) : undefined;
@@ -201,6 +201,10 @@ export class CombatSystem {
     const now = this.engine.now();
     // Mid-respawn there's nothing to hit yet.
     if (now < session.playerStartedAt) return false;
+    if (!this.hasSupplies(session)) {
+      this.markOutOfSupplies(session);
+      return false;
+    }
     const minGap = session.playerAttackSpeedMs * ATTACK_NOW_MIN_INTERVAL_FRACTION;
     if (session.lastPlayerAttackAt !== undefined && now - session.lastPlayerAttackAt < minGap) return false;
     const killsBefore = session.kills;
@@ -229,6 +233,7 @@ export class CombatSystem {
       session.specArmed = false;
       return true;
     }
+    if (session.outOfSupplies) return false;
     if (this.state.specialEnergy < spec.cost) {
       this.notifications.push("status", `${spec.name} needs ${spec.cost}% special attack energy.`, { severity: "warning" });
       return false;
@@ -337,11 +342,29 @@ export class CombatSystem {
     return spell.runes.every((r) => infiniteRunes.includes(r.resource) || this.engine.getOwnedCount(r.resource) >= r.amount);
   }
 
-  /** Ends the fight because arrows or runes ran out, mid-fight or offline. */
-  private endOutOfSupplies(session: ActiveCombatSession, message: string): void {
-    this.state.activeAction = null;
-    this.notifications.push("status", `${message} You stop fighting ${session.enemyName}.`, { severity: "warning" });
-    if (session.dungeonId) this.engine.endDungeonRun("Out of supplies, you retreat from the dungeon.");
+  /** Whether the next swing can be paid for: an arrow, or the spell's runes. */
+  private hasSupplies(session: ActiveCombatSession): boolean {
+    const attackStyle = session.attackStyle ?? "melee";
+    if (attackStyle === "ranged") return !!session.ammoItemId && this.engine.getResourceAmount(session.ammoItemId) >= 1;
+    if (attackStyle === "magic") {
+      const spell = this.engine.getSpell(session.spellId);
+      return !!spell && this.hasRunesFor(spell, session.infiniteRunes ?? []);
+    }
+    return true;
+  }
+
+  /** Out of arrows or runes: the fight goes on, but the player can't
+   *  attack, so it ends only by fleeing or dying. Said once per fight. */
+  private markOutOfSupplies(session: ActiveCombatSession): void {
+    if (session.outOfSupplies) return;
+    session.outOfSupplies = true;
+    session.specArmed = false;
+    const what = (session.attackStyle ?? "melee") === "ranged" ? "arrows" : "runes";
+    this.notifications.push(
+      "status",
+      `You've run out of ${what} and can't attack ${session.enemyName}. Flee, or keep eating.`,
+      { severity: "warning", replaceKey: "combat-out-of-supplies" }
+    );
   }
 
   /** One player attack: pays for it (an arrow, a spell's runes), then
@@ -351,19 +374,15 @@ export class CombatSystem {
     const attackStyle = session.attackStyle ?? "melee";
     let spell: SpellDefinition | undefined;
 
+    if (!this.hasSupplies(session)) {
+      this.markOutOfSupplies(session);
+      return;
+    }
+    session.outOfSupplies = false;
     if (attackStyle === "ranged") {
-      const ammo = session.ammoItemId;
-      if (!ammo || this.engine.getResourceAmount(ammo) < 1) {
-        this.endOutOfSupplies(session, "You've run out of arrows.");
-        return;
-      }
-      this.engine.spendWornStack(ammo, 1);
+      this.engine.spendWornStack(session.ammoItemId!, 1);
     } else if (attackStyle === "magic") {
-      spell = this.engine.getSpell(session.spellId);
-      if (!spell || !this.hasRunesFor(spell, session.infiniteRunes ?? [])) {
-        this.endOutOfSupplies(session, `You've run out of runes for ${spell?.name ?? "your spell"}.`);
-        return;
-      }
+      spell = this.engine.getSpell(session.spellId)!;
       this.engine.payFor(spell.runes.filter((r) => !(session.infiniteRunes ?? []).includes(r.resource)));
       // OSRS gives a spell's base XP on every cast, hit or splash.
       this.engine.addSkillXp("magic", spell.baseXp);
@@ -559,16 +578,19 @@ export class CombatSystem {
       return;
     }
     if (session.autoRepeat) {
-      this.notifications.push("status", `Stopped fighting ${session.enemyName}: HP is low and there's no food left.`, {
+      const reason = this.hasSupplies(session) ? "HP is low and there's no food left" : "you're out of ammo or runes";
+      this.notifications.push("status", `Stopped fighting ${session.enemyName}: ${reason}.`, {
         severity: "warning",
       });
     }
     this.state.activeAction = null;
   }
 
-  /** Repeat fights continue only while HP is healthy or there's food to
-   *  bring it back up — never fight on toward a death unattended. */
+  /** Repeat fights continue only while there's something to attack with,
+   *  and HP is healthy or there's food to bring it back up — never fight
+   *  on toward a death unattended. */
   private canKeepFighting(session: ActiveCombatSession): boolean {
+    if (!this.hasSupplies(session)) return false;
     const healthy = this.engine.getCurrentHp() >= this.engine.getMaxHp() * AUTO_EAT_BELOW_HP_FRACTION;
     const hasFood = !!session.autoEatItemId && this.engine.getFoodCount(session.autoEatItemId) >= 1;
     return healthy || hasFood;

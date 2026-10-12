@@ -7,7 +7,7 @@ import { getEnemy } from "../content/enemies";
 import { CONDITION_LABELS, formatAmounts } from "../content/display";
 import { describeUnmetCondition, isUnlocked } from "../engine/unlockConditions";
 import { getLevelProgress, MAX_LEVEL } from "../engine/xpCurve";
-import { formatDuration, formatNumber } from "../engine/format";
+import { formatDuration, formatNumber, formatXp } from "../engine/format";
 import { confirmAndStartCraftJob, confirmAndStartGatherSession } from "../engine/actionHelpers";
 import { skillIconPath } from "../content/assetPaths";
 import type { CraftingRecipe } from "../engine/types";
@@ -32,7 +32,7 @@ function RecipeEntry({ recipe }: { recipe: CraftingRecipe }) {
   if (lock) return <LockedCard icon={icon} title={recipe.name} reason={lock} />;
 
   const seconds = (recipe.timePerItemMs / 1000).toFixed(1);
-  const meta = `${seconds}s · ${formatNumber(recipe.xpPerItem)} XP each`;
+  const meta = `${seconds}s · ${formatXp(recipe.xpPerItem)} XP each`;
 
   // Gathering happens at a resource node, so it can only start where one
   // is; elsewhere this just says where to go.
@@ -98,7 +98,7 @@ function RecipeEntry({ recipe }: { recipe: CraftingRecipe }) {
         </>
       }
       actions={quantityActions(
-        getSkill(recipe.skill)?.verb ?? "Make",
+        recipe.verb ?? getSkill(recipe.skill)?.verb ?? "Make",
         maxMakeable,
         (q) => confirmAndStartCraftJob(engine, recipe, q),
         `Needs ${formatAmounts(recipe.inputs, " + ")} each`

@@ -192,6 +192,32 @@ export function describeConditionProgress(
   }
 }
 
+/** How far along a counting condition is, for a progress bar: what's
+ *  counted so far (from the baselines) and what's needed. Null for
+ *  conditions that are simply met or not (flags, combinations). */
+export function conditionProgress(
+  condition: UnlockCondition,
+  state: GameState,
+  baselines: ConditionBaselines = {}
+): { have: number; need: number } | null {
+  const key = baselineKey(condition);
+  const base = key ? (baselines[key] ?? 0) : 0;
+  switch (condition.kind) {
+    case "resourceAtLeast":
+      return { have: Math.floor(countOwned(state, condition.resource)), need: condition.amount };
+    case "resourceLifetimeAtLeast":
+      return { have: Math.floor((state.resources[condition.resource]?.lifetimeEarned ?? 0) - base), need: condition.amount };
+    case "skillLevel":
+      return { have: levelForXp(state.skills[condition.skill]?.xp ?? 0), need: condition.atLeast };
+    case "statisticAtLeast":
+      return { have: Math.max(0, (state.statistics[condition.statistic] ?? 0) - base), need: condition.atLeast };
+    case "buildingOwned":
+      return { have: state.buildings[condition.buildingId] ?? 0, need: condition.atLeast };
+    default:
+      return null;
+  }
+}
+
 function assertNever(value: never): never {
   throw new Error(`Unhandled UnlockCondition kind: ${JSON.stringify(value)}`);
 }

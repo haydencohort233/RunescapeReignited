@@ -2,7 +2,8 @@
 // and condition text, so every screen says "1,000 GP" and "Goblin kills"
 // the same way instead of each formatting raw ids its own way.
 import type { ConditionLabels } from "../engine/unlockConditions";
-import type { ActiveAction, RecipeInput } from "../engine/types";
+import type { ActiveAction, EnemyDefinition, ItemDefinition, ItemInstance, RecipeInput, WeaponType } from "../engine/types";
+import { npcCombatLevel } from "../engine/combatMath";
 import { formatDuration, formatNumber } from "../engine/format";
 import { getResourceMeta } from "./resources";
 import { BUILDING_CATALOG } from "./buildings";
@@ -11,6 +12,8 @@ import { getRecipe } from "./recipes";
 import { getEnemy } from "./enemies";
 import { getLocation } from "./mapLocations";
 import { getJob } from "./jobs";
+import { getDungeon } from "./dungeons";
+import { AMENITY_CATALOG } from "./amenities";
 
 const BUILDING_NAMES = new Map(BUILDING_CATALOG.map((b) => [b.id, b.name]));
 const SKILL_NAMES = new Map(SKILL_CATALOG.map((s) => [s.id, s.name]));
@@ -82,6 +85,8 @@ export function statisticName(key: string): string {
     if (kind === "buildingsBought") return `${buildingName(id)} bought`;
     if (kind === "traveledTo") return `Trips to ${getLocation(id)?.name ?? id}`;
     if (kind === "jobCompletions") return `"${getJob(id)?.title ?? id}" completed`;
+    if (kind === "equipped") return `${resourceName(id)} equipped`;
+    if (kind === "dungeonClears") return `${getDungeon(id)?.name ?? id} clears`;
     if (kind === "buried") return `${resourceName(id)} ${id === "ashes" ? "scattered" : "buried"}`;
     if (id === "spent") return `${resourceName(kind)} spent`;
   }
@@ -102,17 +107,53 @@ export const CONDITION_LABELS: ConditionLabels = {
   statisticValue: formatStatisticValue,
 };
 
-/** What the player is doing, for status lines: the recipe's own label
- *  ("Burning Logs"), else the skill's ("Fletching"), "Traveling to Lake
+/** What the player is doing, for status lines and the tab title: the
+ *  recipe's own label ("Burning Logs"), else the skill's with the recipe
+ *  ("Fletching Wooden Bow (u)"), "Traveling to Lake
  *  Shore" or "Fighting Goblin". */
 export function activityLabel(action: ActiveAction): string {
   switch (action.kind) {
     case "craft":
     case "gather":
-      return getRecipe(action.recipeId)?.activityLabel ?? SKILL_ACTIVITY.get(action.skill) ?? action.recipeName;
+      return getRecipe(action.recipeId)?.activityLabel ?? `${SKILL_ACTIVITY.get(action.skill) ?? "Making"} ${action.recipeName}`;
     case "travel":
       return `Traveling to ${action.destinationName}`;
     case "combat":
       return `Fighting ${action.enemyName}`;
   }
+}
+
+/** An item's name for one copy: charged jewellery shows its charges the
+ *  OSRS way, "Amulet of Glory (3)", and "(0)" once they're used up. */
+export function itemName(def: ItemDefinition, instance?: ItemInstance): string {
+  if (def.maxCharges === undefined || !instance) return def.name;
+  return `${def.name} (${instance.charges ?? 0})`;
+}
+
+/** An item's description for one copy (an uncharged Glory reads differently). */
+export function itemDescription(def: ItemDefinition, instance?: ItemInstance): string {
+  if (def.maxCharges !== undefined && instance && (instance.charges ?? 0) <= 0 && def.unchargedDescription) {
+    return def.unchargedDescription;
+  }
+  return def.description;
+}
+
+/** "Goblin (Level 6)", the level worked out from its stats. */
+export function enemyLabel(enemy: EnemyDefinition): string {
+  return `${enemy.name} (Level ${npcCombatLevel(enemy)})`;
+}
+
+export const WEAKNESS_LABEL: Record<WeaponType, string> = { stab: "Stab", slash: "Slash", crush: "Crush" };
+
+/** Text color per item rarity. */
+export const RARITY_CLASS: Record<string, string> = {
+  uncommon: "text-success",
+  rare: "text-info",
+  legendary: "text-gold",
+};
+
+/** A dungeon's description, from its entrance on the map. */
+export function dungeonDescription(dungeonId: string): string {
+  const amenity = AMENITY_CATALOG.find((a) => a.kind === "dungeonEntrance" && a.dungeonId === dungeonId);
+  return amenity?.description ?? "";
 }

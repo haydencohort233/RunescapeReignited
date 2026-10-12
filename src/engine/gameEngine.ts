@@ -30,7 +30,7 @@ import { SHOP_SELL_PRICE_FRACTION, BASE_HP_REGEN_PER_SECOND, SPECIAL_ENERGY_REGE
 import { computeEquipmentBonuses, type EquipmentBonuses } from "./equipmentBonuses";
 import { createInitialState } from "./state";
 import { migrateSave } from "./migrations";
-import { countOwned, isWholeQuantity, stackEquipId } from "./ledger";
+import { countOwned, isWholeQuantity, stackEquipId, wornItemDefId } from "./ledger";
 import { describeAction, getActiveCombat } from "./activeAction";
 import { BuildingSystem } from "./systems/buildings";
 import { CraftingSystem } from "./systems/crafting";
@@ -748,6 +748,7 @@ export class GameEngine {
       this.dungeonSystem.rememberUnequipped(this.state.inventory[replaced]?.itemDefId ?? "", replaced);
     }
     this.state.equipment[def.equipSlot] = def.stackable ? stackEquipId(def.id) : instanceId;
+    this.incrementStatistic(`equipped:${def.id}`, 1);
     this.notifications.push("status", `Equipped ${def.name}.`);
     return true;
   }
@@ -968,21 +969,6 @@ export class GameEngine {
     this.spendResource("gp", cost);
     instance.charges = def.maxCharges;
     this.notifications.push("status", `${npc.name} recharges your ${def.name} for ${cost.toLocaleString()} GP.`);
-    return true;
-  }
-
-  /** Buries bones or scatters ashes for Prayer XP. Instant. */
-  buryItem(itemDefId: string, quantity = 1): boolean {
-    const def = this.itemsById.get(itemDefId);
-    if (!def?.prayerXp || !isWholeQuantity(quantity) || this.getOwnedCount(itemDefId) < quantity) return false;
-    this.removeOwned(itemDefId, quantity);
-    this.addSkillXp("prayer", def.prayerXp * quantity);
-    this.incrementStatistic(`buried:${itemDefId}`, quantity);
-    this.notifications.push(
-      "status",
-      `You ${itemDefId === "ashes" ? "scatter" : "bury"} ${quantity.toLocaleString()}x ${def.name} (+${(def.prayerXp * quantity).toLocaleString()} Prayer XP).`,
-      { replaceKey: "bury" }
-    );
     return true;
   }
 
@@ -1235,6 +1221,11 @@ export class GameEngine {
     this.state.statistics["totalLevel"] = totalLevel;
     this.state.statistics["totalExp"] = totalExp;
     this.state.statistics["gp:earned"] = this.state.resources.gp?.lifetimeEarned ?? 0;
+    // Gear worn before "equipped:<id>" was counted still counts once.
+    for (const value of Object.values(this.state.equipment)) {
+      const itemDefId = value ? wornItemDefId(this.state, value) : undefined;
+      if (itemDefId && !this.state.statistics[`equipped:${itemDefId}`]) this.state.statistics[`equipped:${itemDefId}`] = 1;
+    }
   }
 
   /** Sets a skill directly to a level's minimum XP threshold — for dev
@@ -1449,6 +1440,14 @@ export class GameEngine {
 
   getLoadoutSlotsUsed(loadout: LoadoutEntry[]): number {
     return this.dungeonSystem.slotsUsed(loadout);
+  }
+
+  getSavedLoadout(dungeonId: string): LoadoutEntry[] {
+    return this.dungeonSystem.getSavedLoadout(dungeonId);
+  }
+
+  setSavedLoadout(dungeonId: string, loadout: LoadoutEntry[]): boolean {
+    return this.dungeonSystem.setSavedLoadout(dungeonId, loadout);
   }
 
   enterDungeon(dungeonId: string, loadout: LoadoutEntry[]): boolean {

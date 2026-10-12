@@ -1,8 +1,43 @@
 # Idle Engine Roadmap
 
-Oct 11, 2026. Local copy of the live doc, which is the source of truth: https://claude.ai/code/artifact/fb252a61-8b75-4562-b645-755ca5489eae
+Oct 12, 2026. Local copy of the live doc, which is the source of truth: https://claude.ai/code/artifact/fb252a61-8b75-4562-b645-755ca5489eae
 
 Next up: the remaining Phase 2 skills (Herblore, Agility, Runecrafting) and Phase 3 depth. See Built on Oct 11 for what is already in.
+
+## Built on Oct 12
+
+The friend's Oct 12 round is in: the phone layout and compact action bar (Phase 4, now built alongside desktop), a grid inventory, combat polish, timed Prayer, more achievements and a bigger job board.
+
+| Item | What was built |
+| --- | --- |
+| Smooth progress bars | Fixed a bug, not styling: the per-item bar re-read its start point every second and ran at double speed, jumping to the end. It now fills smoothly for gathering and crafting. |
+| Item art | 168 images from the OSRS wiki: every metal armour tier (bronze to rune, 8 pieces each), all axes and pickaxes, other tools, bird's nest, cooked and raw fish, arrows, all 15 runes, bars, and the Prayer, Smithing and Construction skill icons. Most placeholders are gone. |
+| Metal armour and arrows | Decided with the art: iron to rune full helm, platebody, platelegs and kiteshield, plus iron to rune arrows, sold at the Riverside Armoury. OSRS levels and prices. |
+| Mobile layout | Decided: built alongside desktop, not last. Below 1024px: a bottom tab bar (Home, Map, Quests, Buildings, Skills, Inventory, Equipment), the player strip at the top opens a drawer with status and skills, and Statistics, Achievements and Settings are icons in the drawer's header. Dialogs open as bottom sheets. |
+| Compact action bar | On phones a thin bar under the player strip shows the current action on every tab (skill, count, progress; enemy HP in a fight). Tap for details, Stop and Open fight. |
+| Combat opens Equipment | Starting a fight, or a dungeon wave, switches to the Equipment tab. A dungeon run shows its card there too (waves, what's next, the regear stop). |
+| Gear lock shown | Mid-fight, worn weapons and armour are greyed out with a lock note, and the spell picker is locked. Food stays usable. |
+| Enemy info | Fights and enemy cards show "Goblin (Level 6)" (OSRS combat level from its stats), max HP, weakness and No fleeing. |
+| Dungeon loadout | "Select loadout" opens a picker of your gear only (unworn equipment and arrows, never food) to pick 6. Equipped food comes in free. Saved per dungeon, and also set from the Equipment tab. |
+| Dungeon waves | The run shows "Now: Goblin (Level 6)" and "Next: Bandit (Level 19)", and the plan before entering. |
+| Out of arrows or runes | The fight goes on but you can't attack: flee, or eat until you die. Keep fighting stops instead of starting the next enemy without supplies. |
+| Inventory | Square OSRS-style slots with stack counts, a green outline on worn items, search, filter chips, and Type, Name or Value sort. Typing a filter name ("armor", "armour", "food") finds that type. Tap a slot for details and actions; right-click on desktop. Examine is gone (the details panel shows it). |
+| Uncharged Glory | Shows its charges in the name, "Amulet of Glory (4)" down to "(0)". At 0 the description points to Aggie and Teleport is greyed out. |
+| Prayer | Burying is a skill action now: Prayer's page lists Bury Bones and Scatter Ashes, 1 second each. |
+| Settings | Notifications on or off, per type (warnings and errors always show). Exact numbers (1,234,567 GP). A ❗ in the tab title toggle. |
+| Tab title | Shows what you're doing ("Burning Oak Logs - Idle Engine"), with ❗ in front when a level up, quest step or achievement arrives while you're away. |
+| Achievements | 12 more: first building, first level 10, 20, 50 and 99 in any skill (Hitpoints doesn't count), total level 250, first kill, 100 kills, clearing the Den, equipping a Dragon Scimitar, a full bronze set, 100 shrimps cooked. |
+| Job board | Boards at Lumber Camp, Lake Shore and the Quarry too (4 in all, 20 jobs). Better-paying jobs need a level. One-time and repeatable jobs never rotate off or expire at midnight. Jobs are grouped In progress, Available, Needs a higher level, with progress bars and reward icons. The Quests tab lists every job you've taken. |
+
+### Proposed values to review (Oct 12)
+
+- Burying and scattering take 1 second each.
+- Worn items are outlined in green; stack counts are OSRS yellow.
+- Uncharged jewellery is named with "(0)", OSRS-style, not "Uncharged Amulet of Glory".
+- Weaknesses: Goblin stab, Bandit crush, Den Guardian slash.
+- Equipped food comes into a dungeon whole, with no cap.
+- New job rewards (120 to 2,500 GP) and level gates; achievement point rewards (5 to 100).
+- Armour and arrow prices at the Armoury are their OSRS values.
 
 ## Built on Oct 11
 
@@ -29,7 +64,7 @@ Most of Phase 1, parts of Phases 2 and 3, and the Den dungeon are now in the gam
 | Overgrown Den dungeon | Unlocked by the quest The Overgrown Den. Waves of Goblin, Goblin and Bandit run back to back, then a regear stop with "Continue to Den Guardian", then the boss (no fleeing). Only a 6-slot loadout comes in (proposed, within the decided 4 to 8; one number in content/dungeons.ts): each piece of gear or food takes a slot, a stack of runes one slot, worn gear is free. Inside, only loadout food is eaten and only loadout gear equipped. Fleeing, dying or running out of arrows or runes ends the run. Beating the boss sets denCleared, which the job "Something's Living in the Den" now waits on. |
 | Other | Bob and every shopkeeper have dialogue; Bob sells axes and pickaxes; the dagger moved to a new Riverside Armoury; Aubury's Rune Shop sells runes and the Air Staff; 3 new achievements. |
 
-Still not built: intro (on hold), Herblore, Agility, Runecrafting, Thieving, achievement point shop, more quests, building upgrades, poison, mobile layout and the rest of Phase 4, and item art for the new items.
+Still not built: intro (on hold), Herblore, Agility, Runecrafting, Thieving, achievement point shop, more quests, building upgrades, poison, hide dev tools, confirm wasteful actions and the PWA (Phase 4), and art for the few items still without it (Oct 12 covered most).
 
 ### Proposed values to review
 
@@ -102,8 +137,8 @@ Give players reasons to keep earning: things to spend gold and achievement point
 | Overgrown Den dungeon | Not until combat is finished (all styles, special attacks, Ranged, Magic). Then turn the "Enter" placeholder into a real run: a few waves of goblins and bandits, then the Den Guardian boss. The boss, its loot table (Dragon Scimitar, Glory) and the `denCleared` flag all exist but nothing uses them. Before the boss, a "Continue to Den Guardian" step lets you regear from a small loadout (4 to 8 items to start, as a test of whether it stays), not your whole inventory. | L | High |
 | Building upgrades | Buildings only scale by count. Add upgrade tiers (Lumbermill II) and buildings for new resources (a mine, a herb garden). | M | Medium |
 | Construction skill | Buildings cost gold plus materials (logs, ore, bars), most need a Construction level, and buying one gives Construction XP. Decided: Fishing Hut needs Construction 5, 10,000 gold, 100 raw shrimps and 100 logs; Hunter's Camp needs Construction 15, 100,000 gold and 100 bones. Proposed: Lumbermill and Coal Mine stay early (gold plus logs, no level). The Quarry building is renamed Coal Mine, since it makes coal and Quarry is now the Mining location; its id stays "quarry" so saves still load. Keep each building's requirements in one entry in the buildings content file so they are easy to edit. Building costs already take a list of resources; today each lists only GP. | M | High |
-| More achievements | 7 exist. Add per-skill milestones (level 10, 50, 99), kill counts, first boss, collection goals. | S | Medium |
-| Better job board | 5 jobs rotate. Add more per location, plus higher-paying jobs that need higher levels. One-time jobs shouldn't expire at midnight. | M | Medium |
+| More achievements | Partly built Oct 12 (12 more, any-skill milestones). 7 exist. Add per-skill milestones (level 10, 50, 99), kill counts, first boss, collection goals. | S | Medium |
+| Better job board | Built Oct 12 (4 boards, 20 jobs, level gates). 5 jobs rotate. Add more per location, plus higher-paying jobs that need higher levels. One-time jobs shouldn't expire at midnight. | M | Medium |
 | Amulet of Glory charges | Its description promises limited charges; it teleports forever today. Aggie recharges it for gold. | S | Medium |
 | Equipment durability | Items already have a durability field. Weapons and armour degrade only on selected items, as with Barrows gear. At 0, some dissolve and others become a broken copy (like "Dharok's greataxe 0") that can't be equipped or used in combat. Bob repairs them for gold, as in OSRS. Jewellery uses charges (Glory first, above) that Aggie recharges for gold. Add a dev tool that restores all wear and charges. | M | Medium |
 | Aggie, a witch in Draynor Village | Recharges jewellery for gold for now, with a short dialogue that asks to charge it. Also the first test of NPC dialogue. She lives at a new Draynor Village location, as in RuneScape. | S | Medium |
@@ -115,14 +150,14 @@ The inventory and menus are built for a few dozen items; with 1,000+ planned, th
 
 | Item | What to do | Size | Priority |
 | --- | --- | --- | --- |
-| Inventory at scale | Search, filter by category (the same categories as the art folders), sort by value or name, and a compact grid view with tooltips. | M | High |
+| Inventory at scale | Built Oct 12. Search, filter by category (the same categories as the art folders), sort by value or name, and a compact grid view with tooltips. | M | High |
 | Hide dev tools | The dev section in Settings (spawn items, set levels, teleport) is visible to every player. Put it behind a dev flag before sharing widely. | S | High |
-| Mobile layout | A fresh phone layout: a bottom tab bar for the main tabs instead of the wrapping row at the top, player status and the skill list in a drawer that slides out on tap, and Statistics, Settings and Achievements as small icons in the drawer's header. | L | High |
-| Compact action bar | On phones, replace the action card at the top with a thin progress bar for the current action (travel, crafting, gathering). Tap it to expand details and a Cancel button. | S | High |
-| Notification settings | Per-type on/off and duration (some players want no crafting toasts at all). | S | Medium |
+| Mobile layout | Built Oct 12, alongside desktop (decided: not last). A fresh phone layout: a bottom tab bar for the main tabs instead of the wrapping row at the top, player status and the skill list in a drawer that slides out on tap, and Statistics, Settings and Achievements as small icons in the drawer's header. | L | High |
+| Compact action bar | Built Oct 12. On phones, replace the action card at the top with a thin progress bar for the current action (travel, crafting, gathering). Tap it to expand details and a Cancel button. | S | High |
+| Notification settings | Built Oct 12 (on/off, per type; duration not yet). Per-type on/off and duration (some players want no crafting toasts at all). | S | Medium |
 | Confirm wasteful actions | Ask before eating at full HP outside combat, or selling an item worth a lot. | S | Medium |
 | Installable app | Make it a PWA so it installs to a phone home screen and opens offline. | M | Low |
-| Number format setting | Choose 1.2K or 1,234 style; some players prefer exact numbers. | S | Low |
+| Number format setting | Built Oct 12 (Exact numbers toggle). Choose 1.2K or 1,234 style; some players prefer exact numbers. | S | Low |
 
 ## Change or remove
 
@@ -169,3 +204,9 @@ Bigger or riskier ideas worth keeping in view, not scheduled:
 - [x] Bleed: what % of HP per hit, and for how long? What does the Dragon Scimitar spec cost (55% in OSRS)? Decided: 55%; 5% of max HP every 3 seconds for 4 hits, not stacking, tuned in testing.
 - [x] Where does Betty stand? Decided: a new Draynor Village location, and she is renamed Aggie.
 - [x] Should the Quarry building be renamed now that Quarry is also a location? Decided: renamed Coal Mine, since it makes coal.
+- [x] Build the phone layout last, or alongside desktop? Decided: alongside desktop.
+- [ ] Mid-fight food: the friend asked to lock food too, but swapping food mid-fight was decided earlier. Keep food usable while weapons and armour lock?
+- [ ] Dungeon food: equipped food now comes in whole. Cap it (say 20), or keep it uncapped?
+- [ ] Uncharged Glory: "Amulet of Glory (0)" (OSRS style, built) or "Uncharged Amulet of Glory"?
+- [ ] Per-skill achievements (level 10, 50, 99 for every skill) would add about 60. Want them, or keep the any-skill milestones?
+- [ ] Notification duration per type: wanted, or is on/off enough?

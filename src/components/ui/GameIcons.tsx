@@ -2,7 +2,7 @@ import type { BonusDrop, CraftingRecipe, RecipeInput } from "../../engine/types"
 import { getItemDef } from "../../content/items";
 import { skillName, resourceName } from "../../content/display";
 import { skillIconPath } from "../../content/assetPaths";
-import { formatNumber } from "../../engine/format";
+import { formatNumber, formatXp } from "../../engine/format";
 import GameImage from "../GameImage";
 import ItemIcon from "../ItemIcon";
 
@@ -40,7 +40,7 @@ export function ItemChip({ id, amount, size = 18, label }: { id: string; amount?
 /** The item a recipe is pictured with: what it uses up (the log you burn),
  *  or for gathering, what it gives (the logs you chop). */
 function recipeIconItemId(recipe: CraftingRecipe): string {
-  return recipe.inputs[0]?.resource ?? recipe.output.resource;
+  return recipe.inputs[0]?.resource ?? recipe.output?.resource ?? "";
 }
 
 export function RecipeIcon({ recipe, size = 20 }: { recipe: CraftingRecipe; size?: number }) {
@@ -101,7 +101,14 @@ export function RecipeYield({ recipe }: { recipe: CraftingRecipe }) {
             <span aria-hidden="true">→</span>
           </>
         )}
-        <ItemChip id={recipe.output.resource} amount={recipe.output.amount} />
+        {recipe.output ? (
+          <ItemChip id={recipe.output.resource} amount={recipe.output.amount} />
+        ) : (
+          <span className="item-chip">
+            <SkillIcon skillId={recipe.skill} size={16} />
+            {formatXp(recipe.xpPerItem)} {skillName(recipe.skill)} XP
+          </span>
+        )}
       </div>
       {recipe.bonusDrops && recipe.bonusDrops.length > 0 && (
         <div className="row text-small" style={{ gap: 6 }}>

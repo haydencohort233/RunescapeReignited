@@ -1,6 +1,7 @@
 import { useGame } from "../engine/GameEngineContext";
 import type { GameNotification } from "../engine/types";
 import RichText from "./Richtext";
+import { shouldShowToast, usePreferences } from "../lib/preferences";
 
 function toastClass(n: GameNotification): string {
   if (n.type === "achievement") return "toast toast-achievement";
@@ -17,7 +18,8 @@ export default function NotificationList({
   filter?: (n: GameNotification) => boolean;
 }) {
   const { engine, notifications } = useGame();
-  const visible = filter ? notifications.filter(filter) : notifications;
+  const prefs = usePreferences();
+  const visible = notifications.filter((n) => shouldShowToast(n, prefs) && (!filter || filter(n)));
   if (visible.length === 0) return null;
 
   return (

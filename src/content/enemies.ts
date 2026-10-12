@@ -24,6 +24,7 @@ export const ENEMY_CATALOG: EnemyDefinition[] = [
     strengthBonus: 0,
     defenceBonus: 0,
     xpReward: 20,
+    weakness: "stab", // proposed
     lootTable: [
       { id: "gp", quantityMin: 1, quantityMax: 10, weight: 40 },
       { id: "bones", quantityMin: 1, quantityMax: 1, weight: 30 },
@@ -43,6 +44,7 @@ export const ENEMY_CATALOG: EnemyDefinition[] = [
     strengthBonus: 5,
     defenceBonus: 5,
     xpReward: 45,
+    weakness: "crush", // proposed
     lootTable: [
       { id: "gp", quantityMin: 10, quantityMax: 40, weight: 40 },
       { id: "bronze-dagger", quantityMin: 1, quantityMax: 1, weight: 5 },
@@ -64,6 +66,7 @@ export const ENEMY_CATALOG: EnemyDefinition[] = [
     strengthBonus: 25,
     defenceBonus: 15,
     xpReward: 400,
+    weakness: "slash", // proposed
     canFlee: false,
     lootTable: [
       { id: "gp", quantityMin: 100, quantityMax: 300, weight: 40 },

@@ -252,6 +252,26 @@ export const SMITHING_RECIPES: CraftingRecipe[] = [
   smith("bronze-arrow", "Bronze Arrows (15)", 1, 5, 15),
 ];
 
+// Prayer: bury bones and scatter ashes, one at a time like any other
+// recipe. 1 second each (proposed). Bones give OSRS's 4.5 XP; ashes give
+// 2 (proposed, OSRS's plain ashes give none).
+function prayer(itemId: string, name: string, xp: number, verb: string, activity: string): CraftingRecipe {
+  return {
+    id: `${verb.toLowerCase()}-${itemId}`,
+    name,
+    skill: "prayer",
+    xpPerItem: xp,
+    timePerItemMs: 1000,
+    inputs: [{ resource: itemId, amount: 1 }],
+    verb,
+    extraStatistic: `buried:${itemId}`,
+    activityLabel: activity,
+  };
+}
+
+export const BURY_BONES_RECIPE = prayer("bones", "Bury Bones", 4.5, "Bury", "Burying Bones");
+export const SCATTER_ASHES_RECIPE = prayer("ashes", "Scatter Ashes", 2, "Scatter", "Scattering Ashes");
+
 export const RECIPE_CATALOG: CraftingRecipe[] = [
   WOODEN_BOW_RECIPE,
   SPIN_FLAX_RECIPE,
@@ -276,6 +296,8 @@ export const RECIPE_CATALOG: CraftingRecipe[] = [
   MINE_TIN_RECIPE,
   SMELT_BRONZE_RECIPE,
   ...SMITHING_RECIPES,
+  BURY_BONES_RECIPE,
+  SCATTER_ASHES_RECIPE,
 ];
 
 /** Recipes that turn materials into something anywhere, shown on the Home
