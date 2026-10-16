@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { getDialog, subscribeDialog, type DialogRequest } from "../../lib/dialog";
+import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
+import { getDialog, subscribeDialog, type ActivityPreview, type DialogRequest } from "../../lib/dialog";
 import { formatNumber } from "../../engine/format";
+import { SkillIcon } from "./GameIcons";
 
 /** Renders the pending in-page dialog (see lib/dialog.ts). Mounted once. */
 export function DialogHost() {
@@ -15,7 +16,7 @@ export function DialogHost() {
     if (!dialog) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (dialog.kind === "confirm") dialog.resolve(false);
+      if (dialog.kind === "confirm" || dialog.kind === "switch") dialog.resolve(false);
       else if (dialog.kind === "quantity" || dialog.kind === "dialogue") dialog.resolve(null);
       else dialog.resolve();
     };
@@ -27,7 +28,7 @@ export function DialogHost() {
 
   return (
     <div className="dialog-backdrop" role="presentation">
-      <div className="dialog card" role="dialog" aria-modal="true">
+      <div className={`dialog card${dialog.kind === "switch" ? " switch-dialog" : ""}`} role="dialog" aria-modal="true">
         {dialog.kind === "quantity" ? (
           <QuantityPrompt key={dialog.message} dialog={dialog} />
         ) : dialog.kind === "dialogue" ? (
@@ -56,6 +57,8 @@ export function DialogHost() {
               </button>
             </div>
           </>
+        ) : dialog.kind === "switch" ? (
+          <SwitchPrompt dialog={dialog} primaryRef={primaryRef} />
         ) : dialog.kind === "confirm" ? (
           <>
             <p>{dialog.message}</p>
@@ -105,6 +108,61 @@ export function DialogHost() {
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+const VERB: Record<ActivityPreview["kind"], { now: string; next: string; keep: string }> = {
+  craft: { now: "Crafting", next: "Craft", keep: "Keep crafting" },
+  gather: { now: "Gathering", next: "Gather", keep: "Keep gathering" },
+  travel: { now: "Traveling to", next: "Travel to", keep: "Keep traveling" },
+  combat: { now: "Fighting", next: "Fight", keep: "Keep fighting" },
+};
+
+function ActivityTile({ preview, side }: { preview: ActivityPreview; side: "now" | "next" }) {
+  return (
+    <div className={`switch-tile is-${side}`}>
+      <span className="switch-tile-tag">{side === "now" ? "Now" : "Next"}</span>
+      <span className="switch-tile-icon" aria-hidden="true">
+        {preview.skill ? <SkillIcon skillId={preview.skill} size={28} /> : preview.kind === "travel" ? "🧭" : "⚔️"}
+      </span>
+      <span className="switch-tile-verb">{side === "now" ? VERB[preview.kind].now : VERB[preview.kind].next}</span>
+      <strong className="switch-tile-title">{preview.title}</strong>
+      {preview.detail && <span className="switch-tile-detail">{preview.detail}</span>}
+    </div>
+  );
+}
+
+/** "Switch activity?": what's running, what would replace it, and two
+ *  clear choices. Esc or "Keep ..." keeps the current one. */
+function SwitchPrompt({
+  dialog,
+  primaryRef,
+}: {
+  dialog: Extract<DialogRequest, { kind: "switch" }>;
+  primaryRef: RefObject<HTMLButtonElement | null>;
+}) {
+  return (
+    <div className="stack">
+      <div className="stack-sm">
+        <h3 className="switch-title">Switch activity?</h3>
+        <p className="text-muted">You can only do one thing at a time. Anything already finished is kept.</p>
+      </div>
+      <div className="switch-flow">
+        <ActivityTile preview={dialog.from} side="now" />
+        <span className="switch-arrow" aria-hidden="true">
+          ➜
+        </span>
+        <ActivityTile preview={dialog.to} side="next" />
+      </div>
+      <div className="switch-actions">
+        <button type="button" className="btn" onClick={() => dialog.resolve(false)}>
+          {VERB[dialog.from.kind].keep}
+        </button>
+        <button ref={primaryRef} type="button" className="btn btn-primary" onClick={() => dialog.resolve(true)}>
+          {VERB[dialog.to.kind].next} {dialog.to.title}
+        </button>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 # Handoff
 
-As of Oct 12, 2026. Branch `engine-fixes`. The Oct 12 round (below) is committed. Tests (124), lint and build pass. The test link (https://claude.ai/artifact/4bFZdWSqX9YqupBp4mekRG) runs this build.
+As of Oct 15, 2026. The Oct 15 round (town scenes and shop grid, below) is not committed yet. Tests (128), lint and build pass. The test link (https://claude.ai/artifact/4bFZdWSqX9YqupBp4mekRG) runs this build.
 
 ## Where things stand
 
@@ -13,6 +13,24 @@ Combat is complete and most of Phase 1, plus parts of Phases 2 and 3, are built.
 | World | 7 locations: Riverside Town, Lumber Camp, Lake Shore, Dark Forest, Hidden Grove, Quarry, Draynor Village. Shops: Bob (tools, repairs), Riverside Armoury, Aubury's Rune Shop, Gerrant's fishing shop. Aggie recharges the Amulet of Glory. |
 | Dungeon | Overgrown Den: quest-gated, 3 waves, regear stop, Den Guardian boss, 6-slot loadout. |
 | Other | 8-hour offline progress, degrading gear with repairs (Dharok's Greataxe example), Glory charges, dev tools (spawn, levels, teleport, HP, restore all gear). |
+
+## Oct 15 round: town scenes and shop grid
+
+- **Home is a picture now**, Neopets-style: components/scene/TownScene.tsx draws the current location with a name tag on every amenity; clicking one opens it in a modal (HomeView.tsx `AmenityModal`). The place's name is on a sign inside the picture, so Home has no page title. Phones get a taller picture (4:5) using the same numbers.
+- **Layouts are data**: content/townScenes.ts holds every location's spots, paths, plaza, water and decor as percentages, with instructions at the top. Drawings are in components/scene/sprites.ts. townScenes.test.ts checks every amenity is placed, every point is on the picture, and copied layouts read back the same.
+- **Scene layout editor** (Settings > Dev tools, a preference): drag buildings, decor, path points and the plaza on Home; path ends follow a dragged building or plaza; "Copy layout" gives the block to paste into townScenes.ts (formatted by components/scene/sceneCode.ts).
+- **Panel cards**: inside the amenity modal, `CardPanelContext` (components/ui/cardPanel.ts) makes the outer ActionCard an always-open panel; cards nested inside stay normal.
+- **Shops** (ShopBrowsePanel.tsx): shopkeeper greeting, GP, Buy / Sell / Repair tabs, ItemTile grid with a price tag (`price`, red when unaffordable), tap for details, right-click for Buy 1/5/10/all.
+- **Modal** (ui/Modal.tsx): locks page scroll while open, Escape closes only the topmost one (not while a quick menu or the dialogue box is over it), phones can swipe the sheet down to close.
+- **Resources** moved off Home into the sidebar / phone drawer as a labelled section. ResourceList.tsx is gone.
+- **Training cards**: every way to train (skill page, Home's crafting list, spot and station popups) is a `TrainingCard` (ui/TrainingCard.tsx): stats and the main button top-right, free-form info lines, extra choices at the bottom, dimmed with the reason when locked. `GatherCard` / `CraftCard` (TrainingCards.tsx) fill it in; RecipeList's old RecipeCard is gone. Starting from a popup closes it (`AmenityEntry`'s `onStarted`).
+- **Travel to the closest spot**: components/gatherSpots.ts finds the nearest open place with a resource node for a recipe; away from one, the gather button is "Travel to X". New gathering skills get this by adding nodes in content/amenities.ts.
+- **Switch prompt**: starting something while busy shows what's running and what replaces it (`requestSwitch` in lib/dialog.ts, built in engine/actionHelpers.ts).
+- **Job boards** (JobBoardBrowsePanel.tsx): a corkboard of pinned notes, two columns (one on phones); each note has frequency and level tags, objective bars once taken, and reward + Accept / Turn in on one footer line. Ready-to-turn-in notes glow green. Colors are `--cork` / `--paper` tokens with dark-mode values. The Quests tab's accepted jobs use the same notes.
+- **Tool requirements** on training cards: "✓ Requires Harpoon" in green when you have a usable one, "✗" in red when not (`ToolRequirement` in TrainingCards.tsx).
+- **GP icon**: `GpIcon` / `GpAmount` (ui/GameIcons.tsx) put a coins icon next to GP amounts (sidebar, top strip, shop, prices, job rewards). The art goes at public/assets/ui/coins.png (`GP_ICON`); until it's there a drawn gold coin stands in.
+- **Opening animations**: popups fade and grow a little on desktop, phone sheets slide up (about 0.2s; off with reduced motion). The modal body never scrolls sideways.
+- **Sidebar** Resources and Skills fold (remembered in preferences as `collapsedSections`). Stop / Cancel / Flee are red (`btn-danger`); the right-click menu highlights the hovered item.
 
 ## Oct 12 round
 

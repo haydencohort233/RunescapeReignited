@@ -1,23 +1,47 @@
+import { useCallback, useState } from "react";
 import { useGame } from "../engine/GameEngineContext";
 import { getLocation } from "../content/mapLocations";
-import { getAmenitiesAtLocation } from "../content/amenities";
-import ResourceList from "./ResourceList";
+import { getAmenitiesAtLocation, type Amenity } from "../content/amenities";
+import { getTownScene } from "../content/townScenes";
+import { getShop } from "../content/shops";
 import RecipeList from "./RecipeList";
 import AmenityEntry from "./AmenityEntry";
 import ActivityCard from "./ActivityCard";
+import TownScene from "./scene/TownScene";
+import { CardPanelContext } from "./ui/cardPanel";
+import { Modal } from "./ui/Modal";
 import { EmptyState, Page, Section } from "./ui/Page";
 import { getActiveTravel } from "../engine/activeAction";
 
+/** A building or spot opened from the town scene, in a modal. */
+function AmenityModal({ amenity, locationId, onClose }: { amenity: Amenity; locationId: string; onClose: () => void }) {
+  const shop = amenity.kind === "shop" ? getShop(amenity.shopId) : undefined;
+  const title = getTownScene(locationId).spots[amenity.id]?.label ?? shop?.title ?? amenity.name;
+  // Shops and job boards are grids and lists: give them the wide panel.
+  const wide = amenity.kind === "shop" || amenity.kind === "jobBoard" || amenity.kind === "craftingStation";
+  return (
+    <Modal title={title} onClose={onClose} wide={wide} className="amenity-modal">
+      <CardPanelContext.Provider value={true}>
+        <AmenityEntry amenity={amenity} onStarted={onClose} />
+      </CardPanelContext.Provider>
+    </Modal>
+  );
+}
+
 /**
- * The main/home tab — where players spend most of their time: what you're
- * doing, what's at your current location, your resources, and crafting.
- * New amenity kinds and recipes show up here without layout changes.
+ * The main/home tab, where players spend most of their time: what you're
+ * doing, a picture of where you are (click a building to use it), and
+ * crafting. New amenities show up in the picture on their own; their
+ * placement lives in content/townScenes.ts.
  */
 export default function HomeView() {
   const { state } = useGame();
   const currentLocation = getLocation(state.currentLocationId);
   const amenities = getAmenitiesAtLocation(state.currentLocationId);
   const travel = getActiveTravel(state);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const close = useCallback(() => setOpenId(null), []);
+  const open = openId ? amenities.find((a) => a.id === openId) : undefined;
 
   // On the road there's nowhere to be "here": just the trip.
   if (travel) {
@@ -27,40 +51,34 @@ export default function HomeView() {
         <EmptyState>
           You left {currentLocation?.name ?? "town"}. You can't do anything until you arrive, or you can cancel the trip.
         </EmptyState>
-        <div className="home-resources">
-          <Section title="Resources">
-            <ResourceList />
-          </Section>
-        </div>
       </Page>
     );
   }
 
+  // No page title: the place's name is on a sign in the picture.
   return (
-    <Page title={currentLocation?.name ?? "Unknown location"}>
+    <section className="page">
       <ActivityCard />
 
-      <Section title="Here">
-        {amenities.length === 0 ? (
+      {amenities.length === 0 ? (
+        <>
+          <h2 className="page-title">{currentLocation?.name ?? "Unknown location"}</h2>
           <EmptyState>There's nothing to do here yet.</EmptyState>
-        ) : (
-          <div className="stack">
-            {amenities.map((amenity) => (
-              <AmenityEntry key={amenity.id} amenity={amenity} />
-            ))}
-          </div>
-        )}
-      </Section>
-
-      <div className="home-resources">
-        <Section title="Resources">
-          <ResourceList />
-        </Section>
-      </div>
+        </>
+      ) : (
+        <TownScene
+          locationId={state.currentLocationId}
+          locationName={currentLocation?.name ?? "Unknown location"}
+          amenities={amenities}
+          onOpen={(a) => setOpenId(a.id)}
+        />
+      )}
 
       <Section title="Crafting">
         <RecipeList />
       </Section>
-    </Page>
+
+      {open && <AmenityModal key={open.id} amenity={open} locationId={state.currentLocationId} onClose={close} />}
+    </section>
   );
 }

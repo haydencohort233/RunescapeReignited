@@ -81,7 +81,7 @@ function StopButton({ parts }: { parts: ActivityParts }) {
   return (
     <button
       type="button"
-      className="btn"
+      className="btn btn-danger"
       disabled={!parts.canStop}
       title={parts.canStop ? undefined : "You can't flee this fight"}
       onClick={() => engine.stopActiveAction()}

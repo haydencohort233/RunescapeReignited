@@ -1,3 +1,4 @@
+import { useContext } from "react";
 import { useGame } from "../engine/GameEngineContext";
 import { AMENITY_ICON, type Amenity, type CraftingStationAmenity, type ResourceNodeAmenity } from "../content/amenities";
 import { getShop } from "../content/shops";
@@ -5,30 +6,25 @@ import { getNpc } from "../content/npcs";
 import { getItemDef } from "../content/items";
 import { recipesAtStation } from "../content/recipes";
 import { showDialogue } from "../lib/dialog";
-import { RecipeCard } from "./RecipeList";
+import { CraftCard, GatherCard } from "./TrainingCards";
 import ItemIcon from "./ItemIcon";
 import type { GameEngine } from "../engine/gameEngine";
 import type { NpcDefinition, ShopDefinition } from "../engine/types";
 import { getJobBoard } from "../content/jobBoards";
 import { getRecipe } from "../content/recipes";
 import { CONDITION_LABELS } from "../content/display";
-import { getMsUntilNextDailyReset, formatCountdown } from "../engine/time";
 import { describeUnmetCondition } from "../engine/unlockConditions";
-import { confirmAndStartCraftJob, confirmAndStartGatherSession } from "../engine/actionHelpers";
-import { getActiveGatherSession } from "../engine/activeAction";
 import ShopBrowsePanel from "./ShopBrowsePanel";
 import JobBoardBrowsePanel from "./JobBoardBrowsePanel";
 import CombatPanel from "./CombatPanel";
 import DungeonCard from "./DungeonCard";
 import { ActionCard, LockedCard } from "./ui/ActionCard";
-import { RecipeYield, SkillIcon } from "./ui/GameIcons";
-
-const BATCH_SIZES = [1, 5, 10, 25];
+import { CardPanelContext } from "./ui/cardPanel";
 
 /** One amenity at the CURRENT location, as a card. Every kind uses the same
  *  pattern (see ActionCard): click to show its actions, right-click for
  *  the same actions in a menu, dashed card with a reason when locked. */
-export default function AmenityEntry({ amenity }: { amenity: Amenity }) {
+export default function AmenityEntry({ amenity, onStarted }: { amenity: Amenity; onStarted?: () => void }) {
   const { state } = useGame();
   const icon = AMENITY_ICON[amenity.kind];
 
@@ -45,9 +41,9 @@ export default function AmenityEntry({ amenity }: { amenity: Amenity }) {
     case "combatEncounter":
       return <CombatPanel enemyId={amenity.enemyId} />;
     case "resourceNode":
-      return <ResourceNodeCard amenity={amenity} />;
+      return <ResourceNodeCard amenity={amenity} onStarted={onStarted} />;
     case "craftingStation":
-      return <StationCard amenity={amenity} />;
+      return <StationCard amenity={amenity} onStarted={onStarted} />;
     case "npc":
       return <NpcCard npcId={amenity.npcId} description={amenity.description} />;
     case "dungeonEntrance":
@@ -60,13 +56,13 @@ function randomLine(lines: string[] | undefined, fallback: string): string {
 }
 
 /** A range, furnace or anvil: the recipes made there. */
-function StationCard({ amenity }: { amenity: CraftingStationAmenity }) {
+function StationCard({ amenity, onStarted }: { amenity: CraftingStationAmenity; onStarted?: () => void }) {
   const recipes = recipesAtStation(amenity.station);
   return (
     <ActionCard icon={AMENITY_ICON.craftingStation} title={amenity.name} description={amenity.description} actions={[]}>
       <div className="stack-sm">
         {recipes.map((recipe) => (
-          <RecipeCard key={recipe.id} recipe={recipe} />
+          <CraftCard key={recipe.id} recipe={recipe} onStarted={onStarted} />
         ))}
       </div>
     </ActionCard>
@@ -80,7 +76,6 @@ function RepairPanel({ engine, shop }: { engine: GameEngine; shop: ShopDefinitio
   if (repairable.length === 0) return <p className="text-faint text-small">{shop.npcName} can repair worn or broken gear. Nothing of yours needs it.</p>;
   return (
     <div className="stack-sm">
-      <span className="text-small">Repairs</span>
       {repairable.map((instance) => {
         const def = getItemDef(instance.itemDefId);
         if (!def) return null;
@@ -179,10 +174,15 @@ function NpcCard({ npcId, description }: { npcId: string; description: string })
 
 function ShopCard({ shopId }: { shopId: string }) {
   const { engine } = useGame();
+  const asPanel = useContext(CardPanelContext);
   // By the amenity's own shopId: a location lookup always found the first
   // shop there, so a second shop at the same place was unreachable.
   const shop = getShop(shopId);
   if (!shop) return null;
+  const browse = <ShopBrowsePanel shop={shop} repairPanel={shop.repairs ? <RepairPanel engine={engine} shop={shop} /> : undefined} />;
+  // Opened from the town scene: the shop is the whole panel (the greeting
+  // replaces "Talk to").
+  if (asPanel) return browse;
   return (
     <ActionCard
       icon={AMENITY_ICON.shop}
@@ -195,8 +195,7 @@ function ShopCard({ shopId }: { shopId: string }) {
         },
       ]}
     >
-      <ShopBrowsePanel shop={shop} />
-      {shop.repairs && <RepairPanel engine={engine} shop={shop} />}
+      {browse}
     </ActionCard>
   );
 }
@@ -208,7 +207,6 @@ function JobBoardCard({ boardId, name }: { boardId: string; name: string }) {
     <ActionCard
       icon={AMENITY_ICON.jobBoard}
       title={name}
-      meta={`Resets in ${formatCountdown(getMsUntilNextDailyReset(Date.now()))}`}
       actions={[]}
     >
       <JobBoardBrowsePanel board={board} />
@@ -216,96 +214,10 @@ function JobBoardCard({ boardId, name }: { boardId: string; name: string }) {
   );
 }
 
-
-function ResourceNodeCard({ amenity }: { amenity: ResourceNodeAmenity }) {
-  const { engine, state, actions } = useGame();
+/** A gathering spot: the same training card as the skill page, for this
+ *  one spot. */
+function ResourceNodeCard({ amenity, onStarted }: { amenity: ResourceNodeAmenity; onStarted?: () => void }) {
   const recipe = getRecipe(amenity.recipeId);
   if (!recipe) return null;
-  // The skill it trains, so a tree reads as Woodcutting at a glance.
-  const icon = <SkillIcon skillId={recipe.skill} size={20} />;
-  const description = (
-    <>
-      {amenity.description}
-      <RecipeYield recipe={recipe} />
-      <span className="text-faint text-small">
-        {(engine.getEffectiveTimePerItem(recipe) / 1000).toFixed(1)}s · {recipe.xpPerItem} XP each
-        {recipe.tool && engine.getBestTool(recipe.tool) && ` · using ${engine.getBestTool(recipe.tool)!.name}`}
-      </span>
-    </>
-  );
-
-  // The recipe can gate things too (e.g. Woodcutting 30 for Willow),
-  // separately from the amenity's own unlock, and so can a missing tool.
-  const recipeLock = recipe.unlockCondition
-    ? describeUnmetCondition(recipe.unlockCondition, state, CONDITION_LABELS)
-    : engine.getRecipeStartBlocker(recipe);
-  if (recipeLock) return <LockedCard icon={icon} title={amenity.name} reason={recipeLock} />;
-
-  if (amenity.gatherMode === "batch") {
-    return (
-      <ActionCard
-        icon={icon}
-        title={amenity.name}
-        description={description}
-        actions={BATCH_SIZES.map((n) => ({
-          label: `${amenity.actionLabel} x${n}`,
-          onClick: () => confirmAndStartCraftJob(engine, recipe, n),
-        }))}
-      />
-    );
-  }
-
-  // gatherMode === "session" — open-ended, Start / Tend / Stop.
-  const session = getActiveGatherSession(state);
-  const active = session?.amenityId === amenity.id ? session : null;
-
-  let meta: string | undefined;
-  if (active) {
-    const now = Date.now();
-    const endsIn = Math.max(0, active.startedAt + active.maxDurationMs - now);
-    meta = `x${active.quantityGathered.toLocaleString()} · ends in ${formatCountdown(endsIn)}`;
-    if (active.requiresKeepAliveEveryMs !== undefined && active.lastKeepAliveAt !== undefined) {
-      const tendIn = Math.max(0, active.lastKeepAliveAt + active.requiresKeepAliveEveryMs - now);
-      meta += ` · tend within ${formatCountdown(tendIn)}`;
-    }
-  }
-
-  return (
-    <ActionCard
-      className={active ? "is-active" : ""}
-      icon={icon}
-      title={amenity.name}
-      meta={meta}
-      description={description}
-      actions={
-        active
-          ? [
-              ...(active.requiresKeepAliveEveryMs !== undefined
-                ? [
-                    {
-                      label: "Tend to it",
-                      variant: "primary" as const,
-                      onClick: () => {
-                        engine.keepGatherSessionAlive();
-                        actions.refresh();
-                      },
-                    },
-                  ]
-                : []),
-              { label: "Stop", onClick: () => engine.stopGatherSession() },
-            ]
-          : [
-              {
-                label: amenity.actionLabel,
-                variant: "primary" as const,
-                onClick: () =>
-                  confirmAndStartGatherSession(engine, amenity.id, recipe, {
-                    maxDurationMs: amenity.maxDurationMs,
-                    requiresKeepAliveEveryMs: amenity.requiresKeepAliveEveryMs,
-                  }),
-              },
-            ]
-      }
-    />
-  );
+  return <GatherCard recipe={recipe} node={amenity} onStarted={onStarted} />;
 }

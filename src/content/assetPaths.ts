@@ -114,6 +114,9 @@ export function mapUiIconPath(name: string): string {
   return `${ASSET_ROOT}/worldmap/icons/ui/${slugify(name)}.png`;
 }
 
+/** The coin stack shown next to every GP amount. */
+export const GP_ICON = `${ASSET_ROOT}/ui/coins.png`;
+
 export const HP_BAR_BACKGROUND = `${ASSET_ROOT}/ui/hpbar/background.png`;
 export const HP_BAR_FILL = `${ASSET_ROOT}/ui/hpbar/bar.png`;
 export const HP_BAR_POISONED_FILL = `${ASSET_ROOT}/ui/hpbar/poisoned_bar.png`;

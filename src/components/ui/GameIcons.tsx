@@ -1,7 +1,7 @@
 import type { BonusDrop, CraftingRecipe, RecipeInput } from "../../engine/types";
 import { getItemDef } from "../../content/items";
 import { skillName, resourceName } from "../../content/display";
-import { skillIconPath } from "../../content/assetPaths";
+import { GP_ICON, skillIconPath } from "../../content/assetPaths";
 import { formatNumber, formatXp } from "../../engine/format";
 import GameImage from "../GameImage";
 import ItemIcon from "../ItemIcon";
@@ -25,13 +25,39 @@ export function SkillIcon({ skillId, size = 18 }: { skillId: string; size?: numb
   );
 }
 
+/** The coins icon. Until public/assets/ui/coins.png exists it draws a plain
+ *  gold coin, so it never shows as a missing-glyph box. */
+export function GpIcon({ size = 16 }: { size?: number }) {
+  return (
+    <span className="game-icon gp-icon" title="GP">
+      <GameImage
+        src={GP_ICON}
+        alt="GP"
+        style={{ width: size, height: size }}
+        fallback={<span className="gp-coin" style={{ width: size, height: size }} />}
+      />
+    </span>
+  );
+}
+
+/** An amount of GP: coins icon, the number, and "GP" unless `bare`. */
+export function GpAmount({ amount, size = 16, bare = false }: { amount: number; size?: number; bare?: boolean }) {
+  return (
+    <span className="gp-amount">
+      <GpIcon size={size} />
+      {formatNumber(amount)}
+      {!bare && " GP"}
+    </span>
+  );
+}
+
 /** An item (or currency) as icon + "3 Wood", named in the tooltip. */
 export function ItemChip({ id, amount, size = 18, label }: { id: string; amount?: number; size?: number; label?: string }) {
   const def = getItemDef(id);
   const name = def?.name ?? resourceName(id);
   return (
     <span className="item-chip" title={name}>
-      {def ? <ItemIcon def={def} size={size} /> : <span aria-hidden="true">🪙</span>}
+      {def ? <ItemIcon def={def} size={size} /> : id === "gp" ? <GpIcon size={size} /> : <span aria-hidden="true">•</span>}
       <span>{label ?? `${amount !== undefined ? `${formatNumber(amount)} ` : ""}${name}`}</span>
     </span>
   );

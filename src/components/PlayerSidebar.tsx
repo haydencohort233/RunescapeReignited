@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { setPreferences, usePreferences } from "../lib/preferences";
 import { useGame } from "../engine/GameEngineContext";
 import type { GameEngine } from "../engine/gameEngine";
 import type { GameState } from "../engine/types";
@@ -7,7 +8,7 @@ import { getResourceMeta } from "../content/resources";
 import { getLocation } from "../content/mapLocations";
 import { getLevelProgress, MAX_LEVEL } from "../engine/xpCurve";
 import { activityLabel } from "../content/display";
-import { SkillIcon } from "./ui/GameIcons";
+import { GpAmount, SkillIcon } from "./ui/GameIcons";
 import { formatNumber } from "../engine/format";
 import HpBar from "./HpBar";
 
@@ -55,8 +56,33 @@ function GoldBreakdown({ engine, state }: { engine: GameEngine; state: GameState
   );
 }
 
-/** The right-hand player summary on wide screens: who you are, health,
- *  gold and materials, and every skill. Clicking a skill opens it. */
+/** A sidebar section whose title folds it away; remembered per browser. */
+function FoldSection({ id, title, summary, children }: { id: string; title: string; summary?: string; children: ReactNode }) {
+  const { collapsedSections } = usePreferences();
+  const open = !collapsedSections.includes(id);
+  return (
+    <div className="stack-sm">
+      <button
+        type="button"
+        className="sidebar-fold"
+        aria-expanded={open}
+        onClick={() =>
+          setPreferences({ collapsedSections: open ? [...collapsedSections, id] : collapsedSections.filter((s) => s !== id) })
+        }
+      >
+        <h3 className="section-title">{title}</h3>
+        <span className="text-faint text-small">
+          {!open && summary} {open ? "▾" : "▸"}
+        </span>
+      </button>
+      {open && children}
+    </div>
+  );
+}
+
+/** The right-hand player summary on wide screens (and the drawer the top
+ *  bar opens on phones): who you are, health, gold, resources, and every
+ *  skill. Clicking a skill opens it. */
 export default function PlayerSidebar({ onOpenSkill }: { onOpenSkill: (skillId: string) => void }) {
   const { engine, state } = useGame();
   const [showGold, setShowGold] = useState(false);
@@ -94,7 +120,9 @@ export default function PlayerSidebar({ onOpenSkill }: { onOpenSkill: (skillId: 
           onClick={() => setShowGold((v) => !v)}
           title="Where your gold comes from"
         >
-          <span className="text-gold">{formatNumber(engine.getResourceAmount("gp"))} GP</span>
+          <span className="text-gold">
+            <GpAmount amount={engine.getResourceAmount("gp")} size={18} />
+          </span>
           <span className="text-muted text-small">
             {rateText(gpRate)} {showGold ? "▾" : "▸"}
           </span>
@@ -102,7 +130,10 @@ export default function PlayerSidebar({ onOpenSkill }: { onOpenSkill: (skillId: 
         {showGold && <GoldBreakdown engine={engine} state={state} />}
       </div>
 
-      {materials.length > 0 && (
+      {/* Everything you hold that isn't an item (those are in Inventory).
+          On phones this is what the top bar opens, so it's labelled. */}
+      <FoldSection id="resources" title="Resources" summary={materials.length > 0 ? `${materials.length}` : undefined}>
+        {materials.length === 0 && <span className="text-faint text-small">Nothing yet. Gather something or buy a building.</span>}
         <div>
           {materials.map(({ id, amount, meta, rate }) => (
             <div key={id} className="data-row text-small">
@@ -114,10 +145,9 @@ export default function PlayerSidebar({ onOpenSkill }: { onOpenSkill: (skillId: 
             </div>
           ))}
         </div>
-      )}
+      </FoldSection>
 
-      <div className="stack-sm">
-        <h3 className="section-title">Skills</h3>
+      <FoldSection id="skills" title="Skills" summary={`Total ${formatNumber(state.statistics.totalLevel ?? 0)}`}>
         <div className="sidebar-skills">
           {SKILL_CATALOG.map((skill) => {
             const progress = getLevelProgress(engine.getSkillXp(skill.id));
@@ -144,7 +174,7 @@ export default function PlayerSidebar({ onOpenSkill }: { onOpenSkill: (skillId: 
             );
           })}
         </div>
-      </div>
+      </FoldSection>
     </div>
   );
 }
@@ -159,7 +189,7 @@ export function PlayerStrip({ onOpen, alert = false }: { onOpen?: () => void; al
     <>
       <div className="row row-between text-small">
         <span className="text-gold">
-          {formatNumber(engine.getResourceAmount("gp"))} GP <span className="text-faint">{rateText(gpRate)}</span>
+          <GpAmount amount={engine.getResourceAmount("gp")} /> <span className="text-faint">{rateText(gpRate)}</span>
         </span>
         <span className="text-faint">
           Combat {engine.getCombatLevel()}

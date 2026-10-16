@@ -240,6 +240,7 @@ export default function CombatPanel({ enemyId, inDungeon = false }: { enemyId: s
         },
         {
           label: "Flee",
+          variant: "danger",
           disabled: !session.canFlee || engine.getCurrentHp() <= 0,
           reason: session.canFlee ? "You're out of HP" : `You can't flee from ${session.enemyName}`,
           onClick: () => engine.fleeCombat(),

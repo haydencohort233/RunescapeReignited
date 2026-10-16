@@ -198,6 +198,16 @@ export default function SettingsPanel() {
 
       <Section title="Dev tools">
         <div className="card">
+          <label className="row row-between setting-row">
+            <span>
+              Scene layout editor{" "}
+              <span className="text-faint text-small">· drag buildings, trees and paths on Home, then copy the layout into content/townScenes.ts</span>
+            </span>
+            <input type="checkbox" checked={prefs.sceneEditor} onChange={(e) => setPreferences({ sceneEditor: e.target.checked })} />
+          </label>
+        </div>
+
+        <div className="card">
           <p className="text-muted">Buildings — ignores unlock requirements, still costs resources.</p>
           {BUILDING_CATALOG.filter((b) => b.baseCost).map((building) => (
             <div key={building.id} className="row row-between">

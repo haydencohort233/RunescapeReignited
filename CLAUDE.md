@@ -40,7 +40,7 @@ New fields on `ActiveCombatSession` should be optional, or handled in `sanitizeA
 
 ## Publishing the test link
 
-`npm run build:single`, copy `dist/idle-engine.html` to the scratchpad, publish it with the Artifact tool using `url: https://claude.ai/artifact/4bFZdWSqX9YqupBp4mekRG`. Only send `files` (art under `assets/...`, mirroring `public/assets`) when art changes. Commit first.
+`npm run build:single`, copy `dist/idle-engine.html` to the scratchpad, publish it with the Artifact tool using `url: https://claude.ai/artifact/DCwGp4oX62R6pRdFw1ZkdF`. Only send `files` (art under `assets/...`, mirroring `public/assets`) when art changes. Commit first.
 
 ## Writing and commits
 

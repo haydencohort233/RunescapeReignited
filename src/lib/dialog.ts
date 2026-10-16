@@ -4,7 +4,18 @@
 // rest of the game anyway. Framework-agnostic: DialogHost renders whatever
 // is pending here.
 
+/** One side of a "switch activity?" prompt: what's running, or what's next. */
+export interface ActivityPreview {
+  kind: "craft" | "gather" | "travel" | "combat";
+  /** Skill icon to show (craft/gather). */
+  skill?: string;
+  title: string;
+  /** "12 gathered · 4m in", "~19s trip". */
+  detail?: string;
+}
+
 export type DialogRequest =
+  | { kind: "switch"; from: ActivityPreview; to: ActivityPreview; resolve: (ok: boolean) => void }
   | {
       kind: "confirm";
       message: string;
@@ -65,6 +76,23 @@ export function requestConfirm(
   );
 }
 
+/** "Stop what you're doing and start this instead?" Resolves true to
+ *  switch, false to keep going. */
+export function requestSwitch(from: ActivityPreview, to: ActivityPreview): Promise<boolean> {
+  cancelPending();
+  return new Promise((resolve) =>
+    set({
+      kind: "switch",
+      from,
+      to,
+      resolve: (ok) => {
+        set(null);
+        resolve(ok);
+      },
+    })
+  );
+}
+
 /** Asks "how many?", from 1 to `max`. Resolves null if cancelled. */
 export function requestQuantity(
   message: string,
@@ -88,7 +116,7 @@ export function requestQuantity(
 
 /** A newer question replaces an unanswered one, which counts as "no". */
 function cancelPending(): void {
-  if (current?.kind === "confirm") current.resolve(false);
+  if (current?.kind === "confirm" || current?.kind === "switch") current.resolve(false);
   else if (current?.kind === "quantity" || current?.kind === "dialogue") current.resolve(null);
 }
 

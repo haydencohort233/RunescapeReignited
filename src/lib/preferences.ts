@@ -24,10 +24,24 @@ export interface Preferences {
   hiddenTypes: NotificationType[];
   /** "❗" in the tab title for level ups and achievements while away. */
   titleAlert: boolean;
+  /** Dev tool: drag things around the Home town scene and copy the new
+   *  layout (see content/townScenes.ts). */
+  sceneEditor: boolean;
+  /** Player sidebar sections the player folded away ("skills", "resources"). */
+  collapsedSections: string[];
 }
 
 const KEY = "idlegame:prefs";
-const DEFAULTS: Preferences = { exactNumbers: false, notifications: true, hiddenTypes: [], titleAlert: true };
+const DEFAULTS: Preferences = {
+  exactNumbers: false,
+  notifications: true,
+  hiddenTypes: [],
+  titleAlert: true,
+  sceneEditor: false,
+  collapsedSections: [],
+};
+
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((t: unknown) => typeof t === "string") : []);
 
 function load(): Preferences {
   try {
@@ -37,8 +51,10 @@ function load(): Preferences {
     return {
       exactNumbers: parsed.exactNumbers === true,
       notifications: parsed.notifications !== false,
-      hiddenTypes: Array.isArray(parsed.hiddenTypes) ? parsed.hiddenTypes.filter((t: unknown) => typeof t === "string") : [],
+      hiddenTypes: strings(parsed.hiddenTypes) as NotificationType[],
       titleAlert: parsed.titleAlert !== false,
+      sceneEditor: parsed.sceneEditor === true,
+      collapsedSections: strings(parsed.collapsedSections),
     };
   } catch {
     return DEFAULTS;
