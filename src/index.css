@@ -3,52 +3,66 @@
    data-theme on <html> (resolving "Match system" itself), so each palette
    is defined exactly once. */
 :root {
-  --bg: #f6f6f8;
-  --surface: #fff;
-  --surface-hover: #f0f0f3;
-  --surface-raised: #fff;
-  --text: #4b4f58;
-  --text-h: #111318;
-  --text-strong: #22252b;
-  --text-muted: #5f6470;
-  --text-faint: #858a96;
-  --border: #c9ccd3;
-  --border-subtle: #e2e4e9;
-  --track: #e8e9ed;
-  --map-bg: #eef6ee;
-  --shadow: rgba(0, 0, 0, 0.18);
-  --focus: #2563eb;
+  --bg: #a8987c;
+  --surface: #d4ccb8;
+  --surface-hover: #c9bea6;
+  --surface-raised: #dcd5c3;
+  --text: #2e2a23;
+  --text-h: #1c1812;
+  --text-strong: #241f18;
+  --text-muted: #4f483c;
+  --text-faint: #6b6353;
+  --border: #857760;
+  --border-subtle: #ada085;
+  --track: #bcb097;
+  --map-bg: #c6bea6;
+  --shadow: rgba(40, 30, 15, 0.28);
+  --focus: #7a4e1e;
 
-  --accent-bg: #1a5fa8;
+  --accent-bg: #605443;
   --accent-fg: #fff;
 
-  --danger: #b91c1c;
-  --danger-bg: #fee2e2;
-  --warning: #92400e;
-  --warning-bg: #fef3c7;
-  --info: #1a5fa8;
-  --info-bg: #e0f2fe;
-  --success: #1a7a3a;
-  --good: #4b8;
-  --gold: #a87a08;
-  --gold-border: #d4af37;
-  --gold-bg: #fff8e1;
+  --danger: #a1170f;
+  --danger-bg: #f0cbc2;
+  --warning: #7a4a06;
+  --warning-bg: #eedfa8;
+  --info: #2a5d8a;
+  --info-bg: #cfdbe0;
+  --success: #2f6b1f;
+  --good: #3d8a2a;
+  --gold: #8a5d00;
+  --gold-border: #b8860b;
+  --gold-bg: #efe1b0;
 
   /* Combat log text (not the splat circles, which carry their own white text). */
-  --splat-hit: #b91c1c;
-  --splat-block: #2563eb;
-  --splat-miss: #9ca3af;
-  --splat-bleed: #9f1239;
-  --spec: #b45309;
+  --splat-hit: #a1170f;
+  --splat-block: #2a5d8a;
+  --splat-miss: #7b7364;
+  --splat-bleed: #8b1a3a;
+  --spec: #8a4b08;
 
   /* Outline for sprites; only needed against a dark background. */
   --icon-outline: none;
 
   /* Inventory: worn items' outline, and OSRS-yellow stack counts. */
-  --equipped: #16a34a;
-  --stack-count: #a16207;
+  --equipped: #2f7a1f;
+  --stack-count: #7a5c00;
+
+  /* Medieval frames: a dark outline, a light top-left bevel, a dark
+     bottom-right one, and wood for primary buttons and frame trims. */
+  --surface-top: #ddd6c4;
+  --frame: #5a4a33;
+  --bevel-hi: rgba(255, 250, 235, 0.55);
+  --bevel-lo: rgba(60, 45, 25, 0.25);
+  --wood: #6b5235;
+  --wood-hi: #8a6c47;
+  --wood-lo: #4a3822;
+  /* Hovered menu item and the open tab. */
+  --hover-bg: #6b5235;
+  --hover-fg: #fff3d0;
 
   --sans: system-ui, "Segoe UI", Roboto, sans-serif;
+  --display: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
   --mono: ui-monospace, Consolas, monospace;
 
   font: 14px/1.45 var(--sans);
@@ -60,45 +74,55 @@
 }
 
 :root[data-theme="dark"] {
-  --bg: #0b0c0f;
-  --surface: #14161b;
-  --surface-hover: #1c1f26;
-  --surface-raised: #1c1f26;
-  --text: #c9ccd3;
-  --text-h: #f3f4f6;
-  --text-strong: #e5e7eb;
-  --text-muted: #a1a7b3;
-  --text-faint: #7c8290;
-  --border: #2f333d;
-  --border-subtle: #23262e;
-  --track: #23262e;
-  --map-bg: #121a14;
+  --bg: #1f1d1a;
+  --surface: #2e2c29;
+  --surface-hover: #3a3732;
+  --surface-raised: #46433a;
+  --text: #d8cfb8;
+  --text-h: #ffcf3f;
+  --text-strong: #ece4cf;
+  --text-muted: #b3a98f;
+  --text-faint: #8d8571;
+  --border: #4d4a43;
+  --border-subtle: #3a3833;
+  --track: #3a3833;
+  --map-bg: #23261f;
   --shadow: rgba(0, 0, 0, 0.6);
-  --focus: #60a5fa;
+  --focus: #ffcf3f;
 
-  --accent-bg: #2f6fb5;
-  --accent-fg: #fff;
+  --accent-bg: #694d23;
+  --accent-fg: #fff3d0;
 
-  --danger: #f87171;
-  --danger-bg: #3a1517;
-  --warning: #fbbf24;
-  --warning-bg: #3a2c0f;
-  --info: #60a5fa;
-  --info-bg: #10263a;
-  --success: #4ade80;
-  --good: #4b8;
-  --gold: #e0b44a;
-  --gold-border: #a8842a;
-  --gold-bg: #2a2310;
+  --danger: #ff6b5b;
+  --danger-bg: #3d1a15;
+  --warning: #e6a519;
+  --warning-bg: #3a2f17;
+  --info: #4aa8ff;
+  --info-bg: #142636;
+  --success: #4fdc4f;
+  --good: #4fdc4f;
+  --gold: #e6a519;
+  --gold-border: #b8860b;
+  --gold-bg: #3a2f17;
 
-  --splat-hit: #f87171;
-  --splat-block: #60a5fa;
-  --splat-miss: #7c8290;
-  --splat-bleed: #fb7185;
-  --spec: #f59e0b;
-  --icon-outline: drop-shadow(0 0 1px rgba(255, 255, 255, 0.55));
-  --equipped: #4ade80;
-  --stack-count: #facc15;
+  --splat-hit: #ff5a4a;
+  --splat-block: #4aa8ff;
+  --splat-miss: #8d8571;
+  --splat-bleed: #ff6f8f;
+  --spec: #ffb02e;
+  --icon-outline: drop-shadow(0 0 1px rgba(255, 240, 200, 0.5));
+  --equipped: #3fdc3f;
+  --stack-count: #ffff00;
+
+  --surface-top: #36332f;
+  --frame: #0f0e0c;
+  --bevel-hi: rgba(255, 240, 210, 0.08);
+  --bevel-lo: rgba(0, 0, 0, 0.45);
+  --wood: #5a4126;
+  --wood-hi: #7a5a34;
+  --wood-lo: #3a2a17;
+  --hover-bg: #e6a519;
+  --hover-fg: #1c1812;
 
   color-scheme: dark;
 }
@@ -115,6 +139,7 @@ h1,
 h2,
 h3 {
   color: var(--text-h);
+  font-family: var(--display);
   margin: 0;
 }
 
@@ -222,10 +247,10 @@ input[type="checkbox"] {
 }
 
 .tab[aria-current="page"] {
-  background: var(--surface);
-  border-color: var(--border);
-  color: var(--text-h);
-  font-weight: 600;
+  background: var(--hover-bg);
+  border-color: var(--frame);
+  color: var(--hover-fg);
+  font-weight: 700;
 }
 
 .tab.has-alert {
@@ -270,7 +295,7 @@ input[type="checkbox"] {
     display: flex;
     flex-direction: column;
     padding: 20px 12px;
-    border-right: 1px solid var(--border-subtle);
+    border-right: 3px solid var(--wood);
   }
 
   .shell-brand {
@@ -323,7 +348,7 @@ input[type="checkbox"] {
   .shell-side {
     display: block;
     padding: 12px 16px 24px;
-    border-left: 1px solid var(--border-subtle);
+    border-left: 3px solid var(--wood);
   }
 
   .is-sidebar-collapsed .shell-side {
@@ -393,8 +418,9 @@ input[type="checkbox"] {
 }
 
 .sidebar-breakdown {
-  padding: 2px 10px;
-  border-left: 2px solid var(--gold-border);
+  padding: 4px 10px;
+  border: 1px solid var(--gold-border);
+  border-radius: 4px;
 }
 
 .sidebar-skills {
@@ -492,7 +518,7 @@ input[type="checkbox"] {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-faint);
+  color: var(--text-h);
 }
 
 .row {
@@ -513,15 +539,20 @@ input[type="checkbox"] {
   flex-direction: column;
   gap: 8px;
   padding: 10px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--surface);
+  border: 1px solid var(--frame);
+  border-radius: 4px;
+  background: linear-gradient(180deg, var(--surface-top), var(--surface) 48px);
+  box-shadow:
+    inset 1px 1px 0 var(--bevel-hi),
+    inset -1px -1px 0 var(--bevel-lo),
+    0 1px 3px var(--shadow);
   min-width: 0;
 }
 
 .card.is-locked {
   border-style: dashed;
   background: transparent;
+  box-shadow: none;
 }
 
 .card.is-highlight {
@@ -559,6 +590,7 @@ input[type="checkbox"] {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  font-family: var(--display);
   font-weight: 600;
   color: var(--text-strong);
   min-width: 0;
@@ -606,15 +638,27 @@ input[type="checkbox"] {
   font-size: 13px;
   line-height: 1.3;
   padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border-radius: 3px;
+  border: 1px solid var(--frame);
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface-hover));
+  box-shadow:
+    inset 1px 1px 0 var(--bevel-hi),
+    inset -1px -1px 0 var(--bevel-lo);
   color: var(--text-strong);
   cursor: pointer;
 }
 
 .btn:hover:not(:disabled) {
-  background: var(--surface-hover);
+  background: var(--hover-bg);
+  border-color: var(--frame);
+  color: var(--hover-fg);
+}
+
+/* Pressed: the bevel flips, like a sunken stone button. */
+.btn:active:not(:disabled) {
+  box-shadow:
+    inset 1px 1px 0 var(--bevel-lo),
+    inset -1px -1px 0 var(--bevel-hi);
 }
 
 .btn:disabled {
@@ -623,14 +667,17 @@ input[type="checkbox"] {
 }
 
 .btn-primary {
-  background: var(--accent-bg);
-  border-color: var(--accent-bg);
-  color: var(--accent-fg);
+  background: linear-gradient(180deg, var(--wood-hi), var(--wood-lo));
+  border-color: var(--frame);
+  color: #fff3d0;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--accent-bg);
-  filter: brightness(1.1);
+  background: linear-gradient(180deg, var(--wood-hi), var(--wood-lo));
+  border-color: var(--gold-border);
+  color: #fff3d0;
+  filter: brightness(1.25);
 }
 
 /* Stop, Cancel, Flee, Delete: red so ending something never looks like the
@@ -650,6 +697,7 @@ input[type="checkbox"] {
 .btn-ghost {
   border-color: transparent;
   background: transparent;
+  box-shadow: none;
 }
 
 .btn-row {
@@ -729,14 +777,16 @@ input[type="checkbox"] {
   text-align: left;
   border-color: transparent;
   background: transparent;
+  box-shadow: none;
 }
 
-/* Menu background (surface-raised) and surface-hover are the same color in
-   dark mode, so the hovered item uses the accent instead. */
 .quick-menu .btn:hover:not(:disabled),
 .quick-menu .btn:focus-visible {
-  background: var(--accent-bg);
-  color: var(--accent-fg);
+  background: var(--hover-bg);
+  border-color: var(--hover-bg);
+  color: var(--hover-fg);
+  font-weight: 600;
+  filter: none;
   outline: none;
 }
 
@@ -1045,6 +1095,7 @@ input[type="checkbox"] {
 .dialog {
   width: 100%;
   max-width: 420px;
+  border: 2px solid var(--wood);
   box-shadow: 0 10px 30px var(--shadow);
 }
 
@@ -1348,8 +1399,8 @@ input[type="checkbox"] {
 :root {
   --cork: #c79a64;
   --cork-dot: #b0844f;
-  --paper: #fffdf6;
-  --paper-edge: #e9dfc6;
+  --paper: #e2d8c0;
+  --paper-edge: #c4b597;
   --paper-ink: #2d2a24;
   --pin: #d64545;
 }
@@ -1357,9 +1408,9 @@ input[type="checkbox"] {
 :root[data-theme="dark"] {
   --cork: #4a3826;
   --cork-dot: #3d2e1f;
-  --paper: #22201b;
-  --paper-edge: #3b362c;
-  --paper-ink: #ece6d6;
+  --paper: #e2d6b8;
+  --paper-edge: #b8a282;
+  --paper-ink: #2d2a24;
   --pin: #e06666;
 }
 
@@ -1750,7 +1801,7 @@ input[type="checkbox"] {
     grid-template-columns: repeat(7, minmax(0, 1fr));
     padding: 4px 2px calc(4px + env(safe-area-inset-bottom));
     background: var(--surface);
-    border-top: 1px solid var(--border);
+    border-top: 3px solid var(--wood);
     box-shadow: 0 -2px 10px var(--shadow);
   }
 
@@ -1771,7 +1822,8 @@ input[type="checkbox"] {
 
   .bottom-tab[aria-current="page"] {
     color: var(--text-h);
-    background: var(--surface-hover);
+    background: var(--gold-bg);
+    box-shadow: inset 0 0 0 1px var(--gold-border);
   }
 
   .bottom-tab-icon {

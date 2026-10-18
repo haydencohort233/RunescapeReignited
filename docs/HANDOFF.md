@@ -1,6 +1,6 @@
 # Handoff
 
-As of Oct 15, 2026. The Oct 15 round (town scenes and shop grid, below) is not committed yet. Tests (128), lint and build pass. The test link (https://claude.ai/artifact/4bFZdWSqX9YqupBp4mekRG) runs this build.
+As of Oct 16, 2026. The Oct 15 round (town scenes and shop grid, below) is committed. Next is fleshing out the skills (roadmap, "Skills to flesh out"). Tests (128), lint and build passed at the Oct 15 commit. The test link (https://claude.ai/artifact/4bFZdWSqX9YqupBp4mekRG) runs this build.
 
 ## Where things stand
 
@@ -54,7 +54,7 @@ From the roadmap, in rough order:
 - Achievement point shop, more quests (5 to 10), building upgrades, more achievements, better job board, poison
 - Phase 4: hide dev tools, confirm wasteful actions, PWA, notification durations
 
-## Waiting on the friend
+## Open decisions
 
 - Tutorial: separate island or hints in the main game (on hold).
 - The Oct 12 open questions: mid-fight food lock, dungeon food cap, "(0)" vs "Uncharged" Glory name, per-skill achievements, toast durations.

@@ -1,11 +1,11 @@
 # Working on this project
 
-Read [docs/HANDOFF.md](docs/HANDOFF.md) for the current state and [docs/ROADMAP.md](docs/ROADMAP.md) for the plan. The live roadmap doc (https://claude.ai/code/artifact/fb252a61-8b75-4562-b645-755ca5489eae) is the source of truth; keep docs/ROADMAP.md in sync with it.
+Read [docs/HANDOFF.md](docs/HANDOFF.md) for the current state and [docs/ROADMAP.md](docs/ROADMAP.md) for the plan. The live roadmap doc (https://claude.ai/artifact/CisApq9wcjwbQoxmAGThdH) is the source of truth; keep docs/ROADMAP.md in sync with it.
 
 ## How decisions are made
 
-- Design calls come from the owner's friend, relayed as pasted Q&A rounds. Each round: fold answers into the live roadmap doc (mark "Decided:", tick open questions), sync docs/ROADMAP.md, then give the owner a follow-up question list to send.
-- Before building a feature, read its roadmap row and follow the decided details. Values nobody decided are marked "Proposed" in the roadmap so the friend can review them.
+- The owner is the original author and makes all design calls. When they answer open questions, fold the answers into the live roadmap doc (mark "Decided:", tick open questions) and sync docs/ROADMAP.md.
+- Before building a feature, read its roadmap row and follow the decided details. Values nobody decided are marked "Proposed" in the roadmap so the owner can review them.
 - Desktop and phone are both first-class: every new screen must work at 375px wide with no sideways scroll.
 - The game follows OSRS where it can (formulas, levels, XP, names) unless a decision says otherwise.
 

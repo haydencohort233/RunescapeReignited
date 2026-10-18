@@ -3,7 +3,7 @@
 A browser idle game in the style of Old School RuneScape and Melvor Idle: skills, gathering, crafting, buildings, quests, OSRS-style combat and a first dungeon. Single player, runs entirely in the browser, saves to localStorage.
 
 - Test link (shared build): https://claude.ai/artifact/4bFZdWSqX9YqupBp4mekRG
-- Roadmap (live doc, source of truth): https://claude.ai/code/artifact/fb252a61-8b75-4562-b645-755ca5489eae
+- Roadmap (live doc, source of truth): https://claude.ai/artifact/CisApq9wcjwbQoxmAGThdH
 - Local roadmap copy: [docs/ROADMAP.md](docs/ROADMAP.md)
 - Handoff and current state: [docs/HANDOFF.md](docs/HANDOFF.md)
 - Working on the code: [CLAUDE.md](CLAUDE.md)

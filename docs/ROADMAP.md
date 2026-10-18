@@ -1,12 +1,71 @@
 # Idle Engine Roadmap
 
-Oct 12, 2026. Local copy of the live doc, which is the source of truth: https://claude.ai/code/artifact/fb252a61-8b75-4562-b645-755ca5489eae
+Oct 17, 2026. Local copy of the live doc, which is the source of truth: https://claude.ai/artifact/CisApq9wcjwbQoxmAGThdH
 
-Next up: the remaining Phase 2 skills (Herblore, Agility, Runecrafting) and Phase 3 depth. See Built on Oct 11 for what is already in.
+Next up: the Oct 17 owner list (look and feel, shops, world map, cooking burns, potions, sound, Slayer), flesh out the skills (see Skills to flesh out below), then the remaining Phase 2 skills (Herblore, Agility course, Runecrafting, Thieving) and Phase 3 depth. See Built on Oct 11, 12 and 15 for what is already in.
+
+## Built on Oct 15
+
+Town scenes and a UI rework (committed). Details and file locations are in HANDOFF.md.
+
+| Item | What was built |
+| --- | --- |
+| Town scenes | Home is a picture of the current location with a name tag on every amenity; clicking one opens it in a modal. Layouts are data (content/townScenes.ts). A scene layout editor in Dev tools drags buildings, decor and paths and copies the layout. |
+| Shops | Shopkeeper greeting, GP, Buy / Sell / Repair tabs, an item grid with price tags, Buy 1/5/10/all on right-click. |
+| Training cards | Every way to train (skill page, Home crafting list, spot and station popups) is one card with stats, a main button, info lines, tool requirements ("Requires Harpoon", green or red) and a locked reason. |
+| Travel to nearest spot | Away from a resource, the gather button becomes "Travel to X" for the closest open place that has it. |
+| Switch prompt | Starting something while busy shows what is running and what replaces it. |
+| Job boards | A corkboard of pinned notes with frequency and level tags, objective bars, and a green glow when ready to turn in. |
+| Polish | Modals lock page scroll, Escape closes the top one, phone sheets swipe down to close. Resources moved into the sidebar. Collapsible sidebar sections. GP coin icon (art still to drop in at public/assets/ui/coins.png). Red Stop / Cancel / Flee. Opening animations. |
+
+## Owner's list (Oct 17)
+
+The owner makes the design calls now. Items 1 to 8 are the owner's; "Decided" lines are theirs, the rest of each row is a proposal to refine. Items 9 to 14 are suggestions added by Claude, not yet approved.
+
+| # | Item | What to do | Size | Priority |
+| --- | --- | --- | --- | --- |
+| 1 | OSRS-style look | Decided: a colour scheme close to OSRS without copying it: brown, rustic, medieval, with cream "scroll" panels. Proposed: new `--` tokens (parchment cream, leather and wood browns, dark stone, gold trim) with matching dark-mode values; scroll-like cards, wood-framed panels and a stone sidebar; more images and icons across the UI (skill, tab and resource icons, section headers). Original art and colours only, no copied assets. Must work at 375px. In progress Oct 17: palette done (light = OSRS Wiki parchment, a touch greyer; dark = OSRS interface stone browns with yellow headings; serif headings). Light parchment darkened. Bevelled stone cards and buttons, wood primary buttons and wood trim on the nav, sidebar and dialogs done. Next: icons and section headers, then scroll-style cards. | L | High |
+| 2 | Shops buy only relevant items | Decided: a shop only buys what suits it, except a general store, which buys everything (a fisherman won't buy a Dragon Scimitar). Proposed: each shop gets a buy list of item types or ids in content/shops.ts, enforced in the engine; the Sell tab shows only what the shop takes, with a "does not buy this" message. Add a General Store to town. | M | High |
+| 3 | World map overhaul | Decided: route previews, a player icon, better town icons, maybe zoom and drag. Proposed: show travel time and path on hover or tap before committing; a marker for the current location, moving along the route while travelling; custom location icons; pinch and wheel zoom, drag to pan, and a reset button. Phone and desktop. | L | High |
+| 4 | Cooking burn chance | Decided: a chance to burn that falls with Cooking level, and past a certain level each food stops burning, as in OSRS. Proposed: use the OSRS burn-stop levels per food (shrimps 34, trout 49, tuna 63, shark 94), a burnt version of each food, and a Cooking-gauntlets style bonus later. Show the burn chance on the cooking card. | M | High |
+| 5 | Weapon-restricted enemies | Decided: some enemies can only be hurt by a specific weapon, as turoths and kurasks in OSRS, as part of Slayer. Proposed: an enemy field for the required weapon or damage type, checked by the engine (other weapons deal 0 and the fight card says why), plus a hint on the enemy card. | M | Medium |
+| 6 | Slayer skill | Decided as the home of item 5. Proposed: a Slayer master gives tasks (enemy and count) by combat level; task points; Slayer XP per kill; some enemies need Slayer level to attack; Slayer-only gear and rewards. Needs more enemies first. | L | Medium |
+| 7 | Sound | Decided: sound effects, but few, since most players keep sound off. Proposed: off by default with a volume and mute setting; a handful of cues (level up, quest done, rare drop, special attack, death, button click); small files, loaded lazily; nothing on repeated idle actions. | S | Low |
+| 8 | Potions | Decided: potions that boost combat stats. Proposed: timed boosts on Attack, Strength, Defence, Ranged and Magic with the OSRS formula (level percent plus a flat amount), made by Herblore, drunk from the Equipment tab or food slot, shown as active buffs, allowed in dungeon loadouts, lost on death. Builds on the buff system. | M | High |
+| 9 | Bird's nests and seeds | Decided: search a bird's nest for seeds, to feed Farming later. Proposed: a "Search" action on the nest in the inventory, OSRS seed drop table by rarity; Farming grows them into herbs and crops. | S | Medium |
+| 10 | Bank or storage | Suggested: the inventory has no cap, so storage only matters if a cap is added. Decide first whether to cap it (Melvor has bank slots). | M | Low |
+| 11 | Equipment sets and presets | Suggested: save a worn set (melee, ranged, magic) and swap it before a fight in one tap. | S | Medium |
+| 12 | Offline summary | Suggested: a "While you were away" popup with XP, items and levels gained, since offline time is now 8 hours. | S | High |
+| 13 | Tutorial and hints | Suggested: first-run hints tied to the highlighted amenity on the town scene, replacing the on-hold intro until it is decided. | M | Medium |
+| 14 | Save backup | Suggested: export and import a save file, with a reminder to export before big updates, since saves are in the browser only. | S | Medium |
+
+## Skills to flesh out
+
+Today most skills are one or two recipes deep. Proposed order and scope, all open for review (nothing here is decided):
+
+| Skill | Today | To add |
+| --- | --- | --- |
+| Woodcutting | Normal, oak | Willow, maple, yew, magic trees at OSRS levels; more locations; bird's nest and other rare drops |
+| Mining | Copper, tin | Iron, coal, mithril, adamantite, runite; gems; more rocks and a second mine |
+| Smithing | Bronze bars and gear | Iron, steel, mithril, adamant, rune bars (needs coal) and gear for each; cannonball-style extras later |
+| Fishing | Shrimps, trout, tuna, shark | Anchovies, salmon, lobster, swordfish, more spots; the Fishing Hut makes real shrimps |
+| Cooking | Shrimps and fish at the range | Burn chance by level (owner's list, item 4); cook every catch, meat, pies, stews |
+| Slayer | Not started | Tasks, weapon-restricted enemies, Slayer XP (owner's list, items 5 and 6) |
+| Firemaking | Logs and ashes | Higher logs (willow to magic), longer-lasting fires, bonfire buffs |
+| Fletching | Bows and arrows from basic logs | Oak to magic bows, arrow tips and heads, bolts, shafts |
+| Crafting | Bowstring, leather plan | Leather items, gems and jewellery (feeds Glory and other amulets), pottery |
+| Farming | Flax | Allotments, herb patches (feeds Herblore), growth timers that run offline |
+| Prayer | Bury, scatter | Timed prayers as buffs, an altar |
+| Agility | Travel speed only | A course to run for XP, shortcuts, run energy |
+| Herblore, Runecrafting, Thieving | Not started | See Phase 2 |
+| Construction | Four buildings | More buildings and upgrade tiers (see Building upgrades) |
+| Combat skills | Complete | More enemies, areas and bosses; poison |
+
+Each skill passes when it has content to level from 1 to about 99 without a dead stretch, with OSRS levels and XP.
 
 ## Built on Oct 12
 
-The friend's Oct 12 round is in: the phone layout and compact action bar (Phase 4, now built alongside desktop), a grid inventory, combat polish, timed Prayer, more achievements and a bigger job board.
+The Oct 12 round is in: the phone layout and compact action bar (Phase 4, now built alongside desktop), a grid inventory, combat polish, timed Prayer, more achievements and a bigger job board.
 
 | Item | What was built |
 | --- | --- |
@@ -137,8 +196,8 @@ Give players reasons to keep earning: things to spend gold and achievement point
 | Overgrown Den dungeon | Not until combat is finished (all styles, special attacks, Ranged, Magic). Then turn the "Enter" placeholder into a real run: a few waves of goblins and bandits, then the Den Guardian boss. The boss, its loot table (Dragon Scimitar, Glory) and the `denCleared` flag all exist but nothing uses them. Before the boss, a "Continue to Den Guardian" step lets you regear from a small loadout (4 to 8 items to start, as a test of whether it stays), not your whole inventory. | L | High |
 | Building upgrades | Buildings only scale by count. Add upgrade tiers (Lumbermill II) and buildings for new resources (a mine, a herb garden). | M | Medium |
 | Construction skill | Buildings cost gold plus materials (logs, ore, bars), most need a Construction level, and buying one gives Construction XP. Decided: Fishing Hut needs Construction 5, 10,000 gold, 100 raw shrimps and 100 logs; Hunter's Camp needs Construction 15, 100,000 gold and 100 bones. Proposed: Lumbermill and Coal Mine stay early (gold plus logs, no level). The Quarry building is renamed Coal Mine, since it makes coal and Quarry is now the Mining location; its id stays "quarry" so saves still load. Keep each building's requirements in one entry in the buildings content file so they are easy to edit. Building costs already take a list of resources; today each lists only GP. | M | High |
-| More achievements | Partly built Oct 12 (12 more, any-skill milestones). 7 exist. Add per-skill milestones (level 10, 50, 99), kill counts, first boss, collection goals. | S | Medium |
-| Better job board | Built Oct 12 (4 boards, 20 jobs, level gates). 5 jobs rotate. Add more per location, plus higher-paying jobs that need higher levels. One-time jobs shouldn't expire at midnight. | M | Medium |
+| More achievements | Partly built Oct 12 (12 more, any-skill milestones; about 22 now). Add per-skill milestones (level 10, 50, 99), kill counts, first boss, collection goals. | S | Medium |
+| Better job board | Built Oct 12 and 15 (4 boards, 20 jobs, level gates, corkboard look; one-time jobs never expire). Add more jobs per location and higher-paying ones for higher levels. | S | Low |
 | Amulet of Glory charges | Its description promises limited charges; it teleports forever today. Aggie recharges it for gold. | S | Medium |
 | Equipment durability | Items already have a durability field. Weapons and armour degrade only on selected items, as with Barrows gear. At 0, some dissolve and others become a broken copy (like "Dharok's greataxe 0") that can't be equipped or used in combat. Bob repairs them for gold, as in OSRS. Jewellery uses charges (Glory first, above) that Aggie recharges for gold. Add a dev tool that restores all wear and charges. | M | Medium |
 | Aggie, a witch in Draynor Village | Recharges jewellery for gold for now, with a short dialogue that asks to charge it. Also the first test of NPC dialogue. She lives at a new Draynor Village location, as in RuneScape. | S | Medium |
@@ -205,8 +264,15 @@ Bigger or riskier ideas worth keeping in view, not scheduled:
 - [x] Where does Betty stand? Decided: a new Draynor Village location, and she is renamed Aggie.
 - [x] Should the Quarry building be renamed now that Quarry is also a location? Decided: renamed Coal Mine, since it makes coal.
 - [x] Build the phone layout last, or alongside desktop? Decided: alongside desktop.
-- [ ] Mid-fight food: the friend asked to lock food too, but swapping food mid-fight was decided earlier. Keep food usable while weapons and armour lock?
+- [ ] Mid-fight food: locking food too was suggested, but swapping food mid-fight was decided earlier. Keep food usable while weapons and armour lock?
 - [ ] Dungeon food: equipped food now comes in whole. Cap it (say 20), or keep it uncapped?
 - [ ] Uncharged Glory: "Amulet of Glory (0)" (OSRS style, built) or "Uncharged Amulet of Glory"?
 - [ ] Per-skill achievements (level 10, 50, 99 for every skill) would add about 60. Want them, or keep the any-skill milestones?
 - [ ] Notification duration per type: wanted, or is on/off enough?
+- [ ] Look and feel: should dark mode stay (a darker brown palette), or go light parchment only?
+- [ ] Shops: which shops buy what? Proposed: Bob takes tools and metal gear, the Armoury takes armour and weapons, Aubury runes and staves, Gerrant fish and fishing gear, the General Store anything.
+- [ ] Should a General Store pay less than a specialist (OSRS pays about 40% base)?
+- [ ] Sound: off by default, or on with a first-run prompt?
+- [ ] Potions: do boosts carry into dungeons and can they be taken mid-fight?
+- [ ] Slayer: needs a Slayer master NPC and location; which town?
+- [ ] Add a bank or storage cap, or leave the inventory unlimited?
