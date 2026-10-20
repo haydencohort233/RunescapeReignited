@@ -65,7 +65,7 @@ export interface SceneDecor extends ScenePoint {
   size?: number;
 }
 
-export type SceneThemeId = "town" | "camp" | "lake" | "darkForest" | "grove" | "quarry" | "swamp";
+export type SceneThemeId = "town" | "camp" | "lake" | "darkForest" | "grove" | "quarry" | "swamp" | "desert";
 
 export interface TownScene {
   theme: SceneThemeId;
@@ -133,6 +133,7 @@ export const SCENE_THEMES: Record<SceneThemeId, SceneTheme> = {
     sunbeams: true,
   },
   quarry: { ground: ["#d6bf93", "#b0946a"], path: "#eadbb5", pathEdge: "#a88a5e", trees: ["#6d8f45", "#5a7d3a"], flowers: [], scatter: 0.6 },
+  desert: { ground: ["#f0d58c", "#d9b56a"], path: "#f6e6b8", pathEdge: "#c79d5a", trees: ["#6f9a3a", "#5d8a31"], flowers: [], scatter: 0.3 },
   swamp: {
     ground: ["#8fb876", "#62875a"],
     path: "#cdb98c",
@@ -158,6 +159,7 @@ export const TOWN_SCENES: Record<string, TownScene> = {
       "town-furnace": { x: 28.1, y: 81.4 },
       "town-anvil": { x: 48.9, y: 79.6 },
       "town-trees": { x: 74.1, y: 79.6 },
+      "town-hans": { x: 90, y: 60, sprite: "cottage", label: "Hans" },
     },
     paths: [
       [{ x: 52.8, y: 100 }, { x: 49.8, y: 78.7 }, { x: 49.8, y: 58.7 }],
@@ -438,6 +440,7 @@ export const TOWN_SCENES: Record<string, TownScene> = {
       "quarry-job-board": { x: 30, y: 41.5 },
       "quarry-copper": { x: 66.6, y: 43.9 },
       "quarry-tin": { x: 52, y: 82.5 },
+      "quarry-doric": { x: 80, y: 74, sprite: "camp", label: "Doric" },
     },
     paths: [
       [{ x: 52.6, y: 100 }, { x: 47.8, y: 78.9 }, { x: 49.6, y: 58 }],
@@ -480,6 +483,7 @@ export const TOWN_SCENES: Record<string, TownScene> = {
     plaza: null,
     spots: {
       "draynor-aggie": { x: 52, y: 58.7, label: "Aggie's House" },
+      "draynor-leela": { x: 26, y: 40, sprite: "cottage", label: "Leela" },
     },
     paths: [
       [{ x: 55, y: 100 }, { x: 55.8, y: 81 }, { x: 52, y: 61.7 }],
@@ -514,6 +518,25 @@ export const TOWN_SCENES: Record<string, TownScene> = {
       { kind: "willow", x: 17.5, y: 97.2, size: 1.1 },
       { kind: "willow", x: 8.3, y: 98.1, size: 1.2 },
       { kind: "willow", x: 58.6, y: 99.9, size: 1.2 },
+    ],
+  },
+  "al-kharid": {
+    theme: "desert",
+    plaza: { x: 50, y: 60 },
+    spots: {
+      "al-kharid-furnace": { x: 62, y: 46 },
+    },
+    paths: [
+      [{ x: 48, y: 100 }, { x: 50, y: 80 }, { x: 50, y: 60 }],
+      [{ x: 62, y: 49 }, { x: 56, y: 55 }, { x: 50, y: 60 }],
+    ],
+    decor: [
+      { kind: "rock", x: 12, y: 40, size: 1.3 },
+      { kind: "rock", x: 85, y: 72, size: 1.1 },
+      { kind: "rock", x: 20, y: 82, size: 0.8 },
+      { kind: "tree", x: 8, y: 20, size: 1.1 },
+      { kind: "tree", x: 90, y: 30, size: 1.2 },
+      { kind: "pine", x: 78, y: 92 },
     ],
   },
 };

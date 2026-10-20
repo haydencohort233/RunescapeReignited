@@ -4,7 +4,10 @@ import { ITEM_CATALOG } from "./items";
 import { BUILDING_CATALOG } from "./buildings";
 import { RECIPE_CATALOG } from "./recipes";
 import { ENEMY_CATALOG } from "./enemies";
-import { MAP_LOCATIONS } from "./mapLocations";
+import { MAP_LOCATIONS, MAP_WIDTH, MAP_HEIGHT } from "./mapLocations";
+import { ROADS } from "./roads";
+import { unreachableLocations } from "../engine/roads";
+import { STARTING_LOCATION_ID } from "../engine/state";
 import { SHOP_CATALOG } from "./shops";
 import { AMENITY_CATALOG } from "./amenities";
 import { JOB_CATALOG } from "./jobs";
@@ -174,6 +177,26 @@ export function validateContent(): string[] {
 
   for (const loc of MAP_LOCATIONS) {
     if (loc.unlockCondition) condition(`location "${loc.id}"`, loc.unlockCondition);
+    amounts(`location "${loc.id}" travel cost`, loc.travelCost);
+    if (!(loc.x >= 0 && loc.x <= MAP_WIDTH && loc.y >= 0 && loc.y <= MAP_HEIGHT)) err(`location "${loc.id}": off the map`);
+  }
+
+  const roadPairs = new Set<string>();
+  for (const road of ROADS) {
+    const where = `road "${road.from}" - "${road.to}"`;
+    if (!locations.has(road.from)) err(`${where}: unknown location "${road.from}"`);
+    if (!locations.has(road.to)) err(`${where}: unknown location "${road.to}"`);
+    if (road.from === road.to) err(`${where}: a road can't end where it starts`);
+    const pair = [road.from, road.to].sort().join("|");
+    if (roadPairs.has(pair)) err(`${where}: duplicate road`);
+    roadPairs.add(pair);
+    if (road.requires) condition(where, road.requires);
+    for (const p of road.via ?? []) {
+      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) err(`${where}: waypoint is not a number`);
+    }
+  }
+  for (const id of unreachableLocations(MAP_LOCATIONS, ROADS, STARTING_LOCATION_ID)) {
+    err(`location "${id}": no road leads there from the start`);
   }
 
   for (const shop of SHOP_CATALOG) {
@@ -217,11 +240,21 @@ export function validateContent(): string[] {
   for (const quest of QUEST_CATALOG) {
     const where = `quest "${quest.id}"`;
     if (quest.stages.length === 0) err(`${where}: has no stages`);
+    if (quest.locationId && !locations.has(quest.locationId)) err(`${where}: unknown location "${quest.locationId}"`);
+    if (quest.giverNpcId) {
+      const giver = NPC_CATALOG.find((n) => n.id === quest.giverNpcId);
+      if (!giver) err(`${where}: unknown giver "${quest.giverNpcId}"`);
+      else if (giver.locationId !== quest.locationId) err(`${where}: giver "${giver.id}" isn't at the quest's location`);
+    }
     if (quest.startCondition) condition(where, quest.startCondition);
     quest.stages.forEach((stage, i) => {
       condition(`${where} stage ${i + 1}`, stage.objective);
       amounts(`${where} stage ${i + 1}`, stage.consumes);
+      if (stage.lines?.some((l) => !l.trim())) err(`${where} stage ${i + 1}: has an empty line`);
     });
+    for (const lines of [quest.inProgressLines, quest.completedLines]) {
+      if (lines?.some((l) => !l.trim())) err(`${where}: has an empty greeting line`);
+    }
     rewardItems(where, quest.reward?.items);
     for (const skill of Object.keys(quest.reward?.xp ?? {})) {
       if (!skills.has(skill)) err(`${where}: rewards XP in unknown skill "${skill}"`);

@@ -66,9 +66,10 @@ export const SPECIAL_ENERGY_REGEN_PER_MS = 10 / 30_000;
  *  modifier targeting "hpRegen", no special-cased regen system needed. */
 export const BASE_HP_REGEN_PER_SECOND = 1 / 60;
 
-/** Default travel pace: ms of travel time per unit of map distance. Content
- *  can override per-trip via startTravel's opts. */
-export const DEFAULT_MS_PER_DISTANCE_UNIT = 50;
+/** Default travel pace: ms of travel time per unit of map distance (one
+ *  pixel of the world map art), measured along the roads. Content can
+ *  override per-trip via startTravel's opts. */
+export const DEFAULT_MS_PER_DISTANCE_UNIT = 150;
 
 /** Default cap on how much real-world absence counts toward production and
  *  crafting rewards. Stored per-save (state.offlineCapMs), not hardcoded, so

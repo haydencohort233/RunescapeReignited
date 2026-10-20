@@ -35,6 +35,7 @@ import { describeAction, getActiveCombat } from "./activeAction";
 import { BuildingSystem } from "./systems/buildings";
 import { CraftingSystem } from "./systems/crafting";
 import { TravelSystem } from "./systems/travel";
+import type { TravelRoute } from "./roads";
 import { CombatSystem } from "./systems/combat";
 import { JobBoardSystem } from "./systems/jobs";
 import { QuestSystem } from "./systems/quests";
@@ -195,7 +196,7 @@ export class GameEngine {
     }
     const action = this.state.activeAction;
     if (!action) return true;
-    this.notifications.push("status", `You're busy ${describeAction(action)} — stop that first.`, {
+    this.notifications.push("status", `You're busy ${describeAction(action)}. Stop that first.`, {
       severity: "warning",
     });
     return false;
@@ -1162,7 +1163,7 @@ export class GameEngine {
     this.grantStartingBuildings();
     this.grantStarterKit(this.content.starterKit ?? []);
     this.notifications.clear();
-    this.notifications.push("status", "Save data cleared — starting fresh.");
+    this.notifications.push("status", "Save data cleared. Starting fresh.");
   }
 
   private ensureResourceExists(resource: ResourceId): void {
@@ -1253,7 +1254,7 @@ export class GameEngine {
       this.setFlag(earnedFlag, true);
       this.notifications.push(
         "achievement",
-        `Achievement unlocked: ${achievement.name} — ${achievement.description}`
+        `Achievement unlocked: ${achievement.name}. ${achievement.description}`
       );
     }
   }
@@ -1372,6 +1373,14 @@ export class GameEngine {
 
   getTravelSpeedMultiplier(): number {
     return this.travelSystem.getTravelSpeedMultiplier();
+  }
+
+  getTravelToll(to: MapLocation): RecipeInput[] {
+    return this.travelSystem.getTravelToll(to);
+  }
+
+  getTravelRoute(from: MapLocation, to: MapLocation): TravelRoute | null {
+    return this.travelSystem.getTravelRoute(from, to);
   }
 
   getTravelDurationEstimate(from: MapLocation, to: MapLocation, opts?: { msPerDistanceUnit?: number }): number {
@@ -1531,6 +1540,10 @@ export class GameEngine {
 
   advanceQuest(questId: string): boolean {
     return this.questSystem.advanceQuest(questId);
+  }
+
+  devResetQuests(achievementIds: string[] = []): void {
+    this.questSystem.devResetQuests(achievementIds);
   }
 
   // ── Serialization ──────────────────────────────────────────────────────

@@ -15,7 +15,22 @@ function anySkillAtLeast(level: number): UnlockCondition {
 // count) are deliberately mixed across these five so all the plumbing gets
 // exercised. Extend freely — checkAchievements() picks up new entries
 // automatically, no engine change needed.
+/** One achievement per quest, earned when it's completed (Proposed: names
+ *  and 10 points each). The dev quest reset clears these too. */
+const questAchievement = (questId: string, id: string, name: string, quest: string): AchievementDefinition => ({
+  id,
+  name,
+  description: `Complete ${quest}.`,
+  condition: { kind: "flag", flag: `questDone:${questId}`, label: `Complete ${quest}` },
+  reward: { achievementPoints: 10 },
+});
+
+export const QUEST_ACHIEVEMENT_IDS = ["quest-overgrown-den", "quest-quarry-masters-order", "quest-prince-ali-rescue"];
+
 export const ACHIEVEMENT_CATALOG: AchievementDefinition[] = [
+  questAchievement("overgrown-den", "quest-overgrown-den", "Into the Den", "The Overgrown Den"),
+  questAchievement("quarry-masters-order", "quest-quarry-masters-order", "Bronze for Doric", "The Quarry Master's Order"),
+  questAchievement("prince-ali-rescue", "quest-prince-ali-rescue", "Royal Rescue", "Prince Ali Rescue"),
   {
     id: "bling-bling",
     name: "Bling! Bling!",

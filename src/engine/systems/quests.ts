@@ -20,6 +20,21 @@ export class QuestSystem {
     return this.engine.notifications;
   }
 
+  /** Quests are given out and handed in in person: the player has to be
+   *  where the giver is. Warns and returns false when they aren't. */
+  private atGiver(def: QuestDefinition, what: "start" | "hand in"): boolean {
+    if (!def.locationId || this.state.currentLocationId === def.locationId) return true;
+    const giver = this.engine.content.npcs?.find((n) => n.id === def.giverNpcId);
+    const place = this.engine.content.locations?.find((l) => l.id === def.locationId);
+    const who = giver ? `${giver.name}${place ? ` in ${place.name}` : ""}` : (place?.name ?? "the quest giver");
+    this.notifications.push(
+      "status",
+      what === "start" ? `Talk to ${who} to start ${def.name}.` : `Return to ${who} to hand this in.`,
+      { severity: "warning" }
+    );
+    return false;
+  }
+
   getQuestStatus(questId: string): "not-started" | "in-progress" | "completed" {
     const progress = this.state.quests[questId];
     const def = this.questsById.get(questId);
@@ -37,6 +52,7 @@ export class QuestSystem {
     this.engine.catchUpToNow(); // baselines must capture up-to-date counters
     const def = this.questsById.get(questId);
     if (!def || !this.canStartQuest(questId)) return false;
+    if (!this.atGiver(def, "start")) return false;
     this.state.quests[questId] = { stage: 0, baselines: captureBaselines(def.stages[0].objective, this.state) };
     this.notifications.push("quest", `Quest started: ${def.name}. ${def.stages[0].description}`);
     this.checkQuests(); // a first stage might already be met
@@ -63,6 +79,7 @@ export class QuestSystem {
     const def = this.questsById.get(questId);
     const progress = this.state.quests[questId];
     if (!def || !progress || !this.isQuestStageMet(questId)) return false;
+    if (!this.atGiver(def, "hand in")) return false;
     const stage = def.stages[progress.stage];
     const consumes = stage.consumes ?? [];
     if (consumes.some((c) => this.engine.getOwnedCount(c.resource) < c.amount)) {
@@ -106,6 +123,26 @@ export class QuestSystem {
     for (const [skillId, xp] of Object.entries(reward?.xp ?? {})) this.engine.addSkillXp(skillId, xp);
     for (const flag of reward?.setFlags ?? []) this.engine.setFlag(flag, true);
     this.engine.incrementStatistic("questsCompleted", 1);
+    // What quest achievements check (an achievement condition reads flags).
+    this.engine.setFlag(`questDone:${def.id}`, true);
     this.notifications.push("quest", `Quest complete: ${def.name}!`);
+  }
+
+  /** Dev tool: every quest back to not started, along with what finishing
+   *  them set (reward flags, questDone flags, the completed count) and the
+   *  given achievements, so quests can be played through again. */
+  devResetQuests(achievementIds: string[]): void {
+    const flags = this.state.flags;
+    for (const def of this.questsById.values()) {
+      for (const flag of def.reward?.setFlags ?? []) delete flags[flag];
+      delete flags[`questDone:${def.id}`];
+    }
+    for (const id of achievementIds) {
+      delete flags[`achievement:${id}`];
+      delete flags[`achievementClaimed:${id}`];
+    }
+    this.state.quests = {};
+    this.state.statistics.questsCompleted = 0;
+    this.notifications.push("debug", "All quest progress reset.");
   }
 }

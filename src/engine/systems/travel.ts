@@ -1,8 +1,9 @@
-import type { ItemDefinition, MapLocation, GameState } from "../types";
+import type { ItemDefinition, MapLocation, GameState, RecipeInput } from "../types";
 import type { GameEngine } from "../gameEngine";
 import { isUnlocked } from "../unlockConditions";
 import { DEFAULT_MS_PER_DISTANCE_UNIT } from "../tuning";
 import { getActiveTravel } from "../activeAction";
+import { findRoute, type TravelRoute } from "../roads";
 
 /** World-map travel, teleports and first-visit discovery. */
 export class TravelSystem {
@@ -34,10 +35,34 @@ export class TravelSystem {
     return modifierMultiplier * agilityBonus;
   }
 
-  /** Pure calculation, no state mutation — used both by startTravel and by
-   *  the UI to preview a trip's duration before committing to it. */
+  /** The road route from `from` to `to`, never through a place the player
+   *  can't enter yet. Null when no open road connects them. */
+  getTravelRoute(from: MapLocation, to: MapLocation): TravelRoute | null {
+    const locations = this.engine.content.locations ?? [];
+    const known = new Set(locations.map((l) => l.id));
+    const all = [...locations, ...[from, to].filter((l) => !known.has(l.id))];
+    const byId = new Map(all.map((l) => [l.id, l]));
+    return findRoute(all, this.engine.content.roads, from.id, to.id, {
+      canPassThrough: (id) => {
+        const loc = byId.get(id);
+        return !loc?.unlockCondition || isUnlocked(loc.unlockCondition, this.state);
+      },
+      canUseRoad: (road) => !road.requires || isUnlocked(road.requires, this.state),
+    });
+  }
+
+  /** What travelling to `to` costs right now: its toll, unless waived. */
+  getTravelToll(to: MapLocation): RecipeInput[] {
+    if (!to.travelCost || (to.travelCostWaivedBy && this.engine.getFlag(to.travelCostWaivedBy))) return [];
+    return to.travelCost;
+  }
+
+  /** Pure calculation, no state mutation. Used both by startTravel and by
+   *  the UI to preview a trip's duration before committing to it. Follows
+   *  the road route, or a straight line when there's none (the UI shows
+   *  that case as "no road", and startTravel refuses it). */
   getTravelDurationEstimate(from: MapLocation, to: MapLocation, opts?: { msPerDistanceUnit?: number }): number {
-    const distance = Math.hypot(to.x - from.x, to.y - from.y);
+    const distance = this.getTravelRoute(from, to)?.distance ?? Math.hypot(to.x - from.x, to.y - from.y);
     const baseDurationMs = distance * (opts?.msPerDistanceUnit ?? DEFAULT_MS_PER_DISTANCE_UNIT);
     return Math.max(1000, Math.round(baseDurationMs * this.getTravelSpeedMultiplier()));
   }
@@ -54,9 +79,19 @@ export class TravelSystem {
       this.notifications.push("status", `You can't travel to ${to.name} yet.`, { severity: "warning" });
       return false;
     }
+    if (!this.getTravelRoute(from, to)) {
+      this.notifications.push("status", `There's no open road to ${to.name} from here.`, { severity: "warning" });
+      return false;
+    }
+    const toll = this.getTravelToll(to);
+    if (toll.some((c) => this.engine.getOwnedCount(c.resource) < c.amount)) {
+      this.notifications.push("status", `You can't pay the toll to ${to.name}.`, { severity: "warning" });
+      return false;
+    }
     if (!this.engine.ensureIdle()) return false;
 
     const durationMs = this.getTravelDurationEstimate(from, to, opts);
+    this.engine.payFor(toll);
 
     this.state.activeAction = {
       kind: "travel",
@@ -65,6 +100,7 @@ export class TravelSystem {
       startedAt: this.engine.now(),
       durationMs,
       onArriveSetFlag: to.onArriveSetFlag,
+      ...(toll.length > 0 ? { tollPaid: toll } : {}),
     };
     this.notifications.push("status", `Traveling to ${to.name} (~${Math.round(durationMs / 1000)}s).`);
     return true;
@@ -77,7 +113,11 @@ export class TravelSystem {
     const travel = this.travel;
     if (!travel) return;
     this.state.activeAction = null;
-    this.notifications.push("status", `Travel to ${travel.destinationName} cancelled.`);
+    for (const c of travel.tollPaid ?? []) this.engine.giveBack(c.resource, c.amount);
+    this.notifications.push(
+      "status",
+      `Travel to ${travel.destinationName} cancelled.${travel.tollPaid?.length ? " Your toll was given back." : ""}`
+    );
   }
 
   /** Instantly moves the player to `destination`, bypassing normal travel

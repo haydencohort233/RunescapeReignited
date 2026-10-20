@@ -10,6 +10,7 @@ import { Page, Section } from "./ui/Page";
 import { requestConfirm } from "../lib/dialog";
 import RichText from "./Richtext";
 import { setPreferences, TOGGLEABLE_NOTIFICATIONS, usePreferences } from "../lib/preferences";
+import { QUEST_ACHIEVEMENT_IDS } from "../content/achivements";
 
 export default function SettingsPanel() {
   const { engine, state, autosaveMs, actions } = useGame();
@@ -208,7 +209,7 @@ export default function SettingsPanel() {
         </div>
 
         <div className="card">
-          <p className="text-muted">Buildings — ignores unlock requirements, still costs resources.</p>
+          <p className="text-muted">Buildings: ignores unlock requirements, still costs resources.</p>
           {BUILDING_CATALOG.filter((b) => b.baseCost).map((building) => (
             <div key={building.id} className="row row-between">
               <span>
@@ -251,6 +252,14 @@ export default function SettingsPanel() {
             </button>
             <button type="button" className="btn" onClick={() => engine.devForceJobBoardReset()}>
               Force job board reset
+            </button>
+            <button
+              type="button"
+              className="btn"
+              title="Every quest back to not started, with its reward flags and quest achievements cleared"
+              onClick={dev(() => engine.devResetQuests(QUEST_ACHIEVEMENT_IDS))}
+            >
+              Reset all quests
             </button>
           </div>
           <div className="row row-between">

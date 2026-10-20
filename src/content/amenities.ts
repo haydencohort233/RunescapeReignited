@@ -80,6 +80,38 @@ export type Amenity =
 
 export const AMENITY_CATALOG: Amenity[] = [
   {
+    id: "town-hans",
+    locationId: "town",
+    kind: "npc",
+    name: "Hans",
+    description: "The castle servant. He hears everything that goes on in town.",
+    npcId: "hans",
+  },
+  {
+    id: "quarry-doric",
+    locationId: "quarry",
+    kind: "npc",
+    name: "Doric",
+    description: "The quarry master, always short of bronze for new tools.",
+    npcId: "doric",
+  },
+  {
+    id: "draynor-leela",
+    locationId: "draynor-village",
+    kind: "npc",
+    name: "Leela",
+    description: "A friend of Prince Ali, waiting for news from Al-Kharid.",
+    npcId: "leela",
+  },
+  {
+    id: "al-kharid-furnace",
+    locationId: "al-kharid",
+    kind: "craftingStation",
+    name: "Furnace",
+    description: "The desert furnace. Smelt ore into bars here.",
+    station: "furnace",
+  },
+  {
     id: "bobs-shop",
     locationId: "town",
     kind: "shop",

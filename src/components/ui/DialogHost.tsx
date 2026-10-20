@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
 import { getDialog, subscribeDialog, type ActivityPreview, type DialogRequest } from "../../lib/dialog";
+import { Conversation } from "./Conversation";
+import { AwaySummaryView } from "../AwaySummaryView";
 import { formatNumber } from "../../engine/format";
 import { SkillIcon } from "./GameIcons";
 
@@ -28,35 +30,40 @@ export function DialogHost() {
 
   return (
     <div className="dialog-backdrop" role="presentation">
-      <div className={`dialog card${dialog.kind === "switch" ? " switch-dialog" : ""}`} role="dialog" aria-modal="true">
+      <div
+        className={`dialog card${dialog.kind === "switch" ? " switch-dialog" : ""}${dialog.kind === "dialogue" ? " convo-dialog" : ""}${dialog.kind === "questComplete" ? " quest-done-dialog" : ""}${dialog.kind === "away" ? " away-dialog" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={dialog.kind === "dialogue" ? `Talking to ${dialog.speaker.name}` : undefined}
+      >
         {dialog.kind === "quantity" ? (
           <QuantityPrompt key={dialog.message} dialog={dialog} />
+        ) : dialog.kind === "away" ? (
+          <AwaySummaryView summary={dialog.summary} onClose={() => dialog.resolve()} primaryRef={primaryRef} />
+        ) : dialog.kind === "questComplete" ? (
+          <div className="quest-done">
+            <span className="quest-done-badge" aria-hidden="true">
+              Q
+            </span>
+            <p className="quest-done-kicker">Quest complete!</p>
+            <h3 className="quest-done-name">{dialog.questName}</h3>
+            {dialog.rewards.length > 0 && (
+              <>
+                <p className="quest-done-label">You are awarded:</p>
+                <ul className="quest-done-rewards">
+                  {dialog.rewards.map((r) => (
+                    <li key={r}>{r}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+            <button ref={primaryRef} type="button" className="btn btn-primary" onClick={() => dialog.resolve()}>
+              Continue
+            </button>
+          </div>
         ) : dialog.kind === "dialogue" ? (
-          <>
-            <h3 className="card-title">{dialog.speaker}</h3>
-            <p className="dialogue-line">{dialog.line}</p>
-            <div className="stack-sm">
-              {dialog.options.map((option, i) => (
-                <button
-                  key={i}
-                  ref={i === 0 ? primaryRef : undefined}
-                  type="button"
-                  className="btn dialogue-option"
-                  onClick={() => dialog.resolve(i)}
-                >
-                  {option}
-                </button>
-              ))}
-              <button
-                ref={dialog.options.length === 0 ? primaryRef : undefined}
-                type="button"
-                className="btn btn-ghost dialogue-option"
-                onClick={() => dialog.resolve(null)}
-              >
-                Goodbye
-              </button>
-            </div>
-          </>
+          // Keyed per line so each new line types out from the start.
+          <Conversation key={`${dialog.history.length}:${dialog.line}`} dialog={dialog} />
         ) : dialog.kind === "switch" ? (
           <SwitchPrompt dialog={dialog} primaryRef={primaryRef} />
         ) : dialog.kind === "confirm" ? (

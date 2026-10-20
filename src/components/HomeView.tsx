@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useGame } from "../engine/GameEngineContext";
 import { getLocation } from "../content/mapLocations";
 import { getAmenitiesAtLocation, type Amenity } from "../content/amenities";
@@ -12,6 +12,7 @@ import { CardPanelContext } from "./ui/cardPanel";
 import { Modal } from "./ui/Modal";
 import { EmptyState, Page, Section } from "./ui/Page";
 import { getActiveTravel } from "../engine/activeAction";
+import { subscribeBackToTown } from "../lib/dialog";
 
 /** A building or spot opened from the town scene, in a modal. */
 function AmenityModal({ amenity, locationId, onClose }: { amenity: Amenity; locationId: string; onClose: () => void }) {
@@ -41,6 +42,8 @@ export default function HomeView() {
   const travel = getActiveTravel(state);
   const [openId, setOpenId] = useState<string | null>(null);
   const close = useCallback(() => setOpenId(null), []);
+  // Saying goodbye to an NPC, or finishing a quest, closes the building.
+  useEffect(() => subscribeBackToTown(close), [close]);
   const open = openId ? amenities.find((a) => a.id === openId) : undefined;
 
   // On the road there's nowhere to be "here": just the trip.

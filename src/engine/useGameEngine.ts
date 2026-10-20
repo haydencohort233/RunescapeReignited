@@ -2,13 +2,25 @@ import { useEffect, useRef, useState } from "react";
 import { GameEngine } from "./gameEngine";
 import { NotificationQueue } from "./notificationQueue";
 import { loadGame, saveGame, createAutoSaver, exportSaveText, importSaveFromFileText } from "./save";
-import { showText } from "../lib/dialog";
+import { showAwaySummary, showText } from "../lib/dialog";
 import { GAME_CONTENT } from "../content";
 import { ACHIEVEMENT_CATALOG } from "../content/achivements";
 import type { GameNotification, GameState } from "./types";
+import { AWAY_SUMMARY_MIN_MS, snapshotProgress, summarizeAway, type ProgressSnapshot } from "./awaySummary";
 
 const LIVE_TICK_MS = 1000;
 const DEFAULT_AUTOSAVE_MS = 10_000;
+
+/** Shows "While you were away" if the player was gone long enough and
+ *  anything changed. The popup replaces the short summary toast. */
+function showAwayIfLong(engine: GameEngine, before: ProgressSnapshot): void {
+  const summary = summarizeAway(before, snapshotProgress(engine.getState(), Date.now()), engine.getOfflineCapMs());
+  if (!summary || summary.awayMs < AWAY_SUMMARY_MIN_MS) return;
+  for (const n of engine.notifications.getAll()) {
+    if (n.type === "offline-summary") engine.notifications.dismiss(n.id);
+  }
+  void showAwaySummary(summary);
+}
 
 /** Identifies this tab to other tabs of the game (see the single-tab guard
  *  below). Module-level so React StrictMode's double-mount reuses it. */
@@ -26,11 +38,15 @@ const TAB_ID = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
  * that re-subscription on its own.
  */
 export function useGameEngine() {
+  /** The player's progress when they left: from the save on load, or when
+   *  the tab was hidden. Compared on return for "While you were away". */
+  const awayFrom = useRef<ProgressSnapshot | null>(null);
   const [engine, setEngine] = useState<GameEngine>(() => {
     // Created up front so a "your save couldn't be read" message from
     // loadGame actually reaches the player.
     const notifications = new NotificationQueue();
     const loaded = loadGame(GAME_CONTENT, notifications);
+    if (loaded) awayFrom.current = snapshotProgress(loaded.getState(), loaded.getState().lastTickTimestamp);
     const instance = loaded ?? new GameEngine(GAME_CONTENT, { notifications });
     instance.resolveElapsed();
     instance.checkAchievements(ACHIEVEMENT_CATALOG); // catch anything already met (e.g. from an imported save)
@@ -79,8 +95,20 @@ export function useGameEngine() {
     };
     const id = window.setInterval(tick, LIVE_TICK_MS);
 
+    // Away since the save was loaded (only the first time this runs).
+    if (awayFrom.current) {
+      showAwayIfLong(engine, awayFrom.current);
+      awayFrom.current = null;
+    }
+
     const onVisible = () => {
-      if (document.visibilityState === "visible") tick();
+      if (document.visibilityState === "hidden") {
+        awayFrom.current = snapshotProgress(engine.getState(), Date.now());
+        return;
+      }
+      tick();
+      if (awayFrom.current) showAwayIfLong(engine, awayFrom.current);
+      awayFrom.current = null;
     };
     document.addEventListener("visibilitychange", onVisible);
 

@@ -3,16 +3,18 @@ import { useGame } from "../engine/GameEngineContext";
 import { type JobBoardDefinition, JOB_BOARD_CATALOG, getActiveJobIds } from "../content/jobBoards";
 import { getJob } from "../content/jobs";
 import { getLocation } from "../content/mapLocations";
-import { CONDITION_LABELS, skillName } from "../content/display";
+import { CONDITION_LABELS } from "../content/display";
 import { conditionProgress, describeConditionProgress, describeUnmetCondition } from "../engine/unlockConditions";
 import { getMsUntilNextDailyReset, formatCountdown } from "../engine/time";
 import type { JobDefinition, UnlockCondition } from "../engine/types";
 import { GpAmount, ItemChip } from "./ui/GameIcons";
 
+/** The small tag beside each job's title. Keep labels short: on phones
+ *  notes are two to a row and a long tag squeezes the title. */
 const FREQUENCY: Record<NonNullable<JobDefinition["frequency"]>, { label: string; tone: string }> = {
   daily: { label: "Daily", tone: "is-daily" },
-  once: { label: "One-time", tone: "is-once" },
-  repeatable: { label: "Repeatable", tone: "is-repeat" },
+  once: { label: "Once", tone: "is-once" },
+  repeatable: { label: "Repeat", tone: "is-repeat" },
 };
 
 /** The reward as chips: GP, points and items with their icons. */
@@ -78,7 +80,8 @@ export function JobCard({ job, boardLocationId, showBoard = false }: { job: JobD
   const freq = FREQUENCY[job.frequency ?? "daily"];
   const ready = accepted && objectiveMet;
 
-  let action: ReactNode;
+  // Taken jobs show no status line: the progress bars say it.
+  let action: ReactNode = null;
   if (ready && here) {
     action = (
       <button type="button" className="btn btn-primary" onClick={() => engine.turnInJob(job, boardLocationId)}>
@@ -86,9 +89,9 @@ export function JobCard({ job, boardLocationId, showBoard = false }: { job: JobD
       </button>
     );
   } else if (ready) {
-    action = <span className="job-status">Turn in at {boardName}</span>;
+    action = <span className="job-status is-ready">Turn in at {boardName}</span>;
   } else if (accepted) {
-    action = <span className="job-status">In progress</span>;
+    action = null;
   } else if (needs) {
     action = <span className="job-status is-locked">🔒 {needs}</span>;
   } else if (!here) {
@@ -104,19 +107,13 @@ export function JobCard({ job, boardLocationId, showBoard = false }: { job: JobD
   return (
     <article className={`job-note${accepted ? " is-accepted" : ""}${ready ? " is-ready" : ""}${needs && !accepted ? " is-locked" : ""}`}>
       <span className="job-pin" aria-hidden="true" />
-      <div className="job-tags">
+      <header className="job-head">
+        <h4 className="job-title">{job.title}</h4>
         <span className={`job-freq ${freq.tone}`}>{freq.label}</span>
-        {job.requirement?.kind === "skillLevel" && (
-          <span className={`job-req${needs ? "" : " is-met"}`}>
-            {needs ? "" : "✓ "}Lv {job.requirement.atLeast} {skillName(job.requirement.skill)}
-          </span>
-        )}
-        {ready && <span className="job-ready-tag">Ready!</span>}
-      </div>
-      <h4 className="job-title">{job.title}</h4>
-      <p className="job-desc">{job.description}</p>
-      {showBoard && <span className="text-faint text-small">From the board at {boardName}.</span>}
-      {accepted && <ObjectiveProgress job={job} />}
+      </header>
+      {showBoard && <span className="job-board-name">📌 {boardName}</span>}
+      {/* Once taken, the progress bars say what the description did. */}
+      {accepted ? <ObjectiveProgress job={job} /> : <p className="job-desc">{job.description}</p>}
       <div className="job-foot">
         <RewardChips reward={job.reward} />
         {action}

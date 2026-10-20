@@ -65,6 +65,10 @@ export interface GameContent {
   /** Enemies, needed by dungeons to start each wave themselves. */
   enemies?: EnemyDefinition[];
   dungeons?: DungeonDefinition[];
+  /** World-map locations and the roads between them. Without roads,
+   *  travel goes in a straight line (test content). */
+  locations?: MapLocation[];
+  roads?: RoadDefinition[];
 }
 
 /** A run of fights: waves, then a boss, with a regear stop before the boss.
@@ -117,6 +121,12 @@ export interface SpellDefinition {
 export interface NpcDefinition {
   id: string;
   name: string;
+  /** Shown under the name in conversation ("Witch", "Quarry master"). */
+  title?: string;
+  /** Emoji shown as the chat head until art exists at
+   *  assets/npcs/<slug>/<slug>.png. One character: joined emoji (person
+   *  plus object) draw as two pieces on Windows. */
+  portrait?: string;
   locationId: string;
   /** Lines said when talked to, one picked at random. */
   dialogue: string[];
@@ -161,12 +171,38 @@ export interface QuestStage {
   /** Counters (statisticAtLeast etc.) count from when the stage began. */
   objective: UnlockCondition;
   consumes?: RecipeInput[];
+  /** What the giver greets you with while you're on this stage. Overrides
+   *  the quest's inProgressLines. */
+  lines?: string[];
 }
 
 export interface QuestDefinition {
   id: string;
   name: string;
   description: string;
+  /** Where the quest is given out. The world map marks it there, and the
+   *  engine only starts it while the player is there. */
+  locationId?: string;
+  /** Who gives it out (an NPC at locationId). Talking to them is how the
+   *  quest starts; the map and Quests tab name them as a hint. */
+  giverNpcId?: string;
+  /** What the giver says when asked about the quest, before you agree. */
+  startLine?: string;
+  /** Questions the player can ask before agreeing, each with the giver's
+   *  answer. Asked ones drop off the list. */
+  questions?: { ask: string; answer: string }[];
+  /** The giver's reply when the player agrees. */
+  acceptLine?: string;
+  /** The giver's last line, when the final hand-in completes the quest. */
+  completeLine?: string;
+  /** What the giver greets you with while the quest is under way (unless
+   *  the current stage has its own lines), one at a time in turn. */
+  inProgressLines?: string[];
+  /** What the giver greets you with once the quest is done. */
+  completedLines?: string[];
+  /** Rewards that aren't GP, XP or items, in words ("Free passage through
+   *  the Al-Kharid gate"), shown with the others. */
+  rewardNotes?: string[];
   /** Gates starting the quest. Omit for quests available from the start. */
   startCondition?: UnlockCondition;
   stages: QuestStage[];
@@ -368,6 +404,31 @@ export interface MapLocation {
    *  Lake Shore sets "discoveredLakeShore", which the Fishing Hut building
    *  is waiting on. Works via both normal travel and teleport. */
   onArriveSetFlag?: string;
+  /** Paid every time you travel here, when the trip starts (a gate toll).
+   *  Given back if the trip is cancelled. */
+  travelCost?: RecipeInput[];
+  /** A flag that waives travelCost once set (a quest reward). */
+  travelCostWaivedBy?: string;
+}
+
+/** A point in map space (the same space as MapLocation x/y). */
+export interface MapPoint {
+  x: number;
+  y: number;
+}
+
+/** A two-way road between two locations. Travel follows the shortest chain
+ *  of roads, so trip time is the walked distance, not a straight line.
+ *  `via` bends the road through waypoints, listed from `from` to `to`. */
+export interface RoadDefinition {
+  from: string;
+  to: string;
+  via?: MapPoint[];
+  /** A shortcut's name ("Stepping stones"); plain roads have none. */
+  name?: string;
+  /** Needed to use it (an Agility level for a shortcut). Until it's met,
+   *  travel routes around it. */
+  requires?: UnlockCondition;
 }
 
 /** The in-progress walk to a location — denormalized destination name for
@@ -381,6 +442,8 @@ export interface ActiveTravel {
   startedAt: number;
   durationMs: number;
   onArriveSetFlag?: string;
+  /** The toll paid to start this trip, given back if it's cancelled. */
+  tollPaid?: RecipeInput[];
 }
 export type NotificationSeverity = "info" | "warning" | "error";
 

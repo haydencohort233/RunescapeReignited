@@ -10,7 +10,7 @@ export function saveGame(engine: GameEngine): boolean {
     window.localStorage.setItem(SAVE_KEY, json);
     return true;
   } catch (err) {
-    engine.notifications.push("error", "Couldn't save your game — check your device storage.", {
+    engine.notifications.push("error", "Couldn't save your game. Check your device storage.", {
       severity: "error",
     });
     engine.notifications.push("debug", `Save failed: ${(err as Error).message}`, {

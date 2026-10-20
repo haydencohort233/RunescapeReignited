@@ -1,4 +1,4 @@
-import { useContext } from "react";
+import { useContext, useState } from "react";
 import { useGame } from "../engine/GameEngineContext";
 import { AMENITY_ICON, type Amenity, type CraftingStationAmenity, type ResourceNodeAmenity } from "../content/amenities";
 import { getShop } from "../content/shops";
@@ -6,6 +6,9 @@ import { getNpc } from "../content/npcs";
 import { getItemDef } from "../content/items";
 import { recipesAtStation } from "../content/recipes";
 import { showDialogue } from "../lib/dialog";
+import { greetingFor, nextLine, questsGivenBy, talkTo } from "./npcTalk";
+import { isQuestReadyToHandIn } from "./map/locationStatus";
+import { ChatHead } from "./ui/Conversation";
 import { CraftCard, GatherCard } from "./TrainingCards";
 import ItemIcon from "./ItemIcon";
 import type { GameEngine } from "../engine/gameEngine";
@@ -49,10 +52,6 @@ export default function AmenityEntry({ amenity, onStarted }: { amenity: Amenity;
     case "dungeonEntrance":
       return <DungeonCard dungeonId={amenity.dungeonId} description={amenity.description} />;
   }
-}
-
-function randomLine(lines: string[] | undefined, fallback: string): string {
-  return lines && lines.length > 0 ? lines[Math.floor(Math.random() * lines.length)] : fallback;
 }
 
 /** A range, furnace or anvil: the recipes made there. */
@@ -141,33 +140,68 @@ function RechargePanel({ engine, npc }: { engine: GameEngine; npc: NpcDefinition
   );
 }
 
-/** Someone to talk to who may offer a service (Aggie recharges jewellery). */
+/** Someone to talk to: their chat head, a line of greeting, the quests
+ *  they give out, and what they can do for you. "Talk" opens the
+ *  conversation, which is where quests start and hand-ins happen. */
 function NpcCard({ npcId, description }: { npcId: string; description: string }) {
   const { engine } = useGame();
   const npc = getNpc(npcId);
+  // One greeting per visit to the card, not a new one every render.
+  const [greeting] = useState(() => (npc ? greetingFor(engine, npc) : ""));
   if (!npc) return null;
   const recharges = npc.services?.includes("recharge");
-  const talk = async () => {
-    const choice = await showDialogue(
-      npc.name,
-      randomLine(npc.dialogue, "Hello."),
-      recharges ? ["Can you recharge my jewellery?"] : []
-    );
-    if (choice === 0 && recharges) {
-      const charged = engine.getInventoryItems().filter((i) => getItemDef(i.itemDefId)?.maxCharges !== undefined);
-      const needing = charged.filter((i) => engine.getRechargeCost(i.instanceId) > 0);
-      if (needing.length === 0) {
-        await showDialogue(npc.name, charged.length === 0 ? "You've nothing for me to charge, dearie." : "Those are full already. Come back when they're spent.");
-        return;
-      }
-      const total = needing.reduce((sum, i) => sum + engine.getRechargeCost(i.instanceId), 0);
-      const yes = await showDialogue(npc.name, `That'll be ${total.toLocaleString()} GP for the lot.`, ["Here you go.", "That's too much."]);
-      if (yes === 0) for (const i of needing) engine.rechargeItem(npc, i.instanceId);
-    }
-  };
+  const quests = questsGivenBy(npc.id);
   return (
-    <ActionCard icon={AMENITY_ICON.npc} title={npc.name} description={description} actions={[{ label: `Talk to ${npc.name}`, variant: "primary", onClick: () => void talk() }]}>
-      {recharges && <RechargePanel engine={engine} npc={npc} />}
+    <ActionCard
+      icon={AMENITY_ICON.npc}
+      title={npc.name}
+      meta={npc.title}
+      description={
+        <div className="npc-intro">
+          <ChatHead name={npc.name} portrait={npc.portrait} size={64} />
+          <div className="npc-intro-text">
+            <p className="npc-greeting">"{greeting}"</p>
+            <p className="text-muted text-small">{description}</p>
+          </div>
+        </div>
+      }
+      actions={[{ label: `Talk to ${npc.name}`, variant: "primary", onClick: () => void talkTo(engine, npc, greeting) }]}
+    >
+      {quests.length > 0 && (
+        <ul className="npc-quests">
+          {quests.map((quest) => {
+            const status = engine.getQuestStatus(quest.id);
+            const canStart = engine.canStartQuest(quest.id);
+            return (
+              <li key={quest.id} className="map-quest">
+                <span className="map-badge is-quest" aria-hidden="true">
+                  Q
+                </span>
+                <span className="map-quest-name">{quest.name}</span>
+                {status === "completed" ? (
+                  <span className="tag tag-success">Done</span>
+                ) : status === "in-progress" ? (
+                  isQuestReadyToHandIn(engine, quest) ? (
+                    <span className="tag tag-success">Ready to hand in</span>
+                  ) : (
+                    <span className="tag tag-gold">In progress</span>
+                  )
+                ) : canStart ? (
+                  <span className="tag">Available</span>
+                ) : (
+                  <span className="tag">🔒</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {recharges && (
+        <div className="stack-sm">
+          <h4 className="section-title">Recharge jewellery</h4>
+          <RechargePanel engine={engine} npc={npc} />
+        </div>
+      )}
     </ActionCard>
   );
 }
@@ -191,7 +225,7 @@ function ShopCard({ shopId }: { shopId: string }) {
       actions={[
         {
           label: `Talk to ${shop.npcName}`,
-          onClick: () => void showDialogue(shop.npcName, randomLine(shop.dialogue, "Have a look around.")),
+          onClick: () => void showDialogue(shop.npcName, nextLine(shop.dialogue, "Have a look around.")),
         },
       ]}
     >

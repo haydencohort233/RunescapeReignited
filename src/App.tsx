@@ -18,6 +18,7 @@ import { CompactActionBar } from "./components/ActivityCard";
 import { applySidebarOpen, getSidebarOpen } from "./lib/sidebar";
 import { useTabTitle } from "./lib/useTabTitle";
 import { DialogHost } from "./components/ui/DialogHost";
+import { QuestCompleteWatcher } from "./components/QuestCompleteWatcher";
 import { ACHIEVEMENT_CATALOG } from "./content/achivements";
 import { preloadImages } from "./lib/imagePreloader";
 import {
@@ -110,7 +111,7 @@ function AppContent() {
         <NavBar activeView={activeView} onChange={changeView} alerts={{ achievements: hasUnclaimedAchievement }} />
       </aside>
 
-      <main className="shell-main">
+      <main className={`shell-main${activeView === "map" ? " is-map" : ""}`}>
         <div className="shell-top">
           <PlayerStrip
             onOpen={() => {
@@ -165,6 +166,7 @@ export default function App() {
       <NotificationOverlay />
       <AppContent />
       <DialogHost />
+      <QuestCompleteWatcher />
     </GameEngineProvider>
   );
 }

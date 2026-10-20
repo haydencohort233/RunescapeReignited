@@ -163,24 +163,24 @@ export function describeConditionProgress(
   const base = key ? (baselines[key] ?? 0) : 0;
   switch (condition.kind) {
     case "resourceAtLeast": {
-      const have = Math.floor(countOwned(state, condition.resource));
+      const have = Math.min(Math.floor(countOwned(state, condition.resource)), condition.amount);
       return `${l.resource(condition.resource)}: ${have.toLocaleString()}/${condition.amount.toLocaleString()}`;
     }
     case "resourceLifetimeAtLeast": {
-      const have = Math.floor((state.resources[condition.resource]?.lifetimeEarned ?? 0) - base);
+      const have = Math.min(Math.floor((state.resources[condition.resource]?.lifetimeEarned ?? 0) - base), condition.amount);
       return `${l.resource(condition.resource)} earned: ${have.toLocaleString()}/${condition.amount.toLocaleString()}`;
     }
     case "skillLevel": {
-      const have = levelForXp(state.skills[condition.skill]?.xp ?? 0);
+      const have = Math.min(levelForXp(state.skills[condition.skill]?.xp ?? 0), condition.atLeast);
       return `${l.skill(condition.skill)} level: ${have}/${condition.atLeast}`;
     }
     case "statisticAtLeast": {
-      const have = (state.statistics[condition.statistic] ?? 0) - base;
+      const have = Math.min(Math.max(0, (state.statistics[condition.statistic] ?? 0) - base), condition.atLeast);
       const k = condition.statistic;
-      return `${l.statistic(k)}: ${l.statisticValue(k, Math.max(0, have))}/${l.statisticValue(k, condition.atLeast)}`;
+      return `${l.statistic(k)}: ${l.statisticValue(k, have)}/${l.statisticValue(k, condition.atLeast)}`;
     }
     case "buildingOwned": {
-      const have = state.buildings[condition.buildingId] ?? 0;
+      const have = Math.min(state.buildings[condition.buildingId] ?? 0, condition.atLeast);
       return `${l.building(condition.buildingId)} owned: ${have}/${condition.atLeast}`;
     }
     case "flag":
@@ -193,12 +193,22 @@ export function describeConditionProgress(
 }
 
 /** How far along a counting condition is, for a progress bar: what's
- *  counted so far (from the baselines) and what's needed. Null for
- *  conditions that are simply met or not (flags, combinations). */
+ *  counted so far (from the baselines) and what's needed, capped at what's
+ *  needed (1,000 bars toward 3 reads 3/3). Null for conditions that are
+ *  simply met or not (flags, combinations). */
 export function conditionProgress(
   condition: UnlockCondition,
   state: GameState,
   baselines: ConditionBaselines = {}
+): { have: number; need: number } | null {
+  const raw = rawConditionProgress(condition, state, baselines);
+  return raw && { have: Math.min(raw.have, raw.need), need: raw.need };
+}
+
+function rawConditionProgress(
+  condition: UnlockCondition,
+  state: GameState,
+  baselines: ConditionBaselines
 ): { have: number; need: number } | null {
   const key = baselineKey(condition);
   const base = key ? (baselines[key] ?? 0) : 0;

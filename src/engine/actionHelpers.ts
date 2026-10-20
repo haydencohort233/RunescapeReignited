@@ -77,7 +77,9 @@ export async function confirmAndStartGatherSession(
 }
 
 export async function confirmAndStartTravel(engine: GameEngine, from: MapLocation, to: MapLocation): Promise<boolean> {
-  const next: ActivityPreview = { kind: "travel", title: to.name, detail: `About ${formatDuration(engine.getTravelDurationEstimate(from, to))}` };
+  const toll = engine.getTravelToll(to);
+  const tollText = toll.length > 0 ? `, toll ${toll.map((c) => `${formatNumber(c.amount)} ${c.resource === "gp" ? "GP" : c.resource}`).join(", ")}` : "";
+  const next: ActivityPreview = { kind: "travel", title: to.name, detail: `About ${formatDuration(engine.getTravelDurationEstimate(from, to))}${tollText}` };
   if (!(await confirmStopCurrentAction(engine, next))) return false;
   return engine.startTravel(from, to);
 }

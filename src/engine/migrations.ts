@@ -387,6 +387,8 @@ function sanitizeAction(raw: unknown): GameState["activeAction"] {
         ? (raw as GameState["activeAction"])
         : null;
     case "travel":
+      // A malformed toll record is dropped (nothing to give back), not the trip.
+      if (raw.tollPaid !== undefined && !Array.isArray(raw.tollPaid)) delete raw.tollPaid;
       return finite(raw.startedAt) && finite(raw.durationMs) ? (raw as GameState["activeAction"]) : null;
     case "combat":
       if (

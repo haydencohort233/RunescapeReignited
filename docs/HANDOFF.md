@@ -1,6 +1,6 @@
 # Handoff
 
-As of Oct 16, 2026. The Oct 15 round (town scenes and shop grid, below) is committed. Next is fleshing out the skills (roadmap, "Skills to flesh out"). Tests (128), lint and build passed at the Oct 15 commit. The test link (https://claude.ai/artifact/4bFZdWSqX9YqupBp4mekRG) runs this build.
+As of Oct 20, 2026. The Oct 18 to 20 round (world map, quest givers and conversations, away summary, below) is committed. Tests (153), lint and build pass, apart from itemArt.test.ts on Windows (it compares path separators) and the one oxlint warning listed under Known gaps. The test link (https://claude.ai/artifact/4bFZdWSqX9YqupBp4mekRG) runs this build.
 
 ## Where things stand
 
@@ -14,6 +14,20 @@ Combat is complete and most of Phase 1, plus parts of Phases 2 and 3, are built.
 | Dungeon | Overgrown Den: quest-gated, 3 waves, regear stop, Den Guardian boss, 6-slot loadout. |
 | Other | 8-hour offline progress, degrading gear with repairs (Dharok's Greataxe example), Glory charges, dev tools (spawn, levels, teleport, HP, restore all gear). |
 
+## Oct 18 to 20 round: world map, quest givers, away summary
+
+Roadmap rows 3, 12 and 15 have the full list. How to do the common things by hand:
+
+- **Add a quest**: one entry in content/quests.ts (the note at the top explains the fields). Give it a `giverNpcId` and the same `locationId` as that NPC. Each stage has an `objective` (the UnlockCondition language); add `consumes` when the player hands items over, which happens only by talking to the giver back at their town. Lines: `startLine`, optional `questions`, `acceptLine`, `completeLine`, then the greetings `inProgressLines`, `completedLines` and per stage `lines`. Rewards that aren't GP, XP or items go in `rewardNotes` as words; `setFlags` is how a quest unlocks things. Add its achievement in content/achivements.ts. `npm test` checks the references.
+- **Change what an NPC says**: everyday greetings are `dialogue` in content/npcs.ts; quest greetings are in content/quests.ts as above. Each list shows every line once, in a random order, before repeating (`nextLine` in components/npcTalk.ts), so any number of lines works.
+- **Add an NPC**: an entry in content/npcs.ts, an `npc` amenity in content/amenities.ts, and a spot in content/townScenes.ts. Portrait art goes at public/assets/npcs/<name>/<name>.png; without it the `portrait` emoji shows.
+- **Conversations** are in components/npcTalk.ts (`talkTo`): greeting, then the reply menu (quest offers, reminders, hand-ins, services). Saying goodbye calls `backToTown()` (lib/dialog.ts), which closes the open building; the "Quest complete!" scroll (QuestCompleteWatcher.tsx) does the same.
+- **Away summary**: engine/awaySummary.ts snapshots progress and diffs it; engine/useGameEngine.ts takes the snapshot from the save on load and when the tab hides, and shows the popup (components/AwaySummaryView.tsx) on return. `AWAY_SUMMARY_MIN_MS` (5 minutes) is the cutoff. Under it, the old one-line toast still shows from 1 minute (`MIN_AWAY_MS_FOR_SUMMARY` in gameEngine.ts). To test: wind `state.lastTickTimestamp` back in the save and reload.
+- **Map and roads**: places are in content/mapLocations.ts in map-art pixels (2560x1440); roads in content/roads.ts, with `via` points to bend them and `requires` for Agility shortcuts. The camera math is lib/mapCamera.ts.
+- **Job notes**: the frequency tags (Daily, Once, Repeat) are `FREQUENCY` in JobBoardBrowsePanel.tsx. Phones get two notes a row from the `@media (max-width: 480px)` block after the job styles in index.css.
+- **Progress text** ("Bronze Bar: 3/3") never reads past what's needed: `conditionProgress` and `describeConditionProgress` in engine/unlockConditions.ts cap it, for quests and jobs alike.
+- **Replaying quests**: Settings > Dev tools > Reset all quests.
+
 ## Oct 15 round: town scenes and shop grid
 
 - **Home is a picture now**, Neopets-style: components/scene/TownScene.tsx draws the current location with a name tag on every amenity; clicking one opens it in a modal (HomeView.tsx `AmenityModal`). The place's name is on a sign inside the picture, so Home has no page title. Phones get a taller picture (4:5) using the same numbers.
@@ -26,7 +40,7 @@ Combat is complete and most of Phase 1, plus parts of Phases 2 and 3, are built.
 - **Training cards**: every way to train (skill page, Home's crafting list, spot and station popups) is a `TrainingCard` (ui/TrainingCard.tsx): stats and the main button top-right, free-form info lines, extra choices at the bottom, dimmed with the reason when locked. `GatherCard` / `CraftCard` (TrainingCards.tsx) fill it in; RecipeList's old RecipeCard is gone. Starting from a popup closes it (`AmenityEntry`'s `onStarted`).
 - **Travel to the closest spot**: components/gatherSpots.ts finds the nearest open place with a resource node for a recipe; away from one, the gather button is "Travel to X". New gathering skills get this by adding nodes in content/amenities.ts.
 - **Switch prompt**: starting something while busy shows what's running and what replaces it (`requestSwitch` in lib/dialog.ts, built in engine/actionHelpers.ts).
-- **Job boards** (JobBoardBrowsePanel.tsx): a corkboard of pinned notes, two columns (one on phones); each note has frequency and level tags, objective bars once taken, and reward + Accept / Turn in on one footer line. Ready-to-turn-in notes glow green. Colors are `--cork` / `--paper` tokens with dark-mode values. The Quests tab's accepted jobs use the same notes.
+- **Job boards** (JobBoardBrowsePanel.tsx): a corkboard of pinned notes, two columns (two on phones too since Oct 20); each note has a frequency tag beside the title, objective bars once taken, and reward + Accept / Turn in on one footer line. Ready-to-turn-in notes glow green. Colors are `--cork` / `--paper` tokens with dark-mode values. The Quests tab's accepted jobs use the same notes.
 - **Tool requirements** on training cards: "✓ Requires Harpoon" in green when you have a usable one, "✗" in red when not (`ToolRequirement` in TrainingCards.tsx).
 - **GP icon**: `GpIcon` / `GpAmount` (ui/GameIcons.tsx) put a coins icon next to GP amounts (sidebar, top strip, shop, prices, job rewards). The art goes at public/assets/ui/coins.png (`GP_ICON`); until it's there a drawn gold coin stands in.
 - **Opening animations**: popups fade and grow a little on desktop, phone sheets slide up (about 0.2s; off with reduced motion). The modal body never scrolls sideways.
@@ -80,4 +94,4 @@ From the roadmap, in rough order:
 
 ## Next step
 
-Pick the next roadmap block with the owner: likely Herblore (potions as timed buffs, the buff system already supports it) or Phase 3 depth (achievement shop, quests).
+Recommended: more quests (5 to 10) on the new quest system, with new step types such as "kill a boss" and "talk to another NPC". After that, Slayer with weapon-restricted enemies (rows 5 and 6), then potions (row 8). Confirm the order with the owner.

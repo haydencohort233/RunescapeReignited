@@ -8,6 +8,8 @@ import { SPELL_CATALOG } from "./spells";
 import { AMENITY_CATALOG } from "./amenities";
 import { ENEMY_CATALOG } from "./enemies";
 import { DUNGEON_CATALOG } from "./dungeons";
+import { MAP_LOCATIONS } from "./mapLocations";
+import { ROADS } from "./roads";
 import type { StationType } from "../engine/types";
 
 const stationLocations: Partial<Record<StationType, string[]>> = {};
@@ -27,4 +29,6 @@ export const GAME_CONTENT: GameContent = {
   starterKit: STARTER_KIT,
   enemies: ENEMY_CATALOG,
   dungeons: DUNGEON_CATALOG,
+  locations: MAP_LOCATIONS,
+  roads: ROADS,
 };
