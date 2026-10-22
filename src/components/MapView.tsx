@@ -32,6 +32,7 @@ const PANEL_WIDTH = 320;
 
 /** Order the amenity icons and the panel's list are shown in. */
 const AMENITY_ORDER: Amenity["kind"][] = [
+  "housePortal",
   "shop",
   "jobBoard",
   "npc",

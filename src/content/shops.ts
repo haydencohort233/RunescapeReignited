@@ -36,6 +36,7 @@ export const SHOP_CATALOG: ShopDefinition[] = [
   {
     id: "riverside-armoury",
     npcName: "Armourer",
+    artName: "Blacksmith",
     title: "Riverside Armoury",
     locationId: "town",
     items: [
@@ -90,6 +91,24 @@ export const SHOP_CATALOG: ShopDefinition[] = [
     ],
     buysItems: true,
     dialogue: ["Shrimps in the shallows, trout on a rod, tuna and sharks if you've got a harpoon."],
+  },
+  {
+    // Converts logs into planks for a fee, as in OSRS (proposed prices).
+    // Mahogany planks are sold outright until mahogany trees exist.
+    id: "sawmill-operator",
+    npcName: "Sawmill Operator",
+    title: "Lumber Camp Sawmill",
+    locationId: "lumber-camp",
+    items: [
+      { itemDefId: "plank", price: [...gp(100), { resource: "wood", amount: 1 }] },
+      { itemDefId: "oak-plank", price: [...gp(250), { resource: "oak-logs", amount: 1 }] },
+      { itemDefId: "mahogany-plank", price: gp(1500) },
+    ],
+    dialogue: [
+      "Bring me logs and coin and I'll have them planked before you can blink.",
+      "You can saw your own at the bench out back, if you've the time for it.",
+      "Mahogany comes in by boat. That's why it costs what it costs.",
+    ],
   },
 ];
 

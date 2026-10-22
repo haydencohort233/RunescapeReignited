@@ -286,6 +286,32 @@ export default function SettingsPanel() {
           </div>
           <div className="row row-between">
             <span>
+              Skip time <span className="text-faint">· everything moves forward at once (crafting, fights, builds); up to the offline cap. Later a paid speed-up.</span>
+            </span>
+            <span className="btn-row">
+              <button type="button" className="btn" onClick={dev(() => engine.devSkipTime(10 * 60 * 1000))}>
+                +10 min
+              </button>
+              <button type="button" className="btn" onClick={dev(() => engine.devSkipTime(60 * 60 * 1000))}>
+                +1 hour
+              </button>
+            </span>
+          </div>
+          <div className="row row-between">
+            <span>
+              House <span className="text-faint">· finishes the furniture being built; unlocks every skin</span>
+            </span>
+            <span className="btn-row">
+              <button type="button" className="btn" disabled={!state.house.build} onClick={dev(() => engine.devFinishFurnitureBuild())}>
+                Finish build
+              </button>
+              <button type="button" className="btn" onClick={dev(() => engine.devUnlockAllFurnitureSkins())}>
+                Unlock skins
+              </button>
+            </span>
+          </div>
+          <div className="row row-between">
+            <span>
               Teleport <span className="text-faint">· ignores requirements, ends any fight</span>
             </span>
             <span className="btn-row">

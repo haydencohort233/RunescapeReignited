@@ -272,6 +272,42 @@ function prayer(itemId: string, name: string, xp: number, verb: string, activity
 export const BURY_BONES_RECIPE = prayer("bones", "Bury Bones", 4.5, "Bury", "Burying Bones");
 export const SCATTER_ASHES_RECIPE = prayer("ashes", "Scatter Ashes", 2, "Scatter", "Scattering Ashes");
 
+// Offering at the Stone Altar in the player house: twice the XP of
+// burying (proposed; OSRS altars give more), a little slower. Still counts
+// toward buried:<id>, so bone achievements keep counting.
+const offering = (base: CraftingRecipe, name: string, activity: string): CraftingRecipe => ({
+  ...base,
+  id: `offer-${base.inputs[0].resource}`,
+  name,
+  xpPerItem: base.xpPerItem * 2,
+  timePerItemMs: 2000,
+  verb: "Offer",
+  activityLabel: activity,
+  station: "altar",
+});
+
+export const OFFER_BONES_RECIPE = offering(BURY_BONES_RECIPE, "Offer Bones", "Offering Bones");
+export const OFFER_ASHES_RECIPE = offering(SCATTER_ASHES_RECIPE, "Offer Ashes", "Offering Ashes");
+
+// Sawing planks (proposed numbers): an idle way to make the house's
+// materials, at the Sawmill in Lumber Camp or a workbench at home.
+const sawing = (id: string, name: string, logs: string, plank: string, xp: number, ms: number, level: number): CraftingRecipe => ({
+  id,
+  name,
+  skill: "construction",
+  xpPerItem: xp,
+  timePerItemMs: ms,
+  inputs: [{ resource: logs, amount: 1 }],
+  output: { resource: plank, amount: 1 },
+  verb: "Saw",
+  activityLabel: `Sawing ${name}s`,
+  station: "sawmill",
+  ...(level > 1 ? { unlockCondition: lvl("construction", level) } : {}),
+});
+
+export const SAW_PLANK_RECIPE = sawing("saw-plank", "Plank", "wood", "plank", 3, 3000, 1);
+export const SAW_OAK_PLANK_RECIPE = sawing("saw-oak-plank", "Oak Plank", "oak-logs", "oak-plank", 6, 4000, 1);
+
 export const RECIPE_CATALOG: CraftingRecipe[] = [
   WOODEN_BOW_RECIPE,
   SPIN_FLAX_RECIPE,
@@ -298,6 +334,10 @@ export const RECIPE_CATALOG: CraftingRecipe[] = [
   ...SMITHING_RECIPES,
   BURY_BONES_RECIPE,
   SCATTER_ASHES_RECIPE,
+  SAW_PLANK_RECIPE,
+  SAW_OAK_PLANK_RECIPE,
+  OFFER_BONES_RECIPE,
+  OFFER_ASHES_RECIPE,
 ];
 
 /** Recipes that turn materials into something anywhere, shown on the Home

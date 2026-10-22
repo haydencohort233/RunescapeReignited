@@ -5,7 +5,7 @@ import { getShop } from "../content/shops";
 import { getNpc } from "../content/npcs";
 import { getItemDef } from "../content/items";
 import { recipesAtStation } from "../content/recipes";
-import { showDialogue } from "../lib/dialog";
+import { openHouse, showDialogue } from "../lib/dialog";
 import { greetingFor, nextLine, questsGivenBy, talkTo } from "./npcTalk";
 import { isQuestReadyToHandIn } from "./map/locationStatus";
 import { ChatHead } from "./ui/Conversation";
@@ -37,6 +37,15 @@ export default function AmenityEntry({ amenity, onStarted }: { amenity: Amenity;
   if (lockReason) return <LockedCard icon={icon} title={amenity.name} reason={lockReason} />;
 
   switch (amenity.kind) {
+    case "housePortal":
+      return (
+        <ActionCard
+          icon={icon}
+          title={amenity.name}
+          description={amenity.description}
+          actions={[{ label: "Enter your house", variant: "primary", onClick: openHouse }]}
+        />
+      );
     case "shop":
       return <ShopCard shopId={amenity.shopId} />;
     case "jobBoard":

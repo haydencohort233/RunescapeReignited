@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Raw art dropped in by the owner, sorted into public/assets by Claude
+art-inbox/

@@ -398,7 +398,10 @@ describe("save format v22", () => {
     delete old.specialEnergy;
     delete old.combatStyles;
     const loaded = GameEngine.deserialize(JSON.stringify(old), GAME_CONTENT, { clock: () => g.now() });
-    expect(loaded.getOfflineCapMs()).toBe(DEFAULT_OFFLINE_CAP_MS);
+    // That step raised caps to 8 hours. New saves start at 1 hour now
+    // (DEFAULT_OFFLINE_CAP_MS), but old migrations keep doing what they did.
+    expect(loaded.getOfflineCapMs()).toBe(8 * HOUR);
+    expect(DEFAULT_OFFLINE_CAP_MS).toBe(HOUR);
     expect(loaded.getState().specialEnergy).toBe(100);
 
     loaded.setCombatStyle("melee", "defensive");

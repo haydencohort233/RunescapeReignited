@@ -1,4 +1,4 @@
-import type { GameState, LoadoutEntry } from "./types";
+import type { Facing, GameState, LoadoutEntry, PlacedFurniture, StoredFurniture } from "./types";
 import { getDailyPeriodNumber } from "./time";
 import { DEFAULT_OFFLINE_CAP_MS } from "./tuning";
 import { SCHEMA_VERSION, STARTING_HITPOINTS_XP, STARTING_LOCATION_ID } from "./state";
@@ -13,6 +13,11 @@ import { DEFAULT_COMBAT_STYLES } from "./combatStyles";
  * deserialize() already covers it and a migration entry is optional but
  * still fine to add for clarity.
  */
+/** The offline cap the v21 -> v22 migration raised saves to. Kept as its
+ *  own number: the default for new saves is 1 hour now, and that old step
+ *  should still do what it did. */
+const LEGACY_OFFLINE_CAP_MS = 8 * 60 * 60 * 1000;
+
 const MIGRATIONS: Record<number, (old: any, now: number) => any> = {
   // v3 -> v4: items (like the wooden bow) moved from the resources ledger
   // into a proper instanced inventory. Any pre-existing "bow" resource count
@@ -225,7 +230,7 @@ const MIGRATIONS: Record<number, (old: any, now: number) => any> = {
   // existing saves too (never lower one a future upgrade already raised).
   21: (old) => ({
     ...old,
-    offlineCapMs: Math.max(typeof old.offlineCapMs === "number" ? old.offlineCapMs : 0, DEFAULT_OFFLINE_CAP_MS),
+    offlineCapMs: Math.max(typeof old.offlineCapMs === "number" ? old.offlineCapMs : 0, LEGACY_OFFLINE_CAP_MS),
     specialEnergy: 100,
     combatStyles: { ...DEFAULT_COMBAT_STYLES },
   }),
@@ -233,7 +238,19 @@ const MIGRATIONS: Record<number, (old: any, now: number) => any> = {
   22: (old) => ({ ...old, dungeonRun: null }),
   // v23 -> v24: dungeon loadouts can be saved from the Equipment tab.
   23: (old) => ({ ...old, savedLoadouts: old.savedLoadouts ?? {} }),
+  // v24 -> v25: the player house. Everyone starts with an empty room. The
+  // offline cap is left as it was (decided): only new saves start at 1 hour.
+  24: (old) => ({ ...old, house: old.house ?? emptyHouse() }),
+  // v25 -> v26: the house floor became a cosmetic (floorId). The engine
+  // fills in the default floor, wallpaper and rug from content on load.
+  25: (old) => (isRecord(old.house) && isRecord(old.house.layout) ? { ...old, house: { ...old.house, layout: { ...old.house.layout, floorId: "" } } } : old),
 };
+
+/** An empty house. Wallpaper and rug ids are filled from content by the
+ *  engine (the engine has no content here). */
+export function emptyHouse(): GameState["house"] {
+  return { layout: { inside: [], yard: [], wallpaperId: "", floorId: "", rugId: "" }, storage: [], build: null, unlockedSkins: [] };
+}
 
 /** Brings a parsed save of any version up to the current GameState shape:
  *  runs each migration from the save's version onward, then backfills
@@ -294,6 +311,7 @@ export function migrateSave(parsed: any, now: number): GameState {
     statistics: sanitizeCounts(parsed.statistics, { integers: false }),
     lastTickTimestamp: finiteOr(parsed.lastTickTimestamp, now),
     offlineCapMs: finiteOr(parsed.offlineCapMs, DEFAULT_OFFLINE_CAP_MS, 0),
+    house: sanitizeHouse(parsed.house),
     version: SCHEMA_VERSION,
   };
   // Equipment may only point at instances that still exist, or at a worn
@@ -369,6 +387,68 @@ function sanitizeCounts(raw: unknown, opts = { integers: true }): Record<string,
     counts[id] = opts.integers ? Math.max(0, Math.floor(value)) : value;
   }
   return counts;
+}
+
+const FACINGS = new Set<Facing>(["front", "right", "back", "left"]);
+
+function sanitizePlaced(raw: unknown): PlacedFurniture[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const placed: PlacedFurniture[] = [];
+  for (const p of raw) {
+    if (!isRecord(p) || typeof p.uid !== "string" || typeof p.furnitureId !== "string" || seen.has(p.uid)) continue;
+    if (typeof p.x !== "number" || !Number.isFinite(p.x) || typeof p.y !== "number" || !Number.isFinite(p.y)) continue;
+    seen.add(p.uid);
+    placed.push({
+      uid: p.uid,
+      furnitureId: p.furnitureId,
+      ...(typeof p.skinId === "string" ? { skinId: p.skinId } : {}),
+      x: Math.floor(p.x),
+      y: Math.floor(p.y),
+      facing: FACINGS.has(p.facing) ? p.facing : "front",
+      ...(typeof p.hostId === "string" ? { hostId: p.hostId } : {}),
+    });
+  }
+  return placed;
+}
+
+/** The house, with anything malformed dropped. Unknown furniture ids and
+ *  overlaps are content questions, handled by the engine on load. */
+function sanitizeHouse(raw: unknown): GameState["house"] {
+  const house = emptyHouse();
+  if (!isRecord(raw)) return house;
+  const layout = isRecord(raw.layout) ? raw.layout : {};
+  house.layout = {
+    inside: sanitizePlaced(layout.inside),
+    yard: sanitizePlaced(layout.yard),
+    wallpaperId: typeof layout.wallpaperId === "string" ? layout.wallpaperId : "",
+    floorId: typeof layout.floorId === "string" ? layout.floorId : "",
+    rugId: typeof layout.rugId === "string" ? layout.rugId : "",
+  };
+  house.storage = (Array.isArray(raw.storage) ? raw.storage : [])
+    .filter((s: unknown): s is StoredFurniture => isRecord(s) && typeof s.uid === "string" && typeof s.furnitureId === "string")
+    .map((s: StoredFurniture) => ({ uid: s.uid, furnitureId: s.furnitureId, ...(typeof s.skinId === "string" ? { skinId: s.skinId } : {}) }));
+  const b = raw.build;
+  if (
+    isRecord(b) &&
+    typeof b.furnitureId === "string" &&
+    typeof b.startedAt === "number" &&
+    Number.isFinite(b.startedAt) &&
+    typeof b.durationMs === "number" &&
+    Number.isFinite(b.durationMs) &&
+    b.durationMs >= 0
+  ) {
+    house.build = {
+      furnitureId: b.furnitureId,
+      startedAt: b.startedAt,
+      durationMs: b.durationMs,
+      paid: Array.isArray(b.paid)
+        ? b.paid.filter((c: unknown) => isRecord(c) && typeof c.resource === "string" && typeof c.amount === "number" && Number.isFinite(c.amount) && c.amount > 0)
+        : [],
+    };
+  }
+  house.unlockedSkins = [...new Set((Array.isArray(raw.unlockedSkins) ? raw.unlockedSkins : []).filter((s: unknown) => typeof s === "string"))] as string[];
+  return house;
 }
 
 /** Drops an in-progress action whose timing fields are missing or invalid

@@ -11,14 +11,26 @@ import { activityLabel } from "../content/display";
 import { GpAmount, SkillIcon } from "./ui/GameIcons";
 import { formatNumber } from "../engine/format";
 import HpBar from "./HpBar";
+import GameImage from "./GameImage";
+import { enemyImagePath } from "../content/assetPaths";
 
-/** Placeholder until avatars exist: a plain silhouette in theme colors. */
+/** The player's portrait (assets/npcs/adventurer), or a plain silhouette
+ *  in theme colors until it loads. */
 function Avatar() {
   return (
-    <svg className="avatar" viewBox="0 0 64 64" role="img" aria-label="Player avatar">
-      <circle cx="32" cy="24" r="12" />
-      <path d="M10 60c0-13 10-21 22-21s22 8 22 21z" />
-    </svg>
+    <span className="avatar" role="img" aria-label="Player avatar">
+      <GameImage
+        src={enemyImagePath("Adventurer", 100)}
+        alt=""
+        style={{ width: "100%", height: "100%" }}
+        fallback={
+          <svg viewBox="0 0 64 64" aria-hidden="true" style={{ width: "100%", height: "100%" }}>
+            <circle cx="32" cy="24" r="12" />
+            <path d="M10 60c0-13 10-21 22-21s22 8 22 21z" />
+          </svg>
+        }
+      />
+    </span>
   );
 }
 

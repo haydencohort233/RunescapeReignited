@@ -10,6 +10,7 @@ import { ENEMY_CATALOG } from "./enemies";
 import { DUNGEON_CATALOG } from "./dungeons";
 import { MAP_LOCATIONS } from "./mapLocations";
 import { ROADS } from "./roads";
+import { HOUSE_CONTENT } from "./house";
 import type { StationType } from "../engine/types";
 
 const stationLocations: Partial<Record<StationType, string[]>> = {};
@@ -31,4 +32,5 @@ export const GAME_CONTENT: GameContent = {
   dungeons: DUNGEON_CATALOG,
   locations: MAP_LOCATIONS,
   roads: ROADS,
+  house: HOUSE_CONTENT,
 };

@@ -83,7 +83,8 @@ export class CraftingSystem {
     }
     if (recipe.station) {
       const where = this.engine.content.stationLocations?.[recipe.station] ?? [];
-      if (!where.includes(this.state.currentLocationId)) return `You need to be at a ${recipe.station} for this.`;
+      const atStation = where.includes(this.state.currentLocationId) || this.engine.hasHouseStation(recipe.station);
+      if (!atStation) return `You need to be at a ${recipe.station} for this.`;
     }
     return null;
   }
@@ -130,6 +131,7 @@ export class CraftingSystem {
       extraStatistic: recipe.extraStatistic,
       bonusDrops: recipe.bonusDrops,
       inputsPerItem: recipe.inputs,
+      ...(recipe.station ? { station: recipe.station } : {}),
       // The real current time, not the last tick: the tick can be stale
       // (a throttled background tab), and anchoring to it would credit the
       // job with time from before it was started.

@@ -72,9 +72,10 @@ export const BASE_HP_REGEN_PER_SECOND = 1 / 60;
 export const DEFAULT_MS_PER_DISTANCE_UNIT = 150;
 
 /** Default cap on how much real-world absence counts toward production and
- *  crafting rewards. Stored per-save (state.offlineCapMs), not hardcoded, so
- *  a future upgrade/item can extend it — this is just the starting value. */
-export const DEFAULT_OFFLINE_CAP_MS = 8 * 60 * 60 * 1000; // 8 hours
+ *  crafting rewards. Stored per-save (state.offlineCapMs) as the base; a bed
+ *  in the player house adds to it. Decided Oct 20: 1 hour for new saves,
+ *  existing saves keep the cap they have. */
+export const DEFAULT_OFFLINE_CAP_MS = 60 * 60 * 1000; // 1 hour
 
 /** Default hard cap on a single open-ended gathering session (Woodcutting
  *  etc.) — separate constant from DEFAULT_OFFLINE_CAP_MS on purpose, since
@@ -91,3 +92,25 @@ export const MAX_GATHER_LEVEL_SPEED_BONUS = 0.1;
 
 /** No gathering action ever gets faster than this, whatever stacks. */
 export const MIN_GATHER_TIME_MS = 600;
+
+// ── Player house ──
+
+/** The room's grids, in cells (proposed). Floor rows count from the back
+ *  wall; wall rows from the top. */
+export const HOUSE_FLOOR_COLS = 8;
+export const HOUSE_FLOOR_ROWS = 4;
+export const HOUSE_WALL_COLS = 8;
+export const HOUSE_WALL_ROWS = 2;
+
+/** Pieces placed inside: this many at level 1, plus 1 per 2 Construction
+ *  levels (decided). */
+export const HOUSE_BASE_FURNITURE_LIMIT = 5;
+
+/** House storage: 10 slots, plus 5 per 5 Construction levels, up to 100
+ *  (decided). */
+export const HOUSE_BASE_STORAGE = 10;
+export const HOUSE_STORAGE_PER_FIVE_LEVELS = 5;
+export const HOUSE_MAX_STORAGE = 100;
+
+/** Decor slots in the yard (decided, Phase 3). */
+export const YARD_DECOR_SLOTS = 20;

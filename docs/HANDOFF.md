@@ -1,6 +1,6 @@
 # Handoff
 
-As of Oct 20, 2026. The Oct 18 to 20 round (world map, quest givers and conversations, away summary, below) is committed. Tests (153), lint and build pass, apart from itemArt.test.ts on Windows (it compares path separators) and the one oxlint warning listed under Known gaps. The test link (https://claude.ai/artifact/4bFZdWSqX9YqupBp4mekRG) runs this build.
+As of Oct 20, 2026 (evening). Player House Phase 1 (below) is built on top of the Oct 18 to 20 round. Tests (186), lint and build pass, apart from the flaky "keep fighting doesn't respawn the enemy once the arrows are gone" (one random arrow can miss) and the one oxlint warning listed under Known gaps. The test link (https://claude.ai/artifact/DCwGp4oX62R6pRdFw1ZkdF) runs this build.
 
 ## Where things stand
 
@@ -12,7 +12,22 @@ Combat is complete and most of Phase 1, plus parts of Phases 2 and 3, are built.
 | Skills | Woodcutting, Firemaking, Fletching, Crafting (bowstring), Cooking (range only), Fishing, Mining (copper, tin), Smithing (bronze), Prayer (bury), Construction (from buildings), Farming (flax), Agility (travel speed only). Tools required for gathering; up to 10% faster gathering by level. |
 | World | 7 locations: Riverside Town, Lumber Camp, Lake Shore, Dark Forest, Hidden Grove, Quarry, Draynor Village. Shops: Bob (tools, repairs), Riverside Armoury, Aubury's Rune Shop, Gerrant's fishing shop. Aggie recharges the Amulet of Glory. |
 | Dungeon | Overgrown Den: quest-gated, 3 waves, regear stop, Den Guardian boss, 6-slot loadout. |
-| Other | 8-hour offline progress, degrading gear with repairs (Dharok's Greataxe example), Glory charges, dev tools (spawn, levels, teleport, HP, restore all gear). |
+| House | Player House Phase 1: one side-view room with floor, wall and surface slots, Use and Build modes, time-gated furniture building, facilities that work as crafting stations, beds that raise the offline cap, skins data model. Portal in Riverside Town. Planks from the Sawmill and Sawmill Operator at Lumber Camp. |
+| Other | Offline progress (1 hour for new saves, plus the best bed; older saves keep 8 hours), degrading gear with repairs (Dharok's Greataxe example), Glory charges, dev tools (spawn, levels, teleport, HP, restore all gear). |
+
+## Oct 20 round: Player House, Phase 1
+
+The roadmap's Player House section has the six phases, the decided details and the proposed numbers. Where things live:
+
+- **Content**: content/house.ts holds furniture (size in cells, slot, facings, textures, surface slots, station, bed bonus, level, cost, build time, XP), the example skin, wallpapers, rugs and `HOUSE_PORTAL_LOCATIONS`. `validateContent()` checks it. Room size and the limits are in engine/tuning.ts (`HOUSE_*`, `YARD_DECOR_SLOTS`).
+- **Engine**: engine/systems/house.ts (`HouseSystem`). Building runs beside `activeAction` (it never blocks) and is resolved in `resolveElapsed`; its `startedAt` is moved in `shiftActionAnchors`. Placement rules (grid bounds, overlaps per slot type, surface hosts, rotation footprint swap, furniture limit, storage space, being at the portal) are all here. `getOfflineCapMs()` adds the best bed (placed or stored). Crafting's station check also accepts a placed facility while at the house (`hasHouseStation`).
+- **Save**: `state.house` (v25): `layout` (inside, yard, wallpaperId, rugId: plain data, share-code ready), `storage`, `build`, `unlockedSkins`. Sanitized in migrations.ts (`sanitizeHouse`); content clean-up on load (unknown pieces dropped, orphaned surface pieces back to storage, default wallpaper and rug) is `HouseSystem.normalize`.
+- **UI**: components/house/HouseView.tsx, opened from the House Portal on Riverside Town's picture (Home shows it in place of the town; `openHouse()` in lib/dialog.ts opens it from elsewhere). roomGeometry.ts places things on the 800 x 540 picture; furnitureSprites.ts has a drawn stand-in for every piece until art exists. Build mode: tap a piece for Move / Rotate / Store / Cosmetics, tap a stored piece then a square to place it, "Build furniture" lists everything.
+- **Dev tools**: Settings > Dev tools > Skip time (+10 min, +1 hour: `engine.devSkipTime`, moves everything forward, capped by the offline cap; the future paid speed-up) and House (Finish build, Unlock skins). The build card has "Finish now (dev)".
+- **Oct 22 art**: the owner's art is in. Items (104 files) replaced the wiki images at the same paths; NPC portraits are in assets/npcs/<name>/ (shopkeepers use them too; `ShopDefinition.artName` when the file isn't the npcName, e.g. Armourer uses blacksmith); the player avatar is assets/npcs/adventurer. Furniture art is flat in assets/furniture/ (`art` field in content/house.ts), the room's floor and walls in assets/house/ (wall and floor cosmetics, save v26 `floorId`). components/house/artCache.ts loads each image once to learn its size; roomGeometry.ts draws art at its pixel size (ART_PX_PER_CELL 128) on the floor art's canvas. Rugs are a fourth slot ("rug"). New owner art arrives in art-inbox/ (git-ignored); sort it into public/assets with underscores.
+- **Oct 21 changes**: beds 1x2, tables 1x1; drag a selected piece to move it, R rotates; Build and Storage buttons under the room (storage is a panel); phones start zoomed to 1.5x with a zoom button; Use mode ignores taps on furniture without a use; pieces stand centred on their tile; only placed beds count; storing a facility in use stops the craft (`ActiveCraftJob.station`, optional).
+- **Planks**: Sawmill (station `sawmill`) and Sawmill Operator (shop: logs plus GP, mahogany planks for GP) at Lumber Camp; a Sawhorse in the house works as a sawmill.
+- **Not in Phase 1**: skin unlock sources (Phase 2, a dev tool unlocks them), wallpaper and rug pickers (Phase 2), the yard (stubbed in the save), servants (Phase 4), sharing.
 
 ## Oct 18 to 20 round: world map, quest givers, away summary
 
@@ -93,5 +108,9 @@ From the roadmap, in rough order:
 - The in-app browser's own save (localStorage key `idlegame:save`) is a test save; a few things were done on it (starter kit, a fled Bandit fight, dev teleports).
 
 ## Next step
+
+Recommended now: the owner reviews Player House Phase 1 on the test link and the Proposed values in the roadmap's Player House section, then Phase 2 (cosmetics) or Servants (the owner's prompt calls them the next separate step).
+
+Earlier recommendation, still open:
 
 Recommended: more quests (5 to 10) on the new quest system, with new step types such as "kill a boss" and "talk to another NPC". After that, Slayer with weapon-restricted enemies (rows 5 and 6), then potions (row 8). Confirm the order with the owner.

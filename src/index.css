@@ -390,6 +390,7 @@ input[type="checkbox"] {
 }
 
 .avatar {
+  display: inline-flex;
   width: 56px;
   height: 56px;
   flex-shrink: 0;
@@ -3406,6 +3407,7 @@ html.is-modal-open body {
 
 .shop-keeper {
   flex-shrink: 0;
+  overflow: hidden;
   width: 38px;
   height: 38px;
   border-radius: 50%;
@@ -4099,4 +4101,419 @@ html.is-modal-open body {
   .modal-backdrop > .modal {
     animation: none;
   }
+}
+
+/* ── Player house ─────────────────────────────────────────────────────
+   One room seen from the side (components/house/HouseView.tsx). The
+   room keeps its shape at any width (aspect-ratio); pieces are placed in
+   percentages over it, and emoji stand-ins size with the room (cqw). */
+
+.house {
+  gap: 10px;
+}
+
+.house-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.house-title {
+  flex: 1 1 auto;
+  margin: 0;
+  min-width: 0;
+}
+
+.house-modes {
+  display: flex;
+  gap: 4px;
+}
+
+.house-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  width: 100%;
+  color: var(--text-muted);
+}
+
+.house-build {
+  display: grid;
+  gap: 6px;
+}
+
+.house-build-actions {
+  justify-content: flex-end;
+}
+
+/* The room's frame. Zooming widens the room inside it; the frame scrolls
+   sideways, never the page. */
+.house-stage {
+  position: relative;
+  border: 3px solid var(--wood);
+  border-radius: 8px;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 60%, #4a3a2a, #2a1f15 75%);
+}
+
+.house-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.house-room {
+  position: relative;
+  min-width: 100%;
+  container-type: inline-size;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Phones: the room runs edge to edge. */
+@media (max-width: 1023px) {
+  .house-stage {
+    margin: 0 -16px;
+    border-width: 3px 0;
+    border-radius: 0;
+  }
+}
+
+/* Build and Storage: small, in the bottom corners just under the room. */
+.house-corners {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: -4px;
+}
+
+.house-corner {
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+.house-zoom {
+  position: absolute;
+  z-index: 6000;
+  top: 8px;
+  right: 8px;
+  min-height: 30px;
+  padding: 3px 8px;
+  font-size: 12px;
+  opacity: 0.9;
+  box-shadow: 0 2px 6px #0007;
+}
+
+.house-piece.is-inert:focus-visible {
+  outline: none;
+}
+
+.house-count {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--gold-border);
+  color: #1c1812;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.house-room-bg,
+.house-room-layer,
+.house-targets {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.house-room-bg {
+  display: block;
+}
+
+.house-targets {
+  z-index: 5000;
+}
+
+.house-cell {
+  fill: transparent;
+  stroke: #fff6;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+  pointer-events: none;
+}
+
+.house-target {
+  fill: #ffffff10;
+  stroke: transparent;
+  cursor: pointer;
+}
+
+.house-target:hover {
+  fill: #ffffff30;
+}
+
+.house-footprint {
+  pointer-events: none;
+  stroke-width: 3;
+}
+
+.house-footprint.is-selected {
+  fill: #ffd84d33;
+  stroke: #ffd84d;
+}
+
+.house-footprint.is-ok {
+  fill: #5fd05f55;
+  stroke: #5fd05f;
+}
+
+.house-footprint.is-bad {
+  fill: #e0505055;
+  stroke: #e05050;
+}
+
+.house-piece {
+  position: absolute;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.house-piece:focus-visible {
+  outline: 2px solid var(--focus);
+}
+
+.house-piece.is-selected {
+  filter: drop-shadow(0 0 4px #ffd84d) drop-shadow(0 0 2px #ffd84d);
+  cursor: grab;
+  touch-action: none;
+}
+
+.house-room.is-dragging,
+.house-room.is-dragging .house-piece {
+  cursor: grabbing;
+}
+
+/* Use mode: only things you can use react to taps. */
+.house-piece.is-inert {
+  pointer-events: none;
+  cursor: default;
+}
+
+.house-piece.is-moving {
+  opacity: 0.4;
+}
+
+.house-piece.is-usable:hover {
+  filter: drop-shadow(0 0 5px #fff8c0);
+}
+
+.house-room.is-placing .house-piece {
+  cursor: default;
+}
+
+.house-emoji {
+  display: block;
+  line-height: 1;
+  filter: drop-shadow(0 3px 2px #0006);
+}
+
+.house-facing {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 14px;
+  padding: 0 2px;
+  border-radius: 6px;
+  background: #000a;
+  color: #fff;
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.house-slot {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 2px dashed #fff;
+  border-radius: 50%;
+  background: #5fd05f88;
+  color: #fff;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.house-bar {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.house-bar p {
+  margin: 0;
+}
+
+.house-actions .btn {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.house-hint {
+  margin-top: 8px;
+}
+
+.house-storage {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.house-stored {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.house-stored:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.house-stored-emoji {
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.house-stored-name {
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.house-build-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.house-build-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 4px 10px;
+  padding: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-raised);
+}
+
+.house-build-row.is-locked {
+  opacity: 0.6;
+}
+
+.house-build-emoji {
+  font-size: 26px;
+  line-height: 1;
+  text-align: center;
+}
+
+.house-build-info {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.house-build-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.house-build-cost {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.house-build-why {
+  grid-column: 2 / -1;
+}
+
+.house-drawing {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 3px 2px #0005);
+}
+
+/* A skin with no art yet still looks different: gilded. */
+.house-drawing.is-skinned {
+  filter: drop-shadow(0 3px 2px #0005) sepia(0.6) saturate(2.2) hue-rotate(-12deg) brightness(1.15);
+}
+
+.house-flicker {
+  transform-origin: 50% 50%;
+  animation: house-flicker 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes house-flicker {
+  from {
+    opacity: 0.85;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .house-flicker {
+    animation: none;
+  }
+}
+
+.house-inline-icon {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.house-build-emoji {
+  display: flex;
+  justify-content: center;
+}
+
+/* Furniture art, drawn at its pixel size (the box is sized from it). */
+.house-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 3px 2px #0005);
+  pointer-events: none;
 }

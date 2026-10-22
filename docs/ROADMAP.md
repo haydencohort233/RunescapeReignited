@@ -1,6 +1,6 @@
 # Idle Engine Roadmap
 
-Oct 17, 2026. Local copy of the live doc, which is the source of truth: https://claude.ai/artifact/CisApq9wcjwbQoxmAGThdH
+Oct 20, 2026. Local copy of the live doc, which is the source of truth: https://claude.ai/artifact/CisApq9wcjwbQoxmAGThdH
 
 Next up: the Oct 17 owner list (look and feel, shops, world map, cooking burns, potions, sound, Slayer), flesh out the skills (see Skills to flesh out below), then the remaining Phase 2 skills (Herblore, Agility course, Runecrafting, Thieving) and Phase 3 depth. See Built on Oct 11, 12 and 15 for what is already in.
 
@@ -40,6 +40,68 @@ The owner makes the design calls now. Items 1 to 8 are the owner's; "Decided" li
 | 14 | Save backup | Suggested: export and import a save file, with a reminder to export before big updates, since saves are in the browser only. | S | Medium |
 | 15 | Quest givers and NPC conversations | Decided (Oct 19): quests aren't started from the map; you talk to the person who gives them, in their town. The map shows each quest with its giver as a hint. The NPC talk UI gets an overhaul. Hand-ins happen back at the giver, not from the Quests tab. A quest ready to hand in is marked on the map. Quest completion is its own popup, not a dialogue line, and each quest has an achievement. Dev tool to reset quest progress. Built Oct 19, not committed: quests have a giver NPC and start only at the giver's location (engine-enforced); talking opens an OSRS-style chatbox (chat head, name and title, the conversation so far, lines that type out and can be skipped, numbered replies with keys 1 to 9) where quests are offered, steps are reminded and items handed over; NPC cards show the chat head, a greeting and the quests they give; the Quests tab shows each quest as a parchment scroll (giver, steps done and current with progress, "Talk to X in Y" or "Return to X", rewards), grouped In progress, Available, Completed; a gold ! on the map pin and panel marks a quest ready to hand in; a "Quest complete!" scroll with the rewards shows after the conversation closes; Settings > Dev tools > Reset all quests. Proposed: new NPCs Hans (Riverside Town, gives The Overgrown Den), Doric (Quarry, The Quarry Master's Order) and Leela (Draynor Village, Prince Ali Rescue), their lines and emoji chat heads (art can go at assets/npcs/<name>/<name>.png); quest lines rewritten in a plainer OSRS tone, Leela's offer has four questions adapted from OSRS's Prince Ali Rescue; quest achievements Into the Den, Bronze for Doric and Royal Rescue at 10 points each. Also built Oct 19, not committed: quest and job progress never reads past what's needed (3/3, not 1,000,000,000/3); saying goodbye to an NPC, or finishing a quest, closes the open building back to the town picture; givers greet you differently while their quest is on (per step where set) and once it's done, each list cycling through every line before repeating, set in content/quests.ts; taken jobs show above quests on the Quests tab. Proposed: five greeting lines per quest (in progress and done) for Hans, Doric and Leela, with Leela's in-progress lines split by step. Also built Oct 20, not committed: job notes sit two to a row on phones; the Daily, Once or Repeat tag sits beside the title; taken jobs drop the description (their progress bars say it), the "In progress" label and the met level tag; completed quests fold down to their name and giver; "Your jobs" uses the same group header as the quests. | M | High |
 
+## Player House (Construction)
+
+Decided (Oct 20): Construction gets a player house, one big room like a Club Penguin igloo, built in six phases. Phase 1 (inside room and furniture, local only) was built Oct 20 and is on the test link; the rest follow in order. Also built with it: a Sawmill and Sawmill Operator at Lumber Camp, dev tools to finish a build and unlock skins, and drawn stand-ins for every piece until art exists.
+
+| Phase | Scope | State |
+| --- | --- | --- |
+| 1. Room and furniture | Side-view room with floor, wall and surface slots and depth sorting; Build and Default modes; move, rotate, store; furniture limit and house storage; time-gated furniture building resolved offline; crafting stations as placeable facilities; beds and the new 1 hour default offline cap; cosmetic data model, serializable layout, stubbed yard | Built Oct 20 |
+| 2. Cosmetics | Skin unlocks and the Cosmetics button on selected furniture; wallpaper and rug selection; skins from achievements, drops and shops; no payments | Next |
+| 3. Outside and yard | Exterior view with its own cosmetics; 20 decor slots (plants, fences, fountains); facilities placeable outside; yard in the layout data | Later |
+| 4. Servants | Hiring building in an existing town (100 GP); Basic Male Butler, Female Servant, Demon Butler; background work in Crafting, Construction and Cooking; upkeep in real time and offline; they quit after 25 minutes unpaid | Later |
+| 5. Sharing and online | Share code export and import; read-only visits; likes and a most-popular leaderboard. Needs a backend: hosting decision first | Later |
+| 6. Microtransactions | Purchasable wallpaper, rug and furniture skins via a payment provider and accounts, plugged into the Phase 2 unlock system | Later |
+
+Later, outside this feature: a bank replacing house storage, and servant delivery into it.
+
+Decided details:
+
+- View: side-view room (back wall plus a floor grid in light perspective), not top-down or a dollhouse. Works at 375px with no sideways scroll. Tap to select, never drag-only.
+- Slots: floor (no overlap), wall (no overlap), surface (sits on a host's surface slot, like a lamp on a table; storing the host stores its items, moving it moves them). Draw order sorts by floor row.
+- Rotation: 4 facings from up to 3 textures (front, side, back; right is the side sprite flipped). Each piece lists the facings it supports and falls back to front. Side facings swap the footprint and re-check the grid. Wall pieces don't rotate.
+- Terms: facilities are things you use (crafting stations, trophy case); furniture is chairs, beds, dressers. Both are placeable. Buildings (Lumbermill and so on) stay separate passive producers.
+- Modes: Default (tap a facility to use it, later a servant to manage them) and Build (tap a piece, then Move, Rotate, Store, or Cosmetics when unlocked skins exist).
+- Limits: inside furniture limit 5, plus 1 per 2 Construction levels. House storage 10 slots, plus 5 per 5 levels, max 100. Yard (later) 20 decor slots.
+- Building is time-gated, finishes offline and does not block other activities.
+- Default offline cap becomes 1 hour (existing saves keep theirs). Beds raise it: plank bed (10 min build) +30 min, mahogany bed (2 h build) +2 h. Only the best bed counts.
+- Cosmetics: each piece has an optional list of skin ids; a skin is content (id, name, furniture, art, unlock source); unlocked skins are a set in the save, never tied to payments. Room cosmetics: wallpaper id and rug id.
+- Share code (later) is plain layout data: pieces (furniture, skin, x, y, facing, host), wallpaper, rug, yard.
+- Servants: rate is a share of the player's own rate, for speed and XP alike: Basic Male Butler 20% at 1 GP/s, Female Servant 30% at 3 GP/s, Demon Butler 50% at 5 GP/s. Upkeep is meant to be steep. They work in the background, outside the one-activity rule.
+- Planks: players can saw their own at a sawmill at Lumber Camp (an idle method), or pay the sawmill operator a fee.
+- Decided Oct 21: beds are 1 wide and 2 deep, tables 1 by 1.
+- Decided Oct 21: a selected piece can be dragged to move it (Move still works); R rotates on a keyboard.
+- Decided Oct 21: a speed-up that skips time for everything (builds, crafting, fights), to become a paid option later. For now it's a dev tool: "Finish now" on the build in progress and Skip time (+10 min, +1 hour) in Settings, capped by the offline cap.
+- Decided Oct 21: Build and Storage are small buttons in the bottom corners of the house screen; storage opens as a panel.
+- Decided Oct 21: in Use mode only things with a use (facilities) react to taps; furniture shows no description.
+- Decided Oct 21: pieces stand centred on their tile, not on its front edge.
+- Decided Oct 21: only a placed bed raises the offline cap; a bed in storage does nothing.
+- Decided Oct 21 (bug): storing a facility that's in use stops the craft and refunds what's left.
+- Decided Oct 22: every asset file name uses underscores, never hyphens (bronze_dagger.png). A test checks all of public/assets.
+- Decided Oct 22: rotated art is named <art>_side.png (drawn facing left, flipped for right) and <art>_back.png; no suffix is the front. A missing view uses the front.
+- Decided Oct 22: the room's default look is the owner's art, house_wall_wood and house_floor_wood, kept separate for future wall and floor cosmetics (the save now has a floor id; save v26).
+
+Proposed (Phase 1, for review):
+
+- The house portal is in Riverside Town, entered from the town picture. Building, arranging and using house facilities need you to be at the portal (engine-checked), so the house works like a place.
+- Room size: floor 8 wide by 4 deep, wall 8 wide by 2 high. The furniture limit counts every placed piece, wall and surface pieces included. One furniture build at a time; finished pieces go to storage, and a build can't start without a free storage slot.
+- Phones open the room zoomed to 1.5x so pieces are a usable size; the room scrolls sideways inside its frame, and a zoom button switches between 1x, 1.5x and 2x. The room is drawn 800 by 600 with a deeper floor.
+- Planks: a Sawmill at Lumber Camp saws Logs into Planks (3 s, 3 Construction XP) and Oak Logs into Oak Planks (4 s, 6 XP). The sawmill operator, a shop at Lumber Camp, converts Logs plus 100 GP into a Plank and Oak Logs plus 250 GP into an Oak Plank (OSRS fees), and sells Mahogany Planks for 1,500 GP until mahogany trees exist. No quest gate yet. No nails.
+- Furniture: chairs (crude, wooden, oak), tables (wooden holds 1, oak holds 2), bookcase, beds (plank, oak +1 h, mahogany), wall torch, shelves (wall, surface slots), painting, potted plant and candlestick (surface). Facilities: range, small anvil, small furnace, sawhorse (saws planks at home). Levels, costs, times and XP follow OSRS where a match exists (content/house.ts).
+- One example skin (Gilded Plank Bed) and two wallpapers and rugs, to exercise the data model; a dev tool unlocks every skin until Phase 2.
+- Furniture art goes at assets/furniture/<piece>/<piece>_front.png (_side, _back); skins at assets/furniture/<piece>/<skin>_front.png. Until art exists, pieces draw as an emoji on a footprint.
+
+Proposed (Oct 22, with the owner's art):
+
+- Furniture art is drawn at its pixel size: 128 pixels of art is one floor cell wide, scaled by the row's perspective, so a 64-pixel chair takes half a cell. The room's grid traces the floor art (1536 x 1024 canvas, cropped to the band with art).
+- New pieces from the art, with proposed levels and costs: Oak Stool, Oak Bench, Nightstand (holds 1), Writing Desk, Barrel, Washbasin, Wooden Chest, Cupboard, Wardrobe, Floor Candelabrum, Armour Stand, Weapon Rack, Stone Window, Red Banner, Shield Display. The dining table art is the Oak Dining Table, the wooden bed art the Plank Bed, wall_lantern the Wall Lantern, wall_shelf the Wall Shelf (holds 1), potted_fern the Potted Fern, painting the Landscape Painting (now 1 wide).
+- Rugs (blue, red) are placeable pieces on their own layer under furniture; they only block other rugs. The drawn room-wide rug is gone (the rug cosmetic stays in the save for Phase 2, set to none).
+- The workbench art replaces the Sawhorse: the Workbench saws planks at home.
+- Stone Altar: a facility (level 30) where Offer Bones and Offer Ashes give twice the Prayer XP of burying, 2 seconds each.
+- small_fountain is kept in assets/yard for the yard (Phase 3).
+- Pieces still without art keep the drawn stand-ins: crude and wooden chairs, wooden table, oak and mahogany beds, bronze candlestick, small furnace.
+- Phones still open at 1.5x zoom; the art room is wider than before, so 2x may suit better.
+
 ## Skills to flesh out
 
 Today most skills are one or two recipes deep. Proposed order and scope, all open for review (nothing here is decided):
@@ -59,7 +121,7 @@ Today most skills are one or two recipes deep. Proposed order and scope, all ope
 | Prayer | Bury, scatter | Timed prayers as buffs, an altar |
 | Agility | Travel speed only | A course to run for XP, shortcuts, run energy |
 | Herblore, Runecrafting, Thieving | Not started | See Phase 2 |
-| Construction | Four buildings | More buildings and upgrade tiers (see Building upgrades) |
+| Construction | Four buildings | The player house (see Player House), more buildings and upgrade tiers (see Building upgrades) |
 | Combat skills | Complete | More enemies, areas and bosses; poison |
 
 Each skill passes when it has content to level from 1 to about 99 without a dead stretch, with OSRS levels and XP.

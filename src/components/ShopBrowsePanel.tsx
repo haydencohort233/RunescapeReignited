@@ -15,6 +15,8 @@ import { quantityActions } from "./ui/quantity";
 import { QuickMenu } from "./ui/QuickMenu";
 import { Modal } from "./ui/Modal";
 import { EmptyState } from "./ui/Page";
+import GameImage from "./GameImage";
+import { enemyImagePath } from "../content/assetPaths";
 
 type Tab = "buy" | "sell" | "repair";
 type Mode = "buy" | "sell";
@@ -169,7 +171,7 @@ export default function ShopBrowsePanel({ shop, repairPanel }: { shop: ShopDefin
     <div className="stack shop-view">
       <div className="shop-greeting">
         <span className="shop-keeper" aria-hidden="true">
-          {shop.npcName.charAt(0)}
+          <GameImage src={enemyImagePath(shop.artName ?? shop.npcName, 100)} alt="" style={{ width: 34, height: 34 }} fallback={shop.npcName.charAt(0)} />
         </span>
         <div className="shop-bubble">
           <strong>{shop.npcName}</strong>

@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import { describe, expect, it } from "vitest";
 import { readdirSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ITEM_CATALOG } from "../../content/items";
 import { itemImagePath } from "../../content/assetPaths";
@@ -10,7 +10,7 @@ const ITEMS_DIR = fileURLToPath(new URL("../../../public/assets/items", import.m
 
 function listFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-    e.isDirectory() ? listFiles(join(dir, e.name)) : [relative(ITEMS_DIR, join(dir, e.name))]
+    e.isDirectory() ? listFiles(join(dir, e.name)) : [relative(ITEMS_DIR, join(dir, e.name)).split(sep).join("/")]
   );
 }
 

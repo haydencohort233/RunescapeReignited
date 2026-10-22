@@ -490,6 +490,11 @@ export const ITEM_CATALOG: ItemDefinition[] = [
   ...RUNE_ITEMS,
   ...ARMOUR_ITEMS,
   ...ARROW_ITEMS,
+  // Planks for the player house: sawn at the Sawmill (Lumber Camp), or
+  // bought from the sawmill operator.
+  { id: "plank", assetFolder: "Planks", name: "Plank", description: "A plank of wood. Build furniture with it.", category: "material", rarity: "common", stackable: true, value: 50, actions: ["drop"] },
+  { id: "oak-plank", assetFolder: "Planks", name: "Oak Plank", description: "A sturdy oak plank.", category: "material", rarity: "common", stackable: true, value: 125, actions: ["drop"] },
+  { id: "mahogany-plank", assetFolder: "Planks", name: "Mahogany Plank", description: "A fine, dark plank for the best furniture.", category: "material", rarity: "uncommon", stackable: true, value: 1050, actions: ["drop"] },
   {
     id: "oak-logs",
     assetFolder: "Logs",

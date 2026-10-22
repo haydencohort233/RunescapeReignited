@@ -69,7 +69,15 @@ export interface CombatEncounterAmenity extends BaseAmenity {
   enemyId: string; // references content/enemies.ts
 }
 
+/** The way into the player house. Opens the house in place of the town
+ *  picture; the house's rules (content/house.ts portalLocationIds) decide
+ *  where it can be used. */
+export interface HousePortalAmenity extends BaseAmenity {
+  kind: "housePortal";
+}
+
 export type Amenity =
+  | HousePortalAmenity
   | ShopAmenity
   | ResourceNodeAmenity
   | CraftingStationAmenity
@@ -79,6 +87,29 @@ export type Amenity =
   | NpcAmenity;
 
 export const AMENITY_CATALOG: Amenity[] = [
+  {
+    id: "town-house-portal",
+    locationId: "town",
+    kind: "housePortal",
+    name: "House Portal",
+    description: "Step through to your own house: build furniture and arrange the room.",
+  },
+  {
+    id: "lumber-camp-sawmill",
+    locationId: "lumber-camp",
+    kind: "craftingStation",
+    name: "Sawmill",
+    description: "A saw bench. Cut logs into planks for building.",
+    station: "sawmill",
+  },
+  {
+    id: "lumber-camp-sawmill-operator",
+    locationId: "lumber-camp",
+    kind: "shop",
+    name: "Sawmill Operator",
+    description: "Pays no mind to splinters. Planks your logs for a fee.",
+    shopId: "sawmill-operator",
+  },
   {
     id: "town-hans",
     locationId: "town",
@@ -366,6 +397,7 @@ export const AMENITY_CATALOG: Amenity[] = [
 
 /** One icon per amenity kind, used wherever amenities are listed. */
 export const AMENITY_ICON: Record<Amenity["kind"], string> = {
+  housePortal: "🏠",
   shop: "🛒",
   resourceNode: "🌾",
   craftingStation: "🔥",

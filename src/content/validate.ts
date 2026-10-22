@@ -19,6 +19,8 @@ import { SPELL_CATALOG } from "./spells";
 import { NPC_CATALOG, STARTER_KIT } from "./npcs";
 import { getSpecialAttack } from "../engine/specialAttacks";
 import { DUNGEON_CATALOG } from "./dungeons";
+import { FLOOR_CATALOG, FURNITURE_CATALOG, HOUSE_PORTAL_LOCATIONS, RUG_CATALOG, SKIN_CATALOG, WALLPAPER_CATALOG } from "./house";
+import { HOUSE_FLOOR_COLS, HOUSE_FLOOR_ROWS, HOUSE_WALL_COLS, HOUSE_WALL_ROWS } from "../engine/tuning";
 
 /** Ledger ids that are plain currencies rather than items. */
 const CURRENCIES = new Set(["gp", "achievement-points"]);
@@ -137,7 +139,11 @@ export function validateContent(): string[] {
     }
     if (r.unlockCondition) condition(where, r.unlockCondition);
     if (r.tool && !ITEM_CATALOG.some((i) => i.tool?.type === r.tool)) err(`${where}: no item is a "${r.tool}" tool`);
-    if (r.station && !AMENITY_CATALOG.some((a) => a.kind === "craftingStation" && a.station === r.station)) {
+    if (
+      r.station &&
+      !AMENITY_CATALOG.some((a) => a.kind === "craftingStation" && a.station === r.station) &&
+      !FURNITURE_CATALOG.some((f) => f.station === r.station)
+    ) {
       err(`${where}: no "${r.station}" station exists anywhere`);
     }
   }
@@ -259,6 +265,62 @@ export function validateContent(): string[] {
     for (const skill of Object.keys(quest.reward?.xp ?? {})) {
       if (!skills.has(skill)) err(`${where}: rewards XP in unknown skill "${skill}"`);
     }
+  }
+
+  // The player house.
+  const furniture = ids("furniture", FURNITURE_CATALOG);
+  const skins = ids("furniture skins", SKIN_CATALOG);
+  ids("wallpapers", WALLPAPER_CATALOG);
+  ids("floors", FLOOR_CATALOG);
+  ids("rugs", RUG_CATALOG);
+  if (WALLPAPER_CATALOG.length === 0) err("house: needs at least one wallpaper");
+  if (FLOOR_CATALOG.length === 0) err("house: needs at least one floor");
+  for (const c of [...WALLPAPER_CATALOG, ...FLOOR_CATALOG, ...RUG_CATALOG]) {
+    if (c.art && (c.art !== c.art.toLowerCase() || c.art.includes("-"))) err(`room look "${c.id}": art names are lowercase with underscores`);
+  }
+  if (RUG_CATALOG.length === 0) err("house: needs at least one rug");
+  const achievements = new Set(ACHIEVEMENT_CATALOG.map((a) => a.id));
+  for (const f of FURNITURE_CATALOG) {
+    const where = `furniture "${f.id}"`;
+    amounts(where, f.cost);
+    if (f.cost.length === 0) err(`${where}: needs a cost`);
+    if (!(f.buildTimeMs > 0)) err(`${where}: buildTimeMs must be > 0`);
+    if (!(f.xp >= 0)) err(`${where}: xp must be >= 0`);
+    if (!(f.levelRequired >= 1 && f.levelRequired <= 99)) err(`${where}: levelRequired must be 1 to 99`);
+    if (!Number.isInteger(f.width) || !Number.isInteger(f.depth) || f.width < 1 || f.depth < 1) err(`${where}: width and depth must be whole cells`);
+    const [cols, rows] = f.slot === "wall" ? [HOUSE_WALL_COLS, HOUSE_WALL_ROWS] : [HOUSE_FLOOR_COLS, HOUSE_FLOOR_ROWS];
+    if (f.art !== undefined && (f.art !== f.art.toLowerCase() || f.art.includes("-") || f.art.endsWith(".png"))) err(`${where}: art is a lowercase file name with underscores, without .png`);
+    if (f.surfaceAt !== undefined && !(f.surfaceAt >= 0 && f.surfaceAt <= 1)) err(`${where}: surfaceAt must be between 0 and 1`);
+    if (f.slot === "rug" && (f.surfaceSlots || f.station)) err(`${where}: a rug can't hold things or be a station`);
+    if (f.slot !== "surface" && (Math.max(f.width, f.depth) > Math.max(cols, rows) || f.width > cols || f.depth > rows)) err(`${where}: too big for the room`);
+    if (f.slot !== "floor" && f.facings && f.facings.some((x) => x !== "front")) err(`${where}: only floor pieces rotate`);
+    if (f.facings && f.facings.length === 0) err(`${where}: facings can't be empty (leave it out for all four)`);
+    if (f.slot === "surface" && f.surfaceSlots) err(`${where}: a surface piece can't hold others`);
+    if (f.station && f.kind !== "facility") err(`${where}: a crafting station must be a facility`);
+    if (f.offlineCapBonusMs !== undefined && !(f.offlineCapBonusMs > 0)) err(`${where}: offlineCapBonusMs must be > 0`);
+    for (const id of f.skins ?? []) {
+      const skin = SKIN_CATALOG.find((x) => x.id === id);
+      if (!skin) err(`${where}: unknown skin "${id}"`);
+      else if (skin.furnitureId !== f.id) err(`${where}: skin "${id}" belongs to "${skin.furnitureId}"`);
+    }
+  }
+  for (const skin of SKIN_CATALOG) {
+    const where = `furniture skin "${skin.id}"`;
+    if (!furniture.has(skin.furnitureId)) err(`${where}: unknown furniture "${skin.furnitureId}"`);
+    else if (!FURNITURE_CATALOG.find((f) => f.id === skin.furnitureId)?.skins?.includes(skin.id)) err(`${where}: its furniture doesn't list it`);
+    if (skin.art !== skin.art.toLowerCase() || skin.art.includes("-")) err(`${where}: art names are lowercase with underscores`);
+    const src = skin.unlockSource;
+    if (src.kind === "achievement" && !achievements.has(src.achievementId)) err(`${where}: unknown achievement "${src.achievementId}"`);
+    if (src.kind === "drop" && !enemies.has(src.enemyId)) err(`${where}: unknown enemy "${src.enemyId}"`);
+    if (src.kind === "shop" && !shops.has(src.shopId)) err(`${where}: unknown shop "${src.shopId}"`);
+  }
+  void skins;
+  for (const id of HOUSE_PORTAL_LOCATIONS) {
+    if (!locations.has(id)) err(`house portal: unknown location "${id}"`);
+    if (!AMENITY_CATALOG.some((a) => a.kind === "housePortal" && a.locationId === id)) err(`house portal at "${id}": no House Portal amenity there`);
+  }
+  for (const a of AMENITY_CATALOG) {
+    if (a.kind === "housePortal" && !HOUSE_PORTAL_LOCATIONS.includes(a.locationId)) err(`amenity "${a.id}": not a house portal location in content/house.ts`);
   }
 
   for (const ach of ACHIEVEMENT_CATALOG) {

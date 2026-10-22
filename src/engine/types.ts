@@ -69,6 +69,157 @@ export interface GameContent {
    *  travel goes in a straight line (test content). */
   locations?: MapLocation[];
   roads?: RoadDefinition[];
+  /** The player house: furniture, skins, room cosmetics and where its
+   *  portal is. Optional so test content can leave it out. */
+  house?: HouseContent;
+}
+
+// ── Player house ─────────────────────────────────────────────────────────
+
+/** Where a piece goes: the floor grid, the wall grid, onto another
+ *  piece's surface (a candlestick on a table), or the rug layer (the floor
+ *  grid again, under everything; rugs only block other rugs). */
+export type FurnitureSlot = "floor" | "wall" | "surface" | "rug";
+
+/** Which way a placed piece faces. Right and left share the side texture
+ *  (right is it flipped). */
+export type Facing = "front" | "right" | "back" | "left";
+
+/** The art a piece can have: front, side (drawn facing left) and back. */
+export type FurnitureTexture = "front" | "side" | "back";
+
+/** One kind of placeable piece. Static content (content/house.ts); the save
+ *  holds only which pieces were built and where they stand. */
+export interface FurnitureDefinition {
+  id: string;
+  name: string;
+  description: string;
+  /** Facilities are used (crafting stations); furniture is to look at
+   *  (and beds). Both are placed the same way. */
+  kind: "furniture" | "facility";
+  slot: FurnitureSlot;
+  /** Cells covered when facing front: width along the wall, and depth into
+   *  the room (floor) or height (wall). Side facings swap them. Surface
+   *  pieces take one surface slot and ignore these. */
+  width: number;
+  depth: number;
+  /** The facings rotation steps through. Defaults to all four on the
+   *  floor; wall, surface and rug pieces don't rotate. */
+  facings?: Facing[];
+  /** Art file stem in assets/furniture/ (<art>.png, <art>_side.png,
+   *  <art>_back.png). A missing facing falls back to the front. */
+  art?: string;
+  /** Pieces that hold others (a table): how many surface pieces fit. */
+  surfaceSlots?: number;
+  /** Where its top surface is, as a fraction of its art's height from the
+   *  top (for pieces with surfaceSlots). */
+  surfaceAt?: number;
+  /** A facility that works as this crafting station while placed. */
+  station?: StationType;
+  /** A bed: how much it adds to the offline cap. Only the best one counts. */
+  offlineCapBonusMs?: number;
+  levelRequired: number;
+  cost: RecipeInput[];
+  buildTimeMs: number;
+  /** Construction XP when the build finishes. */
+  xp: number;
+  /** Drawn until art exists. */
+  emoji: string;
+  /** Skin ids that can dress this piece (see FurnitureSkin). */
+  skins?: string[];
+}
+
+/** Where a skin is earned. Never a payment: paid skins (later) still
+ *  unlock through this same set in the save. */
+export type SkinUnlockSource =
+  | { kind: "achievement"; achievementId: string }
+  | { kind: "drop"; enemyId: string }
+  | { kind: "shop"; shopId: string };
+
+/** A different look for one kind of piece. Same stats, different art. */
+export interface FurnitureSkin {
+  id: string;
+  name: string;
+  furnitureId: string;
+  /** The art's file stem: assets/furniture/<piece>/<art>_<texture>.png. */
+  art: string;
+  unlockSource: SkinUnlockSource;
+}
+
+/** A room-wide look (walls, floor or rug). */
+export interface RoomCosmetic {
+  id: string;
+  name: string;
+  /** CSS colours used to draw it until art exists. */
+  colors: string[];
+  /** Art file stem in assets/house/. */
+  art?: string;
+}
+
+export interface HouseContent {
+  furniture: FurnitureDefinition[];
+  skins: FurnitureSkin[];
+  wallpapers: RoomCosmetic[];
+  floors: RoomCosmetic[];
+  rugs: RoomCosmetic[];
+  /** Locations with a house portal. Being at one is being "at the house". */
+  portalLocationIds: string[];
+}
+
+/** One piece standing in the house. Plain data only: the whole layout is
+ *  what a share code will carry. Floor: x is the column, y the row (0 at
+ *  the back wall). Wall: x the column, y the row (0 at the top). Surface:
+ *  x is the slot on its host and y is 0. */
+export interface PlacedFurniture {
+  uid: string;
+  furnitureId: string;
+  skinId?: string;
+  x: number;
+  y: number;
+  facing: Facing;
+  /** Surface pieces: the uid of the piece they sit on. */
+  hostId?: string;
+}
+
+export interface HouseLayout {
+  inside: PlacedFurniture[];
+  /** The yard (Phase 3). Saved and shared already, not shown yet. */
+  yard: PlacedFurniture[];
+  wallpaperId: string;
+  floorId: string;
+  rugId: string;
+}
+
+/** A built piece not standing anywhere. */
+export interface StoredFurniture {
+  uid: string;
+  furnitureId: string;
+  skinId?: string;
+}
+
+/** The piece being built. Runs alongside whatever the player is doing. */
+export interface FurnitureBuild {
+  furnitureId: string;
+  startedAt: number;
+  durationMs: number;
+  /** What was paid, given back if it's cancelled. */
+  paid: RecipeInput[];
+}
+
+export interface HouseState {
+  layout: HouseLayout;
+  storage: StoredFurniture[];
+  build: FurnitureBuild | null;
+  /** Skin ids the player has earned. */
+  unlockedSkins: string[];
+}
+
+/** Where to put a piece: grid cell (floor, wall) or host and slot (surface). */
+export interface FurniturePlacement {
+  x: number;
+  y: number;
+  facing?: Facing;
+  hostId?: string;
 }
 
 /** A run of fights: waves, then a boss, with a regear stop before the boss.
@@ -145,6 +296,8 @@ export interface ShopItem {
 export interface ShopDefinition {
   id: string;
   npcName: string;
+  /** Portrait art under assets/npcs, when it isn't named after npcName. */
+  artName?: string;
   title: string;
   /** The MapLocation id this shop is accessible from — you have to
    *  physically be there, checked inside GameEngine.buyFromShop and
@@ -535,9 +688,11 @@ export interface GameState {
   statistics: Record<string, number>;
   /** Epoch ms of the last time the engine resolved elapsed time. Authoritative clock anchor. */
   lastTickTimestamp: number;
-  /** Max real-world ms of absence that counts toward production/crafting rewards.
-   *  Kept in state (not a constant) so future upgrades/items can extend it. */
+  /** Base cap on real-world absence that counts toward progress. The
+   *  best bed in the house adds to it (GameEngine.getOfflineCapMs). */
   offlineCapMs: number;
+  /** The player house: its layout, storage and the piece being built. */
+  house: HouseState;
   /** Schema version, bump when GameState shape changes — see migrations in gameEngine.ts. */
   version: number;
 }
@@ -708,7 +863,7 @@ export interface CraftingRecipe {
   station?: StationType;
 }
 
-export type StationType = "range" | "furnace" | "anvil";
+export type StationType = "range" | "furnace" | "anvil" | "sawmill" | "altar";
 
 /**
  * The live, in-progress job — denormalized from whatever CraftingRecipe
@@ -729,6 +884,9 @@ export interface ActiveCraftJob {
   bonusDrops?: BonusDrop[];
   /** What was actually deducted at start — used to compute a refund if cancelled early. */
   inputsPerItem: RecipeInput[];
+  /** The station it's made at, if any. Optional for jobs saved before it
+   *  existed. Storing the last house facility of this kind stops the job. */
+  station?: StationType;
   startedAt: number;
   quantityTotal: number;
   quantityCompleted: number;

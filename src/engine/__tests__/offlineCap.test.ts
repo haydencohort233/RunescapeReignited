@@ -6,7 +6,7 @@ import { CHOP_NORMAL_TREE_RECIPE, WOODEN_BOW_RECIPE } from "../../content/recipe
 // Regression: the offline cap used to apply only to the catch-up tick
 // itself. Every action measured from an absolute startedAt, so the NEXT
 // live tick paid out everything the cap had just withheld. These pin the
-// cap at 1 hour so the numbers stay readable; the default is 8.
+// cap at 1 hour so the numbers stay readable (also the default now).
 function cappedEngine() {
   const g = makeEngine();
   g.engine.setOfflineCapMs(HOUR);

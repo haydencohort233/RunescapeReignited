@@ -21,6 +21,11 @@ import type {
   DungeonDefinition,
   LoadoutEntry,
   ToolType,
+  FurnitureDefinition,
+  FurniturePlacement,
+  FurnitureSkin,
+  RoomCosmetic,
+  StationType,
 } from "./types";
 import { NotificationQueue } from "./notificationQueue";
 import { levelForXp, xpForLevel, MAX_LEVEL, calculateCombatLevel } from "./xpCurve";
@@ -40,6 +45,7 @@ import { CombatSystem } from "./systems/combat";
 import { JobBoardSystem } from "./systems/jobs";
 import { QuestSystem } from "./systems/quests";
 import { DungeonSystem } from "./systems/dungeons";
+import { HouseSystem } from "./systems/house";
 
 /** Below this, a gap is just a tab-switch/screen-lock, not a real "away"
  *  session — don't narrate it, even though the simulation still resolves
@@ -86,11 +92,14 @@ export class GameEngine {
   private readonly jobBoardSystem: JobBoardSystem;
   private readonly questSystem: QuestSystem;
   private readonly dungeonSystem: DungeonSystem;
+  private readonly houseSystem: HouseSystem;
   private readonly enemiesById: Map<string, EnemyDefinition>;
   /** Non-null only while resolveElapsed() is replaying an away period.
    *  Combat outcomes collect here and go into the one "while you were
    *  away" summary instead of a toast per kill. */
   catchUp: { kills: Record<string, number>; eaten: number } | null = null;
+  /** Set while devSkipTime runs, so the summary says "skipped". */
+  private skippingTime = false;
 
   constructor(
     content: GameContent,
@@ -107,6 +116,7 @@ export class GameEngine {
     this.questSystem = new QuestSystem(this);
     this.enemiesById = new Map((content.enemies ?? []).map((e) => [e.id, e]));
     this.dungeonSystem = new DungeonSystem(this);
+    this.houseSystem = new HouseSystem(this);
     this.clock = opts?.clock ?? Date.now;
     this.state = opts?.state ?? createInitialState(this.clock());
     this.notifications = opts?.notifications ?? new NotificationQueue();
@@ -114,6 +124,7 @@ export class GameEngine {
     this.stackInstancesOfStackableItems();
     this.backfillItemCharges();
     this.grantStarterKit(content.starterKit ?? []);
+    this.houseSystem.normalize();
   }
 
   /** A copy of a charged item (Amulet of Glory) from before charges existed
@@ -440,15 +451,14 @@ export class GameEngine {
 
     const wasOffline = elapsedMs > MIN_AWAY_MS_FOR_SUMMARY;
     this.catchUp = wasOffline ? { kills: {}, eaten: 0 } : null;
-    const cappedMs = Math.min(elapsedMs, this.state.offlineCapMs);
+    const capMs = this.getOfflineCapMs();
+    const cappedMs = Math.min(elapsedMs, capMs);
     const effectiveNow = from + cappedMs;
 
-    if (elapsedMs > this.state.offlineCapMs) {
+    if (elapsedMs > capMs) {
       this.notifications.push(
         "debug",
-        `Offline gap of ${Math.round(elapsedMs / 60000)}min capped to ${Math.round(
-          this.state.offlineCapMs / 60000
-        )}min for reward calculation`,
+        `Offline gap of ${Math.round(elapsedMs / 60000)}min capped to ${Math.round(capMs / 60000)}min for reward calculation`,
         { devOnly: true }
       );
     }
@@ -483,6 +493,8 @@ export class GameEngine {
       this.gainResource(resourceId, gained);
     }
 
+    // Furniture builds run beside the active action, never instead of it.
+    this.houseSystem.resolveBuild(effectiveNow);
     this.craftingSystem.resolveCraftJob(effectiveNow);
     this.travelSystem.resolveTravel(effectiveNow);
     this.craftingSystem.resolveGatherSession(effectiveNow);
@@ -572,6 +584,7 @@ export class GameEngine {
   }
 
   private shiftActionAnchors(ms: number): void {
+    this.houseSystem.shiftAnchors(ms);
     const action = this.state.activeAction;
     if (!action) return;
     switch (action.kind) {
@@ -629,18 +642,47 @@ export class GameEngine {
 
     if (parts.length === 0) return;
     // Say when the cap kicked in, or "away for 9h" paying 1h looks like a bug.
-    const counted =
-      elapsedMs > this.state.offlineCapMs ? ` (only ${formatDuration(this.state.offlineCapMs)} counted)` : "";
+    const capMs = this.getOfflineCapMs();
+    const counted = elapsedMs > capMs ? ` (only ${formatDuration(capMs)} counted)` : "";
     this.notifications.push(
       "offline-summary",
-      `While you were away for ${duration}${counted}, you earned ${parts.join(", ")}.`,
+      this.skippingTime
+        ? `Skipped ${duration}${counted}: you earned ${parts.join(", ")}.`
+        : `While you were away for ${duration}${counted}, you earned ${parts.join(", ")}.`,
       { replaceKey: "offline-summary" }
     );
   }
 
   // ── Offline cap (flexible so future upgrades/items can extend it) ──────
 
+  /** How much time away counts: the save's base cap plus the best bed. */
   getOfflineCapMs(): number {
+    return this.state.offlineCapMs + this.houseSystem.getOfflineCapBonusMs();
+  }
+
+  /**
+   * Moves the game forward by `ms` at once, as if that much time had
+   * passed: crafting, gathering, fights, travel, furniture builds,
+   * production and buffs all advance. Capped by the offline cap like any
+   * away time. A dev tool for now; later the paid "speed up" (decided:
+   * it will skip everything, not just builds).
+   */
+  devSkipTime(ms: number): void {
+    if (!Number.isFinite(ms) || ms <= 0) return;
+    this.catchUpToNow();
+    this.state.lastTickTimestamp -= ms;
+    this.shiftActionAnchors(-ms);
+    for (const m of Object.values(this.state.modifiers)) if (m.expiresAt !== undefined) m.expiresAt -= ms;
+    this.skippingTime = true;
+    try {
+      this.resolveElapsed();
+    } finally {
+      this.skippingTime = false;
+    }
+  }
+
+  /** The save's base cap, without the bed. */
+  getBaseOfflineCapMs(): number {
     return this.state.offlineCapMs;
   }
 
@@ -1162,6 +1204,7 @@ export class GameEngine {
     this.state = createInitialState(this.clock());
     this.grantStartingBuildings();
     this.grantStarterKit(this.content.starterKit ?? []);
+    this.houseSystem.normalize();
     this.notifications.clear();
     this.notifications.push("status", "Save data cleared. Starting fresh.");
   }
@@ -1484,6 +1527,98 @@ export class GameEngine {
   /** Internal: the dungeon starts its own waves. */
   startDungeonFight(enemy: EnemyDefinition, dungeonId: string, startAt: number, autoEatItemId?: string): void {
     this.combatSystem.startDungeonFight(enemy, dungeonId, startAt, autoEatItemId);
+  }
+
+  // HouseSystem (systems/house.ts)
+
+  getFurnitureDef(furnitureId: string): FurnitureDefinition | undefined {
+    return this.houseSystem.getFurnitureDef(furnitureId);
+  }
+
+  getFurnitureSkin(skinId: string): FurnitureSkin | undefined {
+    return this.houseSystem.getSkin(skinId);
+  }
+
+  isAtHouse(): boolean {
+    return this.houseSystem.isAtHouse();
+  }
+
+  getFurnitureLimit(): number {
+    return this.houseSystem.getFurnitureLimit();
+  }
+
+  getHouseStorageCapacity(): number {
+    return this.houseSystem.getStorageCapacity();
+  }
+
+  getHouseStorageUsed(): number {
+    return this.houseSystem.getStorageUsed();
+  }
+
+  /** A house facility for this station is standing in the house and the
+   *  player is there. */
+  hasHouseStation(station: StationType): boolean {
+    return this.houseSystem.hasStationHere(station);
+  }
+
+  getHouseWallpaper(): RoomCosmetic | undefined {
+    return this.houseSystem.getWallpaper();
+  }
+
+  getHouseFloor(): RoomCosmetic | undefined {
+    return this.houseSystem.getFloor();
+  }
+
+  getHouseRug(): RoomCosmetic | undefined {
+    return this.houseSystem.getRug();
+  }
+
+  getFurnitureBuildBlocker(furnitureId: string): string | null {
+    return this.houseSystem.getBuildBlocker(furnitureId);
+  }
+
+  startFurnitureBuild(furnitureId: string): boolean {
+    return this.houseSystem.startBuild(furnitureId);
+  }
+
+  cancelFurnitureBuild(): boolean {
+    return this.houseSystem.cancelBuild();
+  }
+
+  getFurniturePlacementBlocker(def: FurnitureDefinition, placement: FurniturePlacement, ignoreUid?: string): string | null {
+    return this.houseSystem.getPlacementBlocker(def, placement, ignoreUid);
+  }
+
+  placeFurniture(storageUid: string, placement: FurniturePlacement): boolean {
+    return this.houseSystem.placeFromStorage(storageUid, placement);
+  }
+
+  moveFurniture(uid: string, placement: FurniturePlacement): boolean {
+    return this.houseSystem.moveFurniture(uid, placement);
+  }
+
+  rotateFurniture(uid: string): boolean {
+    return this.houseSystem.rotateFurniture(uid);
+  }
+
+  storeFurniture(uid: string): boolean {
+    return this.houseSystem.storeFurniture(uid);
+  }
+
+  getAvailableFurnitureSkins(furnitureId: string): FurnitureSkin[] {
+    return this.houseSystem.getAvailableSkins(furnitureId);
+  }
+
+  setFurnitureSkin(uid: string, skinId: string | null): boolean {
+    return this.houseSystem.setFurnitureSkin(uid, skinId);
+  }
+
+  devUnlockAllFurnitureSkins(): void {
+    this.houseSystem.devUnlockAllSkins();
+  }
+
+  devFinishFurnitureBuild(): void {
+    this.houseSystem.devFinishBuild();
   }
 
   // JobBoardSystem (systems/jobs.ts)

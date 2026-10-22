@@ -217,6 +217,19 @@ export function subscribeBackToTown(listener: () => void): () => void {
   return () => backToTownListeners.delete(listener);
 }
 
+const openHouseListeners = new Set<() => void>();
+
+/** Steps through the house portal: Home shows the house instead of the
+ *  town picture. */
+export function openHouse(): void {
+  openHouseListeners.forEach((l) => l());
+}
+
+export function subscribeOpenHouse(listener: () => void): () => void {
+  openHouseListeners.add(listener);
+  return () => openHouseListeners.delete(listener);
+}
+
 /** The "Quest complete!" scroll: the quest's name and what it awarded.
  *  Closes whatever else is open first. */
 export function showQuestComplete(questName: string, rewards: string[]): Promise<void> {

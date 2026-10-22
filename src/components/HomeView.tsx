@@ -12,7 +12,12 @@ import { CardPanelContext } from "./ui/cardPanel";
 import { Modal } from "./ui/Modal";
 import { EmptyState, Page, Section } from "./ui/Page";
 import { getActiveTravel } from "../engine/activeAction";
-import { subscribeBackToTown } from "../lib/dialog";
+import { subscribeBackToTown, subscribeOpenHouse } from "../lib/dialog";
+import HouseView from "./house/HouseView";
+
+/** Whether the house was open when Home was last shown, so visiting
+ *  another tab and coming back returns to the house. */
+let houseWasOpen = false;
 
 /** A building or spot opened from the town scene, in a modal. */
 function AmenityModal({ amenity, locationId, onClose }: { amenity: Amenity; locationId: string; onClose: () => void }) {
@@ -41,9 +46,28 @@ export default function HomeView() {
   const amenities = getAmenitiesAtLocation(state.currentLocationId);
   const travel = getActiveTravel(state);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [inHouse, setInHouseState] = useState(houseWasOpen);
+  const setInHouse = useCallback((open: boolean) => {
+    houseWasOpen = open;
+    setInHouseState(open);
+  }, []);
   const close = useCallback(() => setOpenId(null), []);
   // Saying goodbye to an NPC, or finishing a quest, closes the building.
   useEffect(() => subscribeBackToTown(close), [close]);
+  useEffect(
+    () =>
+      subscribeOpenHouse(() => {
+        setOpenId(null);
+        setInHouse(true);
+      }),
+    [setInHouse]
+  );
+  // Going somewhere else leaves the house behind.
+  const [houseLocation, setHouseLocation] = useState(state.currentLocationId);
+  if (houseLocation !== state.currentLocationId) {
+    setHouseLocation(state.currentLocationId);
+    setInHouse(false);
+  }
   const open = openId ? amenities.find((a) => a.id === openId) : undefined;
 
   // On the road there's nowhere to be "here": just the trip.
@@ -55,6 +79,15 @@ export default function HomeView() {
           You left {currentLocation?.name ?? "town"}. You can't do anything until you arrive, or you can cancel the trip.
         </EmptyState>
       </Page>
+    );
+  }
+
+  if (inHouse) {
+    return (
+      <>
+        <ActivityCard />
+        <HouseView onLeave={() => setInHouse(false)} />
+      </>
     );
   }
 
@@ -73,7 +106,7 @@ export default function HomeView() {
           locationId={state.currentLocationId}
           locationName={currentLocation?.name ?? "Unknown location"}
           amenities={amenities}
-          onOpen={(a) => setOpenId(a.id)}
+          onOpen={(a) => (a.kind === "housePortal" ? setInHouse(true) : setOpenId(a.id))}
         />
       )}
 

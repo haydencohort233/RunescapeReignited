@@ -16,6 +16,10 @@
 //   /assets/npcs/<slug>/<slug>_<pct>_hurt.png   optional degrade stages
 //        (npcs DO get a folder each, because they legitimately have
 //        multiple files — base plus degrade stages.)
+//   /assets/furniture/<art>.png, <art>_side.png, <art>_back.png
+//        house furniture: front, side (drawn facing left), back. <art>
+//        is FurnitureDefinition.art or FurnitureSkin.art.
+//   /assets/house/<art>.png                     room walls and floors
 //   /assets/skills/<slug>.png
 //   /assets/buildings/<slug>.png
 //   /assets/achievements/<slug>.png
@@ -73,6 +77,18 @@ export function enemyImagePath(
   const applicable = [...degradeStages].sort((a, b) => b - a).filter((stage) => hpPercent <= stage);
   const stage = applicable.length > 0 ? applicable[applicable.length - 1] : undefined;
   return stage === undefined ? `${base}.png` : `${base}_${stage}_hurt.png`;
+}
+
+/** House furniture art: `<art>.png` facing front, `<art>_side.png`
+ *  (drawn facing left) and `<art>_back.png`. `art` is the piece's (or a
+ *  skin's) file stem from content/house.ts. */
+export function furnitureImagePath(art: string, texture: "front" | "side" | "back"): string {
+  return `${ASSET_ROOT}/furniture/${art}${texture === "front" ? "" : `_${texture}`}.png`;
+}
+
+/** Room art (walls, floors) on its 1536 x 1024 canvas. */
+export function houseImagePath(art: string): string {
+  return `${ASSET_ROOT}/house/${art}.png`;
 }
 
 export function skillIconPath(skillId: string): string {

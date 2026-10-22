@@ -25,12 +25,17 @@ export function pickSprite(amenity: Amenity, spot?: SceneSpot): { sprite: SpotSp
   const look: SpriteLook = { roof: spot?.roof, sign: spot?.sign };
   if (spot?.sprite) return { sprite: spot.sprite, look: withShopDefaults(amenity, look) };
   switch (amenity.kind) {
+    case "housePortal":
+      return { sprite: "portal", look };
     case "shop":
       return { sprite: "shop", look: withShopDefaults(amenity, look) };
     case "jobBoard":
       return { sprite: "board", look };
     case "craftingStation":
-      return { sprite: amenity.station === "furnace" ? "furnace" : amenity.station === "anvil" ? "anvil" : "oven", look };
+      return {
+        sprite: amenity.station === "furnace" ? "furnace" : amenity.station === "anvil" ? "anvil" : amenity.station === "sawmill" ? "sawmill" : "oven",
+        look,
+      };
     case "dungeonEntrance":
       return { sprite: "cave", look };
     case "combatEncounter":
@@ -124,6 +129,11 @@ export function spriteMarkup(sprite: SpotSprite, look: SpriteLook, amenity: Amen
       const flag = amenity.kind === "combatEncounter" && /goblin/.test(amenity.enemyId) ? "#4caf50" : "#d23b3b";
       return `${shadow(54)}<path d="M-44 34 L-12 -36 L22 34Z" fill="${tent}" stroke="#2e2318" stroke-width="3" stroke-linejoin="round"/><path d="M-12 -36 L-12 34" stroke="#00000033" stroke-width="2"/><path d="M-20 34 L-12 12 L-4 34Z" fill="#2a1c12"/><path d="M-12 -36 V-58" stroke="${INK}" stroke-width="2.5"/><path d="M-12 -58 L10 -52 L-12 -45Z" fill="${flag}" stroke="${INK}" stroke-width="1.5"/><path d="M26 32 l20 -8 M26 24 l20 8" stroke="#6b3f22" stroke-width="5" stroke-linecap="round"/><path d="M30 26 q-2 -16 6 -24 q0 10 6 12 q2 -6 0 -10 q8 8 2 22Z" fill="#ff8a1e"/><path d="M33 26 q0 -8 4 -12 q2 6 4 12Z" fill="#ffe066"/><circle cx="34" cy="-22" r="11" fill="#fffbe8" stroke="${INK}" stroke-width="2"/><text x="34" y="-21" text-anchor="middle" dominant-baseline="central" font-size="12">⚔️</text>`;
     }
+    case "portal":
+      // A small house of your own, its door a glowing house portal.
+      return `${shadow(50)}<rect x="-36" y="-14" width="72" height="48" rx="2" fill="#e8d6ae" stroke="${INK}" stroke-width="3"/><path d="M-36 -2h72M-36 10h72M-36 22h72" stroke="#cbb68a" stroke-width="1.5"/><path d="M-46 -12 L0 -56 L46 -12Z" fill="${look.roof ?? "#4f6b3a"}" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/><path d="M-30 -20 L-4 -46" stroke="#ffffff44" stroke-width="3" stroke-linecap="round"/><rect x="18" y="-48" width="9" height="18" fill="#8a5a3c" stroke="${INK}" stroke-width="2"/><rect x="-30" y="-4" width="14" height="12" rx="2" fill="#bfe6ff" stroke="${INK}" stroke-width="2"/><rect x="16" y="-4" width="14" height="12" rx="2" fill="#bfe6ff" stroke="${INK}" stroke-width="2"/><path d="M-11 34 V8 a11 11 0 0 1 22 0 V34Z" fill="#7b4fc9" stroke="#2a1840" stroke-width="2.5"/><path d="M-6 30 V10 a6 6 0 0 1 12 0 V30Z" fill="#b28cff"/><g class="sc-smoke"><circle cx="0" cy="18" r="2" fill="#f2e8ff"/><circle cx="-3" cy="10" r="1.5" fill="#f2e8ff"/><circle cx="3" cy="24" r="1.5" fill="#f2e8ff"/></g>`;
+    case "sawmill":
+      return `${shadow(52)}<rect x="-40" y="4" width="80" height="10" rx="2" fill="#b07a45" stroke="${INK}" stroke-width="2.5"/><path d="M-34 14 L-38 34 M-24 14 L-20 34 M24 14 L20 34 M34 14 L38 34" stroke="#7a4a26" stroke-width="5" stroke-linecap="round"/><rect x="-36" y="-8" width="56" height="12" rx="6" fill="#a0683a" stroke="#4a2c14" stroke-width="2"/><ellipse cx="-36" cy="-2" rx="4" ry="6" fill="#d9a86a" stroke="#4a2c14" stroke-width="1.5"/><circle cx="24" cy="-6" r="20" fill="#c9ced6" stroke="#2c2f35" stroke-width="2.5"/><circle cx="24" cy="-6" r="5" fill="#6b7078" stroke="#2c2f35" stroke-width="2"/><path d="M24 -26 l3 -4 l3 4 M44 -6 l4 3 l-4 3 M24 14 l-3 4 l-3 -4 M4 -6 l-4 -3 l4 -3 M38 -20 l4 -2 l0 5 M10 8 l-4 2 l0 -5" fill="#c9ced6" stroke="#2c2f35" stroke-width="1.5"/><path d="M40 30 l6 -3 M-44 30 l8 -2 M-40 26 l4 -1" stroke="#e8c98a" stroke-width="3" stroke-linecap="round"/>`;
     case "cottage":
       return `${shadow(54)}<g class="sc-smoke"><circle cx="-22" cy="-62" r="6" fill="#9be07aaa"/><circle cx="-28" cy="-74" r="8" fill="#9be07a77"/><circle cx="-22" cy="-88" r="9" fill="#9be07a44"/></g><rect x="-30" y="-58" width="10" height="24" fill="#6d5a4a" stroke="#2a2018" stroke-width="2.5" transform="rotate(-6 -25 -46)"/><path d="M-34 34 L-36 -8 L32 -12 L34 34Z" fill="#dcc59c" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/><path d="M-46 -6 Q-12 -26 4 -70 Q14 -40 44 -12Z" fill="${look.roof ?? "#5b3c7a"}" stroke="#2a1838" stroke-width="3" stroke-linejoin="round"/><path d="M-30 -14 Q-10 -30 0 -56" stroke="#ffffff40" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="18" cy="8" r="8" fill="#ffe9a8" stroke="${INK}" stroke-width="2"/><path d="M10 8h16M18 0v16" stroke="${INK}" stroke-width="1.5"/><path d="M-22 34 V10 a8 8 0 0 1 16 0 V34Z" fill="#5a3a22" stroke="${INK}" stroke-width="2"/><ellipse cx="44" cy="28" rx="13" ry="8" fill="#2a2a2a" stroke="#111" stroke-width="2"/><ellipse cx="44" cy="22" rx="11" ry="3.5" fill="#7be05a"/><circle cx="40" cy="17" r="2.5" fill="#9bf07a"/><circle cx="48" cy="14" r="2" fill="#9bf07a"/>`;
   }

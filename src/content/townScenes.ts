@@ -42,7 +42,7 @@ export interface ScenePoint {
 
 /** The drawings available for spots (see components/scene/sprites.ts). */
 export type SpotSprite =
-  "shop" | "board" | "oven" | "furnace" | "anvil" | "trees" | "oaks" | "willows" | "fishing" | "rocks" | "flax" | "cave" | "camp" | "cottage";
+  "shop" | "board" | "oven" | "furnace" | "anvil" | "trees" | "oaks" | "willows" | "fishing" | "rocks" | "flax" | "cave" | "camp" | "cottage" | "portal" | "sawmill";
 
 export interface SceneSpot extends ScenePoint {
   /** Overrides the drawing picked from the amenity's kind. */
@@ -160,6 +160,7 @@ export const TOWN_SCENES: Record<string, TownScene> = {
       "town-anvil": { x: 48.9, y: 79.6 },
       "town-trees": { x: 74.1, y: 79.6 },
       "town-hans": { x: 90, y: 60, sprite: "cottage", label: "Hans" },
+      "town-house-portal": { x: 10, y: 58, label: "Your House" },
     },
     paths: [
       [{ x: 52.8, y: 100 }, { x: 49.8, y: 78.7 }, { x: 49.8, y: 58.7 }],
@@ -208,6 +209,8 @@ export const TOWN_SCENES: Record<string, TownScene> = {
       "lumber-camp-job-board": { x: 33.3, y: 36.7 },
       "lumber-camp-trees": { x: 67.3, y: 34.2 },
       "lumber-camp-bandit": { x: 51.7, y: 85.6 },
+      "lumber-camp-sawmill": { x: 22, y: 62 },
+      "lumber-camp-sawmill-operator": { x: 80, y: 62, roof: "#8a5a32", sign: "🪚" },
     },
     paths: [
       [{ x: 53.8, y: 100 }, { x: 52.3, y: 77.2 }, { x: 50.8, y: 54.1 }],
