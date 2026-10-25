@@ -83,8 +83,12 @@ export class CraftingSystem {
     }
     if (recipe.station) {
       const where = this.engine.content.stationLocations?.[recipe.station] ?? [];
-      const atStation = where.includes(this.state.currentLocationId) || this.engine.hasHouseStation(recipe.station);
-      if (!atStation) return `You need to be at a ${recipe.station} for this.`;
+      const inTown = where.includes(this.state.currentLocationId);
+      if (!inTown && !this.engine.hasHouseStation(recipe.station)) return `You need to be at a ${recipe.station} for this.`;
+      // A house facility a servant is working is occupied (decided Oct 23).
+      if (!inTown && this.engine.isHouseStationBusy(recipe.station)) {
+        return `Your ${this.engine.getHiredServant()?.name ?? "servant"} is using the ${this.engine.getHouseFacility(recipe.station)?.name ?? recipe.station}.`;
+      }
     }
     return null;
   }

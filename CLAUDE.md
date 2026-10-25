@@ -11,7 +11,7 @@ Read [docs/HANDOFF.md](docs/HANDOFF.md) for the current state and [docs/ROADMAP.
 
 ## Architecture rules
 
-- **One time path.** `GameEngine.resolveElapsed()` advances everything, live and offline, against one capped window: `engine.getOfflineCapMs()`, which is the save's `offlineCapMs` (1 hour for new saves since Oct 20; older saves keep theirs) plus the best bed in the player house. Every in-progress action stores absolute anchors (`startedAt`, attack counters); `shiftActionAnchors` moves them when time is skipped. A new timer must be added there too (the house's furniture build is one, and it runs beside `activeAction`, not in it).
+- **One time path.** `GameEngine.resolveElapsed()` advances everything, live and offline, against one capped window: `engine.getOfflineCapMs()`, which is the save's `offlineCapMs` (1 hour for new saves since Oct 20; older saves keep theirs) plus the best bed in the player house. Every in-progress action stores absolute anchors (`startedAt`, attack counters); `shiftActionAnchors` moves them when time is skipped. A new timer must be added there too (the house's furniture build and the servant's order are two, and they run beside `activeAction`, not in it).
 - **Engine has no content imports.** Content reaches it through `GameContent` (content/index.ts). Static data is never saved; saves hold only player progress, so content edits reach existing saves.
 - **The engine enforces rules, not the UI.** Unlocks, tool and station checks, gear lock, shop location checks and dungeon loadout limits all live in the engine.
 - **One activity at a time.** `state.activeAction` is a union (craft, gather, travel, combat); `ensureIdle()` gates every start. A dungeon run (`state.dungeonRun`) also blocks other starts.
@@ -24,7 +24,7 @@ Any new `GameState` field must go in four places, or it is silently dropped on l
 1. `createInitialState` in engine/state.ts
 2. the `withDefaults` object in `migrateSave` (engine/migrations.ts), sanitized
 3. a migration entry for the old version in `MIGRATIONS`
-4. a bump of `SCHEMA_VERSION` (currently 26)
+4. a bump of `SCHEMA_VERSION` (currently 27)
 
 New fields on `ActiveCombatSession` should be optional, or handled in `sanitizeAction`, so a save made mid-fight still loads. Add a round-trip test (serialize, then deserialize).
 

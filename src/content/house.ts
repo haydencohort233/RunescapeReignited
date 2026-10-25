@@ -1,4 +1,4 @@
-import type { FurnitureDefinition, FurnitureSkin, HouseContent, RecipeInput, RoomCosmetic } from "../engine/types";
+import type { FurnitureDefinition, FurnitureSkin, HouseContent, RecipeInput, RoomCosmetic, ServantDefinition } from "../engine/types";
 
 /**
  * The player house (Construction). Every number here is proposed: levels,
@@ -143,6 +143,46 @@ export const RUG_CATALOG: RoomCosmetic[] = [{ id: "none", name: "No rug", colors
  *  just more ids here. */
 export const HOUSE_PORTAL_LOCATIONS = ["town"];
 
+/** Servants (Phase 4). Levels, order limits and the hiring fee are
+ *  decided; rates and wages too (decided Oct 20). Hired at the Servants'
+ *  Guild in Draynor Village. They only work facilities standing in the
+ *  house (decided Oct 22). */
+export const SERVANT_CATALOG: ServantDefinition[] = [
+  {
+    id: "butler",
+    name: "Butler",
+    description: "A dependable butler. Slow, but cheap to keep.",
+    portrait: "🤵",
+    levelRequired: 20,
+    rateShare: 0.2,
+    wagePerSecond: 1,
+    orderLimit: 500,
+    hireCostGp: 100,
+  },
+  {
+    id: "servant",
+    name: "Servant",
+    description: "A capable servant who works at a good pace.",
+    portrait: "🧹",
+    levelRequired: 40,
+    rateShare: 0.3,
+    wagePerSecond: 3,
+    orderLimit: 1000,
+    hireCostGp: 100,
+  },
+  {
+    id: "demon-butler",
+    name: "Demon Butler",
+    description: "Fast, tireless and expensive. Don't ask where he came from.",
+    portrait: "😈",
+    levelRequired: 60,
+    rateShare: 0.5,
+    wagePerSecond: 5,
+    orderLimit: 1500,
+    hireCostGp: 100,
+  },
+];
+
 export const HOUSE_CONTENT: HouseContent = {
   furniture: FURNITURE_CATALOG,
   skins: SKIN_CATALOG,
@@ -150,6 +190,7 @@ export const HOUSE_CONTENT: HouseContent = {
   floors: FLOOR_CATALOG,
   rugs: RUG_CATALOG,
   portalLocationIds: HOUSE_PORTAL_LOCATIONS,
+  servants: SERVANT_CATALOG,
 };
 
 const FURNITURE_BY_ID = new Map(FURNITURE_CATALOG.map((f) => [f.id, f]));

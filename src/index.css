@@ -4517,3 +4517,75 @@ html.is-modal-open body {
   filter: drop-shadow(0 3px 2px #0005);
   pointer-events: none;
 }
+
+/* ── Servants (house Servant button, Servants' Guild) ── */
+
+.house-corners {
+  flex-wrap: wrap;
+}
+
+.servant-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.servant-portrait {
+  flex: none;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.servant-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.servant-row-action {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.servant-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.servant-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.servant-deposits {
+  flex-wrap: wrap;
+}
+
+.servant-custom {
+  gap: 8px;
+}
+
+.servant-custom input {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  .servant-row {
+    flex-wrap: wrap;
+  }
+
+  .servant-row-action {
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    justify-content: space-between;
+  }
+}

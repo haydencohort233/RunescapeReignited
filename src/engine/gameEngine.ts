@@ -26,6 +26,7 @@ import type {
   FurnitureSkin,
   RoomCosmetic,
   StationType,
+  ServantDefinition,
 } from "./types";
 import { NotificationQueue } from "./notificationQueue";
 import { levelForXp, xpForLevel, MAX_LEVEL, calculateCombatLevel } from "./xpCurve";
@@ -46,6 +47,7 @@ import { JobBoardSystem } from "./systems/jobs";
 import { QuestSystem } from "./systems/quests";
 import { DungeonSystem } from "./systems/dungeons";
 import { HouseSystem } from "./systems/house";
+import { ServantSystem } from "./systems/servants";
 
 /** Below this, a gap is just a tab-switch/screen-lock, not a real "away"
  *  session — don't narrate it, even though the simulation still resolves
@@ -93,6 +95,7 @@ export class GameEngine {
   private readonly questSystem: QuestSystem;
   private readonly dungeonSystem: DungeonSystem;
   private readonly houseSystem: HouseSystem;
+  private readonly servantSystem: ServantSystem;
   private readonly enemiesById: Map<string, EnemyDefinition>;
   /** Non-null only while resolveElapsed() is replaying an away period.
    *  Combat outcomes collect here and go into the one "while you were
@@ -117,6 +120,7 @@ export class GameEngine {
     this.enemiesById = new Map((content.enemies ?? []).map((e) => [e.id, e]));
     this.dungeonSystem = new DungeonSystem(this);
     this.houseSystem = new HouseSystem(this);
+    this.servantSystem = new ServantSystem(this);
     this.clock = opts?.clock ?? Date.now;
     this.state = opts?.state ?? createInitialState(this.clock());
     this.notifications = opts?.notifications ?? new NotificationQueue();
@@ -125,6 +129,7 @@ export class GameEngine {
     this.backfillItemCharges();
     this.grantStarterKit(content.starterKit ?? []);
     this.houseSystem.normalize();
+    this.servantSystem.normalize();
   }
 
   /** A copy of a charged item (Amulet of Glory) from before charges existed
@@ -495,6 +500,7 @@ export class GameEngine {
 
     // Furniture builds run beside the active action, never instead of it.
     this.houseSystem.resolveBuild(effectiveNow);
+    this.servantSystem.resolve(effectiveNow);
     this.craftingSystem.resolveCraftJob(effectiveNow);
     this.travelSystem.resolveTravel(effectiveNow);
     this.craftingSystem.resolveGatherSession(effectiveNow);
@@ -585,6 +591,7 @@ export class GameEngine {
 
   private shiftActionAnchors(ms: number): void {
     this.houseSystem.shiftAnchors(ms);
+    this.servantSystem.shiftAnchors(ms);
     const action = this.state.activeAction;
     if (!action) return;
     switch (action.kind) {
@@ -1205,6 +1212,7 @@ export class GameEngine {
     this.grantStartingBuildings();
     this.grantStarterKit(this.content.starterKit ?? []);
     this.houseSystem.normalize();
+    this.servantSystem.normalize();
     this.notifications.clear();
     this.notifications.push("status", "Save data cleared. Starting fresh.");
   }
@@ -1619,6 +1627,104 @@ export class GameEngine {
 
   devFinishFurnitureBuild(): void {
     this.houseSystem.devFinishBuild();
+  }
+
+  /** A facility for this station stands in the house, wherever the player is. */
+  hasPlacedHouseStation(station: StationType): boolean {
+    return this.houseSystem.hasPlacedStation(station);
+  }
+
+  /** The facility standing in the house for this station, if any. */
+  getHouseFacility(station: StationType): FurnitureDefinition | undefined {
+    return this.houseSystem.getPlacedFacility(station);
+  }
+
+  /** A servant's order is using the house's facility for this station. */
+  isHouseStationBusy(station: StationType): boolean {
+    return this.servantSystem.getBusyStation() === station;
+  }
+
+  /** The player's own craft is using the house's facility for this
+   *  station (not a town one where they stand). */
+  isPlayerUsingHouseStation(station: StationType): boolean {
+    const action = this.state.activeAction;
+    if (action?.kind !== "craft" || action.station !== station) return false;
+    const inTown = (this.content.stationLocations?.[station] ?? []).includes(this.state.currentLocationId);
+    return !inTown && this.houseSystem.hasStationHere(station);
+  }
+
+  // ServantSystem (systems/servants.ts)
+
+  getServantDefinitions(): ServantDefinition[] {
+    return this.servantSystem.getDefinitions();
+  }
+
+  getServantDefinition(servantId: string): ServantDefinition | undefined {
+    return this.servantSystem.getDefinition(servantId);
+  }
+
+  /** The hired servant's definition, if any. */
+  getHiredServant(): ServantDefinition | undefined {
+    return this.servantSystem.getHired();
+  }
+
+  getServantHireBlocker(npc: NpcDefinition, servantId: string): string | null {
+    return this.servantSystem.getHireBlocker(npc, servantId);
+  }
+
+  hireServant(npc: NpcDefinition, servantId: string): boolean {
+    return this.servantSystem.hire(npc, servantId);
+  }
+
+  dismissServant(): boolean {
+    return this.servantSystem.dismiss();
+  }
+
+  depositServantWages(amount: number): boolean {
+    return this.servantSystem.deposit(amount);
+  }
+
+  /** How much work the coin pouch pays for, in ms. */
+  getServantPurseTimeMs(): number {
+    return this.servantSystem.getPurseTimeMs();
+  }
+
+  /** Wages for a whole order; the pouch must hold this much to start it. */
+  getServantOrderWages(recipe: CraftingRecipe, quantity: number): number {
+    return this.servantSystem.getOrderWages(recipe, quantity);
+  }
+
+  getServantOrderBlocker(recipe: CraftingRecipe, quantity: number): string | null {
+    return this.servantSystem.getOrderBlocker(recipe, quantity);
+  }
+
+  getServantMaxOrder(recipe: CraftingRecipe): number {
+    return this.servantSystem.getMaxOrder(recipe);
+  }
+
+  getServantTimePerItem(recipe: CraftingRecipe): number {
+    return this.servantSystem.getTimePerItem(recipe);
+  }
+
+  startServantOrder(recipe: CraftingRecipe, quantity: number): boolean {
+    return this.servantSystem.startOrder(recipe, quantity);
+  }
+
+  cancelServantOrder(): boolean {
+    return this.servantSystem.cancelOrder();
+  }
+
+  getServantOrderTimeLeftMs(): number {
+    return this.servantSystem.getOrderTimeLeftMs();
+  }
+
+  /** Internal: the house calls this when a facility is put away. */
+  stopServantIfFacilityGone(storedName: string): void {
+    this.servantSystem.stopIfFacilityGone(storedName);
+  }
+
+  devHireServant(servantId: string): void {
+    this.servantSystem.devHire(servantId);
   }
 
   // JobBoardSystem (systems/jobs.ts)

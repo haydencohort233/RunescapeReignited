@@ -23,6 +23,7 @@ import CombatPanel from "./CombatPanel";
 import DungeonCard from "./DungeonCard";
 import { ActionCard, LockedCard } from "./ui/ActionCard";
 import { CardPanelContext } from "./ui/cardPanel";
+import { ServantHirePanel } from "./house/ServantPanel";
 
 /** One amenity at the CURRENT location, as a card. Every kind uses the same
  *  pattern (see ActionCard): click to show its actions, right-click for
@@ -205,6 +206,7 @@ function NpcCard({ npcId, description }: { npcId: string; description: string })
           })}
         </ul>
       )}
+      {npc.services?.includes("servants") && <ServantHirePanel npc={npc} />}
       {recharges && (
         <div className="stack-sm">
           <h4 className="section-title">Recharge jewellery</h4>

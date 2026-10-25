@@ -1,4 +1,4 @@
-import type { Facing, GameState, LoadoutEntry, PlacedFurniture, StoredFurniture } from "./types";
+import type { Facing, GameState, LoadoutEntry, PlacedFurniture, ServantOrder, StoredFurniture } from "./types";
 import { getDailyPeriodNumber } from "./time";
 import { DEFAULT_OFFLINE_CAP_MS } from "./tuning";
 import { SCHEMA_VERSION, STARTING_HITPOINTS_XP, STARTING_LOCATION_ID } from "./state";
@@ -244,6 +244,8 @@ const MIGRATIONS: Record<number, (old: any, now: number) => any> = {
   // v25 -> v26: the house floor became a cosmetic (floorId). The engine
   // fills in the default floor, wallpaper and rug from content on load.
   25: (old) => (isRecord(old.house) && isRecord(old.house.layout) ? { ...old, house: { ...old.house, layout: { ...old.house.layout, floorId: "" } } } : old),
+  // v26 -> v27: servants. Nobody has one yet.
+  26: (old) => ({ ...old, servant: null }),
 };
 
 /** An empty house. Wallpaper and rug ids are filled from content by the
@@ -312,6 +314,7 @@ export function migrateSave(parsed: any, now: number): GameState {
     lastTickTimestamp: finiteOr(parsed.lastTickTimestamp, now),
     offlineCapMs: finiteOr(parsed.offlineCapMs, DEFAULT_OFFLINE_CAP_MS, 0),
     house: sanitizeHouse(parsed.house),
+    servant: sanitizeServant(parsed.servant),
     version: SCHEMA_VERSION,
   };
   // Equipment may only point at instances that still exist, or at a worn
@@ -449,6 +452,36 @@ function sanitizeHouse(raw: unknown): GameState["house"] {
   }
   house.unlockedSkins = [...new Set((Array.isArray(raw.unlockedSkins) ? raw.unlockedSkins : []).filter((s: unknown) => typeof s === "string"))] as string[];
   return house;
+}
+
+/** The hired servant, or null if malformed. A bad order is dropped (its
+ *  materials with it) rather than the servant. Unknown servant ids are a
+ *  content question, handled by the engine on load. */
+function sanitizeServant(raw: unknown): GameState["servant"] {
+  if (!isRecord(raw) || typeof raw.servantId !== "string") return null;
+  const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+  const servant: NonNullable<GameState["servant"]> = { servantId: raw.servantId, purse: finiteOr(raw.purse, 0, 0), order: null };
+  const o = raw.order;
+  if (
+    isRecord(o) &&
+    typeof o.recipeId === "string" &&
+    typeof o.station === "string" &&
+    finite(o.timePerItemMs) &&
+    o.timePerItemMs > 0 &&
+    finite(o.quantityTotal) &&
+    o.quantityTotal > 0 &&
+    finite(o.quantityCompleted) &&
+    finite(o.resolvedTo) &&
+    Array.isArray(o.inputsPerItem)
+  ) {
+    servant.order = {
+      ...(o as unknown as ServantOrder),
+      quantityCompleted: Math.max(0, Math.min(o.quantityTotal, Math.floor(o.quantityCompleted))),
+      progressMs: Math.max(0, finiteOr(o.progressMs, 0, 0)),
+      xpPerItem: finiteOr(o.xpPerItem, 0, 0),
+    };
+  }
+  return servant;
 }
 
 /** Drops an in-progress action whose timing fields are missing or invalid

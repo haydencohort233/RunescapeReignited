@@ -9,6 +9,7 @@ import { CraftCard } from "../TrainingCards";
 import { Modal } from "../ui/Modal";
 import { CardPanelContext } from "../ui/cardPanel";
 import { BuildMenu, FurnitureIcon, FurnitureSprite, SkinPicker, StoragePanel } from "./houseParts";
+import { ServantPanel } from "./ServantPanel";
 import { ART_CANVAS, ART_Y_OFFSET, cellAt, cellsPolygon, floorPoint, gridOf, pct, placedBox, ROOM_H, ROOM_SHAPE, ROOM_W, spriteBox, surfaceAtOf, surfaceBox, type SpriteBox } from "./roomGeometry";
 import { artSize, pieceArt, useArtVersion } from "./artCache";
 import { houseImagePath } from "../../content/assetPaths";
@@ -63,7 +64,7 @@ export default function HouseView({ onLeave }: { onLeave: () => void }) {
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [station, setStation] = useState<{ station: StationType; name: string } | null>(null);
-  const [panel, setPanel] = useState<"build" | "storage" | null>(null);
+  const [panel, setPanel] = useState<"build" | "storage" | "servant" | null>(null);
   const [skinsFor, setSkinsFor] = useState<string | null>(null);
   // Phones start zoomed in so the furniture is a comfortable size; the
   // room then scrolls sideways inside its frame.
@@ -83,6 +84,10 @@ export default function HouseView({ onLeave }: { onLeave: () => void }) {
   // Rebuilt every render: the engine changes the layout in place.
   const byUid = new Map(house.layout.inside.map((p) => [p.uid, p]));
   const atHouse = engine.isAtHouse();
+  const servantDef = engine.getHiredServant();
+  const servantOrder = state.servant?.order;
+  // On the Servant button: how far the order is.
+  const servantNote = servantOrder ? `${Math.floor((servantOrder.quantityCompleted / servantOrder.quantityTotal) * 100)}%` : null;
   const selectedPiece = selected ? byUid.get(selected) : undefined;
   const selectedDef = selectedPiece ? defOf(selectedPiece.furnitureId) : undefined;
 
@@ -490,6 +495,10 @@ export default function HouseView({ onLeave }: { onLeave: () => void }) {
         <button type="button" className="btn btn-primary house-corner" onClick={() => setPanel("build")}>
           🔨 Build
         </button>
+        <button type="button" className="btn house-corner" onClick={() => setPanel("servant")}>
+          {servantDef?.portrait ?? "🛎️"} Servant
+          {servantNote && <span className="house-count">{servantNote}</span>}
+        </button>
         <button type="button" className="btn house-corner" onClick={() => setPanel("storage")}>
           📦 Storage {house.storage.length > 0 && <span className="house-count">{house.storage.length}</span>}
         </button>
@@ -567,6 +576,7 @@ export default function HouseView({ onLeave }: { onLeave: () => void }) {
       )}
 
       {panel === "build" && <BuildMenu onClose={() => setPanel(null)} />}
+      {panel === "servant" && <ServantPanel onClose={() => setPanel(null)} />}
       {panel === "storage" && (
         <StoragePanel
           onClose={() => setPanel(null)}
@@ -585,6 +595,14 @@ export default function HouseView({ onLeave }: { onLeave: () => void }) {
         <Modal title={station.name} onClose={() => setStation(null)} wide>
           <CardPanelContext.Provider value={true}>
             <div className="stack-sm">
+              {engine.isHouseStationBusy(station.station) && (
+                <p className="text-small text-warning">
+                  Your {servantDef?.name ?? "servant"} is using this.{" "}
+                  {(engine.content.stationLocations?.[station.station] ?? []).includes(state.currentLocationId)
+                    ? "You're using the one in town instead."
+                    : "Cancel their order to use it yourself."}
+                </p>
+              )}
               {recipesAtStation(station.station).map((recipe) => (
                 <CraftCard key={recipe.id} recipe={recipe} onStarted={() => setStation(null)} />
               ))}

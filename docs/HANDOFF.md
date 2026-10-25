@@ -1,6 +1,6 @@
 # Handoff
 
-As of Oct 20, 2026 (evening). Player House Phase 1 (below) is built on top of the Oct 18 to 20 round. Tests (186), lint and build pass, apart from the flaky "keep fighting doesn't respawn the enemy once the arrows are gone" (one random arrow can miss) and the one oxlint warning listed under Known gaps. The test link (https://claude.ai/artifact/DCwGp4oX62R6pRdFw1ZkdF) runs this build.
+As of Oct 23, 2026. Servants (Player House Phase 4, below) are built on top of Phase 1 and the Oct 18 to 20 round; not yet committed or on the test link. Tests (202), lint and build pass, apart from the flaky "keep fighting doesn't respawn the enemy once the arrows are gone" (one random arrow can miss) and the one oxlint warning listed under Known gaps. The test link (https://claude.ai/artifact/DCwGp4oX62R6pRdFw1ZkdF) still runs the Phase 1 build.
 
 ## Where things stand
 
@@ -12,8 +12,19 @@ Combat is complete and most of Phase 1, plus parts of Phases 2 and 3, are built.
 | Skills | Woodcutting, Firemaking, Fletching, Crafting (bowstring), Cooking (range only), Fishing, Mining (copper, tin), Smithing (bronze), Prayer (bury), Construction (from buildings), Farming (flax), Agility (travel speed only). Tools required for gathering; up to 10% faster gathering by level. |
 | World | 7 locations: Riverside Town, Lumber Camp, Lake Shore, Dark Forest, Hidden Grove, Quarry, Draynor Village. Shops: Bob (tools, repairs), Riverside Armoury, Aubury's Rune Shop, Gerrant's fishing shop. Aggie recharges the Amulet of Glory. |
 | Dungeon | Overgrown Den: quest-gated, 3 waves, regear stop, Den Guardian boss, 6-slot loadout. |
-| House | Player House Phase 1: one side-view room with floor, wall and surface slots, Use and Build modes, time-gated furniture building, facilities that work as crafting stations, beds that raise the offline cap, skins data model. Portal in Riverside Town. Planks from the Sawmill and Sawmill Operator at Lumber Camp. |
+| House | Servants (Phase 4): hire at the Servants' Guild in Draynor, give orders at placed facilities from the house's Servant button, wages from a coin pouch. Player House Phase 1: one side-view room with floor, wall and surface slots, Use and Build modes, time-gated furniture building, facilities that work as crafting stations, beds that raise the offline cap, skins data model. Portal in Riverside Town. Planks from the Sawmill and Sawmill Operator at Lumber Camp. |
 | Other | Offline progress (1 hour for new saves, plus the best bed; older saves keep 8 hours), degrading gear with repairs (Dharok's Greataxe example), Glory charges, dev tools (spawn, levels, teleport, HP, restore all gear). |
+
+## Oct 22 round: Servants (Player House, Phase 4)
+
+The roadmap's Player House section has the decided details and the proposed values. Where things live:
+
+- **Content**: `SERVANT_CATALOG` in content/house.ts (level, rate share, wage per second, order limit, hire fee; checked by `validateContent()`). The guild is an NPC with `services: ["servants"]` (Mistress Wren, content/npcs.ts) and the `draynor-servants-guild` amenity and town spot.
+- **Engine**: engine/systems/servants.ts (`ServantSystem`). The order runs beside `activeAction`, resolved in `resolveElapsed` after the furniture build; its anchor is `order.resolvedTo`, moved in `shiftActionAnchors`. Wages are taken per ms of work, so an idle servant costs nothing; an order only starts when the pouch covers `getOrderWages`, so it never runs dry (no quitting, decided Oct 23). A house facility in an order is occupied: `CraftingSystem.getStartBlocker` checks `isHouseStationBusy` (a town station where the player stands stays usable), and the servant checks `isPlayerUsingHouseStation`. One facility per station: `HouseSystem` blocks building or placing a second, and `normalize` sends extras to storage. `HouseSystem.storeFurniture` calls `stopServantIfFacilityGone`. `hasPlacedHouseStation` answers "is a facility placed" wherever the player is.
+- **Save**: `state.servant` (v27): `servantId`, `purse`, `order`. Sanitized in migrations.ts (`sanitizeServant`); a servant whose id left content leaves on load with a refund (`ServantSystem.normalize`).
+- **UI**: components/house/ServantPanel.tsx: `ServantPanel` (the house's Servant button: coin pouch with Deposit GP, the order with progress and time left, or the order picker) and `ServantHirePanel` (shown on the guild's NPC card).
+- **Dev tools**: Settings > Dev tools > Servant hires a tier on the spot; Skip time moves their work along.
+- **Tests**: engine/__tests__/servants.test.ts.
 
 ## Oct 20 round: Player House, Phase 1
 
@@ -27,7 +38,7 @@ The roadmap's Player House section has the six phases, the decided details and t
 - **Oct 22 art**: the owner's art is in. Items (104 files) replaced the wiki images at the same paths; NPC portraits are in assets/npcs/<name>/ (shopkeepers use them too; `ShopDefinition.artName` when the file isn't the npcName, e.g. Armourer uses blacksmith); the player avatar is assets/npcs/adventurer. Furniture art is flat in assets/furniture/ (`art` field in content/house.ts), the room's floor and walls in assets/house/ (wall and floor cosmetics, save v26 `floorId`). components/house/artCache.ts loads each image once to learn its size; roomGeometry.ts draws art at its pixel size (ART_PX_PER_CELL 128) on the floor art's canvas. Rugs are a fourth slot ("rug"). New owner art arrives in art-inbox/ (git-ignored); sort it into public/assets with underscores.
 - **Oct 21 changes**: beds 1x2, tables 1x1; drag a selected piece to move it, R rotates; Build and Storage buttons under the room (storage is a panel); phones start zoomed to 1.5x with a zoom button; Use mode ignores taps on furniture without a use; pieces stand centred on their tile; only placed beds count; storing a facility in use stops the craft (`ActiveCraftJob.station`, optional).
 - **Planks**: Sawmill (station `sawmill`) and Sawmill Operator (shop: logs plus GP, mahogany planks for GP) at Lumber Camp; a Sawhorse in the house works as a sawmill.
-- **Not in Phase 1**: skin unlock sources (Phase 2, a dev tool unlocks them), wallpaper and rug pickers (Phase 2), the yard (stubbed in the save), servants (Phase 4), sharing.
+- **Not in Phase 1**: skin unlock sources (Phase 2, a dev tool unlocks them), wallpaper and rug pickers (Phase 2), the yard (stubbed in the save), sharing. Servants (Phase 4) were built Oct 22.
 
 ## Oct 18 to 20 round: world map, quest givers, away summary
 
@@ -109,7 +120,7 @@ From the roadmap, in rough order:
 
 ## Next step
 
-Recommended now: the owner reviews Player House Phase 1 on the test link and the Proposed values in the roadmap's Player House section, then Phase 2 (cosmetics) or Servants (the owner's prompt calls them the next separate step).
+Recommended now: the owner reviews Servants and the Proposed servant values in the roadmap, then commits and publishes the test link. After that, Phase 2 (cosmetics) once cosmetic art exists, or the material tiers (iron to rune, willow to yew), which give servants more to do.
 
 Earlier recommendation, still open:
 

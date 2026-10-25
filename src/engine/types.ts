@@ -156,8 +156,28 @@ export interface RoomCosmetic {
   art?: string;
 }
 
+/** A kind of servant (Phase 4). Static content; the save holds only which
+ *  one is hired, their coin pouch and their order. */
+export interface ServantDefinition {
+  id: string;
+  name: string;
+  description: string;
+  portrait: string;
+  /** Construction level needed to hire them. */
+  levelRequired: number;
+  /** Share of the player's own speed (0.2 = a fifth as fast). XP per item
+   *  is the player's, so XP per hour is the same share. */
+  rateShare: number;
+  /** Wages taken from their coin pouch per second of work. Nothing while idle. */
+  wagePerSecond: number;
+  /** Most items in one order. */
+  orderLimit: number;
+  hireCostGp: number;
+}
+
 export interface HouseContent {
   furniture: FurnitureDefinition[];
+  servants?: ServantDefinition[];
   skins: FurnitureSkin[];
   wallpapers: RoomCosmetic[];
   floors: RoomCosmetic[];
@@ -212,6 +232,38 @@ export interface HouseState {
   build: FurnitureBuild | null;
   /** Skin ids the player has earned. */
   unlockedSkins: string[];
+}
+
+/** What a servant is making: a recipe at a facility in the house.
+ *  Denormalized like ActiveCraftJob, so no recipe registry is needed. */
+export interface ServantOrder {
+  recipeId: string;
+  recipeName: string;
+  skill: string;
+  xpPerItem: number;
+  /** The servant's time per item (the player's time / their share). */
+  timePerItemMs: number;
+  output?: RecipeInput;
+  extraStatistic?: string;
+  bonusDrops?: BonusDrop[];
+  /** Taken for the whole order up front; what's left is given back on cancel. */
+  inputsPerItem: RecipeInput[];
+  station: StationType;
+  quantityTotal: number;
+  quantityCompleted: number;
+  /** Work done on the item in hand. */
+  progressMs: number;
+  /** Time anchor: work is resolved up to here (moved by shiftActionAnchors). */
+  resolvedTo: number;
+}
+
+/** The hired servant. Works beside the one active action. */
+export interface ServantState {
+  servantId: string;
+  /** GP in their coin pouch. Wages come out of it only while working; an
+   *  order only starts when it covers the whole order. */
+  purse: number;
+  order: ServantOrder | null;
 }
 
 /** Where to put a piece: grid cell (floor, wall) or host and slot (surface). */
@@ -281,7 +333,7 @@ export interface NpcDefinition {
   locationId: string;
   /** Lines said when talked to, one picked at random. */
   dialogue: string[];
-  services?: ("recharge" | "repair")[];
+  services?: ("recharge" | "repair" | "servants")[];
 }
 
 export interface ShopItem {
@@ -693,6 +745,8 @@ export interface GameState {
   offlineCapMs: number;
   /** The player house: its layout, storage and the piece being built. */
   house: HouseState;
+  /** The hired servant, if any (one at a time). */
+  servant: ServantState | null;
   /** Schema version, bump when GameState shape changes — see migrations in gameEngine.ts. */
   version: number;
 }

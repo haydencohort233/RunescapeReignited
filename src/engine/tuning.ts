@@ -114,3 +114,4 @@ export const HOUSE_MAX_STORAGE = 100;
 
 /** Decor slots in the yard (decided, Phase 3). */
 export const YARD_DECOR_SLOTS = 20;
+

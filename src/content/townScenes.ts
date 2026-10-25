@@ -487,9 +487,11 @@ export const TOWN_SCENES: Record<string, TownScene> = {
     spots: {
       "draynor-aggie": { x: 52, y: 58.7, label: "Aggie's House" },
       "draynor-leela": { x: 26, y: 40, sprite: "cottage", label: "Leela" },
+      "draynor-servants-guild": { x: 76, y: 44, sprite: "shop", label: "Servants' Guild" },
     },
     paths: [
       [{ x: 55, y: 100 }, { x: 55.8, y: 81 }, { x: 52, y: 61.7 }],
+      [{ x: 55.8, y: 81 }, { x: 68, y: 62 }, { x: 76, y: 47 }],
     ],
     decor: [
       { kind: "pond", x: 14, y: 87, size: 1.2 },

@@ -312,6 +312,18 @@ export default function SettingsPanel() {
           </div>
           <div className="row row-between">
             <span>
+              Servant <span className="text-faint">· hires one now, ignoring the guild and level</span>
+            </span>
+            <span className="btn-row">
+              {engine.getServantDefinitions().map((def) => (
+                <button key={def.id} type="button" className="btn" onClick={dev(() => engine.devHireServant(def.id))}>
+                  {def.name}
+                </button>
+              ))}
+            </span>
+          </div>
+          <div className="row row-between">
+            <span>
               Teleport <span className="text-faint">· ignores requirements, ends any fight</span>
             </span>
             <span className="btn-row">

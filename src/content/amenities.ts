@@ -393,6 +393,14 @@ export const AMENITY_CATALOG: Amenity[] = [
     description: "A witch who knows how to put the magic back into jewellery.",
     npcId: "aggie",
   },
+  {
+    id: "draynor-servants-guild",
+    locationId: "draynor-village",
+    kind: "npc",
+    name: "Servants' Guild",
+    description: "Hire a servant to work the facilities in your house while you're busy elsewhere.",
+    npcId: "guildmistress-wren",
+  },
 ];
 
 /** One icon per amenity kind, used wherever amenities are listed. */

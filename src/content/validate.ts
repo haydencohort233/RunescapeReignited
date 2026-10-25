@@ -19,7 +19,7 @@ import { SPELL_CATALOG } from "./spells";
 import { NPC_CATALOG, STARTER_KIT } from "./npcs";
 import { getSpecialAttack } from "../engine/specialAttacks";
 import { DUNGEON_CATALOG } from "./dungeons";
-import { FLOOR_CATALOG, FURNITURE_CATALOG, HOUSE_PORTAL_LOCATIONS, RUG_CATALOG, SKIN_CATALOG, WALLPAPER_CATALOG } from "./house";
+import { FLOOR_CATALOG, FURNITURE_CATALOG, HOUSE_PORTAL_LOCATIONS, RUG_CATALOG, SERVANT_CATALOG, SKIN_CATALOG, WALLPAPER_CATALOG } from "./house";
 import { HOUSE_FLOOR_COLS, HOUSE_FLOOR_ROWS, HOUSE_WALL_COLS, HOUSE_WALL_ROWS } from "../engine/tuning";
 
 /** Ledger ids that are plain currencies rather than items. */
@@ -322,6 +322,16 @@ export function validateContent(): string[] {
   for (const a of AMENITY_CATALOG) {
     if (a.kind === "housePortal" && !HOUSE_PORTAL_LOCATIONS.includes(a.locationId)) err(`amenity "${a.id}": not a house portal location in content/house.ts`);
   }
+  ids("servants", SERVANT_CATALOG);
+  for (const sv of SERVANT_CATALOG) {
+    const where = `servant "${sv.id}"`;
+    if (!(sv.levelRequired >= 1 && sv.levelRequired <= 99)) err(`${where}: levelRequired must be 1 to 99`);
+    if (!(sv.rateShare > 0 && sv.rateShare <= 1)) err(`${where}: rateShare must be above 0 and at most 1`);
+    if (!(sv.wagePerSecond >= 0)) err(`${where}: wagePerSecond must be >= 0`);
+    if (!Number.isInteger(sv.orderLimit) || sv.orderLimit < 1) err(`${where}: orderLimit must be a whole number >= 1`);
+    if (!(sv.hireCostGp >= 0)) err(`${where}: hireCostGp must be >= 0`);
+  }
+  if (SERVANT_CATALOG.length > 0 && !NPC_CATALOG.some((n) => n.services?.includes("servants"))) err("servants: no NPC hires them (services: [\"servants\"])");
 
   for (const ach of ACHIEVEMENT_CATALOG) {
     condition(`achievement "${ach.id}"`, ach.condition);

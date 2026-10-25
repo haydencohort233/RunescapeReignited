@@ -49,7 +49,7 @@ Decided (Oct 20): Construction gets a player house, one big room like a Club Pen
 | 1. Room and furniture | Side-view room with floor, wall and surface slots and depth sorting; Build and Default modes; move, rotate, store; furniture limit and house storage; time-gated furniture building resolved offline; crafting stations as placeable facilities; beds and the new 1 hour default offline cap; cosmetic data model, serializable layout, stubbed yard | Built Oct 20 |
 | 2. Cosmetics | Skin unlocks and the Cosmetics button on selected furniture; wallpaper and rug selection; skins from achievements, drops and shops; no payments | Next |
 | 3. Outside and yard | Exterior view with its own cosmetics; 20 decor slots (plants, fences, fountains); facilities placeable outside; yard in the layout data | Later |
-| 4. Servants | Hiring building in an existing town (100 GP); Basic Male Butler, Female Servant, Demon Butler; background work in Crafting, Construction and Cooking; upkeep in real time and offline; they quit after 25 minutes unpaid | Later |
+| 4. Servants | Servants' Guild in Draynor Village (100 GP); Butler, Servant, Demon Butler; background work at facilities placed in the house; wages from a coin pouch only while working, in real time and offline; an order only starts when the pouch covers it; a facility in use is occupied; one facility of each kind per house | Built Oct 22 (Phases 2 and 3 skipped for now) |
 | 5. Sharing and online | Share code export and import; read-only visits; likes and a most-popular leaderboard. Needs a backend: hosting decision first | Later |
 | 6. Microtransactions | Purchasable wallpaper, rug and furniture skins via a payment provider and accounts, plugged into the Phase 2 unlock system | Later |
 
@@ -80,6 +80,35 @@ Decided details:
 - Decided Oct 22: every asset file name uses underscores, never hyphens (bronze_dagger.png). A test checks all of public/assets.
 - Decided Oct 22: rotated art is named <art>_side.png (drawn facing left, flipped for right) and <art>_back.png; no suffix is the front. A missing view uses the front.
 - Decided Oct 22: the room's default look is the owner's art, house_wall_wood and house_floor_wood, kept separate for future wall and floor cosmetics (the save now has a floor id; save v26).
+
+Decided Oct 22 (Servants, built the same day):
+
+- Servants only work facilities placed in the house (Workbench for planks, Range for cooking, and so on), so getting the most from one means building the facilities. Errands to the Sawmill and other places may come later.
+- No bell pull: a Servant button in the house, next to Build and Storage. Its panel shows the servant, their task, start and cancel, progress and time left.
+- A servant costs nothing while idle. Wages come out of a coin pouch only while they work; the panel has Deposit GP.
+- No bed needed for a servant (house space is tight).
+- Construction levels to hire: Butler 20, Servant 40, Demon Butler 60. One servant at a time.
+- The hiring place is not in Riverside Town (it's full): the Servants' Guild is in Draynor Village.
+- Order limits: Butler 500, Servant 1,000, Demon Butler 1,500. Materials for the whole order come from your stock when it starts.
+- Notifications: order started, order finished.
+
+Decided Oct 23 (Servants, built the same day):
+
+- A house facility a servant is working is occupied: the player can't use it until the order ends or is cancelled, and a servant can't start on a facility the player is using.
+- A house holds one facility of each kind (one Workbench, one Range, and so on). A second can't be built or placed; extras standing from before the rule go to storage on load.
+- Idle stays free. Wages and the hiring fee will be raised later, once there's more content to balance against.
+- No quitting. An order only starts when the coin pouch covers its whole wages, so a servant never runs dry mid-order. The order picker offers "Add N GP and start" when the pouch is short.
+
+Note: the house portal is in Riverside Town, which has its own public Range, Furnace and Anvil. Those stay free while the servant works the house ones, so today the occupied rule mostly bites on the Workbench and the Altar.
+
+Proposed (Servants, for review):
+
+- Speed is the servant's share of your own time per item; each item gives your full XP, so XP per hour is the same share (Butler 20%, Servant 30%, Demon Butler 50%).
+- They can work any recipe at a placed facility you could make yourself (level, tool): Construction, Cooking, Smithing and Prayer today. Crafting has no house facility yet.
+- Dismissing gives back the pouch and unused materials. Cancelling gives back unused materials, and unused wages stay in the pouch. Putting away the last facility an order needs cancels it with a refund.
+- The guild is run by Mistress Wren (NPC, emoji portrait until art). Servants show as emoji until art.
+- Deposit buttons: +1,000, +10,000, +100,000 and any amount. There's no way to take GP back out except dismissing.
+- Dev tool: Settings > Dev tools > Servant hires any tier on the spot.
 
 Proposed (Phase 1, for review):
 

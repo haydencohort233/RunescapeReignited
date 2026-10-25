@@ -18,6 +18,20 @@ export const NPC_CATALOG: NpcDefinition[] = [
     services: ["recharge"],
   },
   {
+    id: "guildmistress-wren",
+    name: "Mistress Wren",
+    title: "Servants' Guild",
+    portrait: "👩‍💼",
+    locationId: "draynor-village",
+    dialogue: [
+      "Looking for help around the house? Every one of mine is trained, bonded and punctual.",
+      "Keep their coin pouch full and they'll work while you're off adventuring.",
+      "A servant only works what you've built. No range, no cooking. Simple as that.",
+      "The demon butler? Oh, he's very good. Just don't ask about his last employer.",
+    ],
+    services: ["servants"],
+  },
+  {
     id: "hans",
     name: "Hans",
     title: "Castle servant",

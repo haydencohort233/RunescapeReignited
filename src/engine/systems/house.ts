@@ -97,6 +97,20 @@ export class HouseSystem {
         this.house.storage.push({ uid: p.uid, furnitureId: p.furnitureId, ...(p.skinId ? { skinId: p.skinId } : {}) });
       }
     }
+    // One facility of each station stands in the house (decided Oct 23):
+    // extras from before the rule go back into storage.
+    const stations = new Set<StationType>();
+    for (const p of [...layout.inside]) {
+      const station = this.furnitureById.get(p.furnitureId)?.station;
+      if (!station) continue;
+      if (!stations.has(station)) {
+        stations.add(station);
+        continue;
+      }
+      const going = layout.inside.filter((q) => q.uid === p.uid || q.hostId === p.uid);
+      layout.inside = layout.inside.filter((q) => !going.includes(q));
+      for (const q of going) this.house.storage.push({ uid: q.uid, furnitureId: q.furnitureId, ...(q.skinId ? { skinId: q.skinId } : {}) });
+    }
     if (this.house.build && !this.furnitureById.has(this.house.build.furnitureId)) {
       for (const c of this.house.build.paid) this.engine.giveBack(c.resource, c.amount);
       this.house.build = null;
@@ -146,8 +160,30 @@ export class HouseSystem {
   /** A facility for this station is standing in the house, and the player
    *  is there to use it. */
   hasStationHere(station: StationType): boolean {
-    if (!this.isAtHouse()) return false;
-    return this.house.layout.inside.some((p) => this.furnitureById.get(p.furnitureId)?.station === station);
+    return this.isAtHouse() && this.hasPlacedStation(station);
+  }
+
+  /** A facility for this station is standing in the house, wherever the
+   *  player is (servants work it while they're away). */
+  hasPlacedStation(station: StationType): boolean {
+    return !!this.getPlacedFacility(station);
+  }
+
+  /** The facility standing in the house for this station (one at most). */
+  getPlacedFacility(station: StationType): FurnitureDefinition | undefined {
+    for (const p of this.house.layout.inside) {
+      const def = this.furnitureById.get(p.furnitureId);
+      if (def?.station === station) return def;
+    }
+    return undefined;
+  }
+
+  /** The facility of this station the player owns anywhere (placed,
+   *  stored or being built). A house holds one of each (decided Oct 23). */
+  private ownedFacility(station: StationType): FurnitureDefinition | undefined {
+    const ids = [...this.house.layout.inside, ...this.house.storage].map((p) => p.furnitureId);
+    if (this.house.build) ids.push(this.house.build.furnitureId);
+    return ids.map((id) => this.furnitureById.get(id)).find((d) => d?.station === station);
   }
 
   getWallpaper(): RoomCosmetic | undefined {
@@ -171,6 +207,8 @@ export class HouseSystem {
     if (this.engine.getSkillLevel("construction") < def.levelRequired) return `You need Construction level ${def.levelRequired}.`;
     if (!this.isAtHouse()) return "You need to be at your house for that.";
     if (this.house.build) return "You're already building something.";
+    const owned = def.station ? this.ownedFacility(def.station) : undefined;
+    if (owned) return `You already have a ${owned.name}. A house holds one of each facility.`;
     if (this.getStorageUsed() >= this.getStorageCapacity()) return "Your house storage is full.";
     const short = def.cost.find((c) => this.engine.getOwnedCount(c.resource) < c.amount);
     if (short) return `You need ${short.amount} ${this.engine.nameOf(short.resource)}.`;
@@ -277,6 +315,8 @@ export class HouseSystem {
     if (this.getPlacedCount() >= this.getFurnitureLimit()) {
       return this.warn(`Your house holds ${this.getFurnitureLimit()} pieces at your Construction level. Store something first.`);
     }
+    const standing = def.station ? this.getPlacedFacility(def.station) : undefined;
+    if (standing) return this.warn(`There's already a ${standing.name} in the house. A house holds one of each facility.`);
     const facing = placement.facing ?? facingsOf(def)[0];
     const blocker = this.getPlacementBlocker(def, { ...placement, facing });
     if (blocker) return this.warn(blocker);
@@ -326,6 +366,8 @@ export class HouseSystem {
   /** Puts a placed piece (and anything on it) back into storage. */
   storeFurniture(uid: string): boolean {
     if (!this.requireAtHouse()) return false;
+    // Work done up to now counts before a facility goes away.
+    this.engine.catchUpToNow();
     const piece = this.findPlaced(uid);
     if (!piece) return false;
     const attached = this.house.layout.inside.filter((p) => p.hostId === uid);
@@ -338,7 +380,9 @@ export class HouseSystem {
     const ids = new Set(going.map((p) => p.uid));
     this.house.layout.inside = this.house.layout.inside.filter((p) => !ids.has(p.uid));
     for (const p of going) this.house.storage.push({ uid: p.uid, furnitureId: p.furnitureId, ...(p.skinId ? { skinId: p.skinId } : {}) });
-    this.stopCraftingWithoutStation(this.furnitureById.get(piece.furnitureId)?.name ?? "it");
+    const storedName = this.furnitureById.get(piece.furnitureId)?.name ?? "it";
+    this.stopCraftingWithoutStation(storedName);
+    this.engine.stopServantIfFacilityGone(storedName);
     return true;
   }
 
