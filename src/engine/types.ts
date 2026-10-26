@@ -81,6 +81,9 @@ export interface GameContent {
  *  grid again, under everything; rugs only block other rugs). */
 export type FurnitureSlot = "floor" | "wall" | "surface" | "rug";
 
+/** Inside the room, or out in the yard (Phase 3). One layout holds both. */
+export type HouseArea = "inside" | "yard";
+
 /** Which way a placed piece faces. Right and left share the side texture
  *  (right is it flipped). */
 export type Facing = "front" | "right" | "back" | "left";
@@ -109,6 +112,10 @@ export interface FurnitureDefinition {
   /** Art file stem in assets/furniture/ (<art>.png, <art>_side.png,
    *  <art>_back.png). A missing facing falls back to the front. */
   art?: string;
+  /** Joins up with neighbours of the same kind (fences, hedges): drawn as
+   *  a post plus rails toward each one, so runs and corners form on their
+   *  own. Connecting pieces don't rotate. */
+  connects?: boolean;
   /** Pieces that hold others (a table): how many surface pieces fit. */
   surfaceSlots?: number;
   /** Where its top surface is, as a fraction of its art's height from the
@@ -116,6 +123,9 @@ export interface FurnitureDefinition {
   surfaceAt?: number;
   /** A facility that works as this crafting station while placed. */
   station?: StationType;
+  /** Where it can stand. Defaults to inside; facilities default to both
+   *  (decided: facilities can go outside). Wall pieces stay inside. */
+  areas?: HouseArea[];
   /** A bed: how much it adds to the offline cap. Only the best one counts. */
   offlineCapBonusMs?: number;
   levelRequired: number;
@@ -163,6 +173,9 @@ export interface ServantDefinition {
   name: string;
   description: string;
   portrait: string;
+  /** NPC art used for their portrait (assets/npcs/<art>/<art>.png); the
+   *  emoji shows until it loads. */
+  art?: string;
   /** Construction level needed to hire them. */
   levelRequired: number;
   /** Share of the player's own speed (0.2 = a fifth as fast). XP per item
@@ -175,6 +188,21 @@ export interface ServantDefinition {
   hireCostGp: number;
 }
 
+/** A style of path painted on the yard's ground, one tile per square. */
+export interface PathStyle {
+  id: string;
+  name: string;
+  /** CSS colours used to draw it until art exists: fill, then edge. */
+  colors: string[];
+  levelRequired: number;
+  /** Paid per tile painted, given back when a tile is cleared. */
+  cost: RecipeInput[];
+}
+
+/** Which look of the house a cosmetic sets (decided Oct 25: the outside
+ *  has its own looks like the room). */
+export type HouseLookSlot = "wallpaper" | "floor" | "front" | "roof" | "ground" | "sky";
+
 export interface HouseContent {
   furniture: FurnitureDefinition[];
   servants?: ServantDefinition[];
@@ -182,6 +210,12 @@ export interface HouseContent {
   wallpapers: RoomCosmetic[];
   floors: RoomCosmetic[];
   rugs: RoomCosmetic[];
+  /** Outside looks: the house front, its roof, the yard's ground and the sky. */
+  fronts: RoomCosmetic[];
+  roofs: RoomCosmetic[];
+  grounds: RoomCosmetic[];
+  skies: RoomCosmetic[];
+  paths: PathStyle[];
   /** Locations with a house portal. Being at one is being "at the house". */
   portalLocationIds: string[];
 }
@@ -208,6 +242,25 @@ export interface HouseLayout {
   wallpaperId: string;
   floorId: string;
   rugId: string;
+  /** Outside looks (save v29). */
+  frontId: string;
+  roofId: string;
+  groundId: string;
+  skyId: string;
+  /** Path tiles painted on the yard's ground. */
+  paths: PathTile[];
+  /** Weather in the yard (decided Oct 25: the owner picks Auto, which
+   *  follows the ground, or Off; viewers can still switch effects off). */
+  weather: HouseWeather;
+}
+
+export type HouseWeather = "auto" | "off";
+
+/** One painted path square in the yard. */
+export interface PathTile {
+  x: number;
+  y: number;
+  pathId: string;
 }
 
 /** A built piece not standing anywhere. */
@@ -264,6 +317,15 @@ export interface ServantState {
    *  order only starts when it covers the whole order. */
   purse: number;
   order: ServantOrder | null;
+}
+
+/** Who this save is to the house server: a random id and a secret that
+ *  proves it, plus the id of the house it has listed, if any. No account,
+ *  no personal data. */
+export interface OnlineIdentity {
+  playerId: string;
+  secret: string;
+  houseId: string | null;
 }
 
 /** Where to put a piece: grid cell (floor, wall) or host and slot (surface). */
@@ -747,6 +809,9 @@ export interface GameState {
   house: HouseState;
   /** The hired servant, if any (one at a time). */
   servant: ServantState | null;
+  /** Anonymous identity for shared houses and likes (Phase 5), made the
+   *  first time the player goes online. Null until then. */
+  online: OnlineIdentity | null;
   /** Schema version, bump when GameState shape changes — see migrations in gameEngine.ts. */
   version: number;
 }

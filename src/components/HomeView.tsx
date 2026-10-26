@@ -12,8 +12,9 @@ import { CardPanelContext } from "./ui/cardPanel";
 import { Modal } from "./ui/Modal";
 import { EmptyState, Page, Section } from "./ui/Page";
 import { getActiveTravel } from "../engine/activeAction";
-import { subscribeBackToTown, subscribeOpenHouse } from "../lib/dialog";
+import { subscribeBackToTown, subscribeOpenHouse, subscribeOpenVisit, type HouseVisit } from "../lib/dialog";
 import HouseView from "./house/HouseView";
+import { VisitLikeButton } from "./house/SharePanel";
 
 /** Whether the house was open when Home was last shown, so visiting
  *  another tab and coming back returns to the house. */
@@ -41,7 +42,7 @@ function AmenityModal({ amenity, locationId, onClose }: { amenity: Amenity; loca
  * placement lives in content/townScenes.ts.
  */
 export default function HomeView() {
-  const { state } = useGame();
+  const { engine, state } = useGame();
   const currentLocation = getLocation(state.currentLocationId);
   const amenities = getAmenitiesAtLocation(state.currentLocationId);
   const travel = getActiveTravel(state);
@@ -52,6 +53,16 @@ export default function HomeView() {
     setInHouseState(open);
   }, []);
   const close = useCallback(() => setOpenId(null), []);
+  // Someone else's house, read-only, while visiting.
+  const [visiting, setVisiting] = useState<HouseVisit | null>(null);
+  useEffect(
+    () =>
+      subscribeOpenVisit((visit) => {
+        setOpenId(null);
+        setVisiting(visit);
+      }),
+    []
+  );
   // Saying goodbye to an NPC, or finishing a quest, closes the building.
   useEffect(() => subscribeBackToTown(close), [close]);
   useEffect(
@@ -62,11 +73,13 @@ export default function HomeView() {
       }),
     [setInHouse]
   );
-  // Going somewhere else leaves the house behind.
-  const [houseLocation, setHouseLocation] = useState(state.currentLocationId);
-  if (houseLocation !== state.currentLocationId) {
-    setHouseLocation(state.currentLocationId);
+  // Away from the house portal (another town, or on the road), Home shows
+  // where you are, not the house (decided Oct 26). Checked on every
+  // render, so it also holds after visiting other tabs or a teleport.
+  const atHouse = engine.isAtHouse();
+  if (!atHouse && (inHouse || visiting)) {
     setInHouse(false);
+    setVisiting(null);
   }
   const open = openId ? amenities.find((a) => a.id === openId) : undefined;
 
@@ -79,6 +92,20 @@ export default function HomeView() {
           You left {currentLocation?.name ?? "town"}. You can't do anything until you arrive, or you can cancel the trip.
         </EmptyState>
       </Page>
+    );
+  }
+
+  if (visiting) {
+    return (
+      <>
+        <ActivityCard />
+        <HouseView
+          key={`${visiting.houseId ?? "code"}:${visiting.name}`}
+          visit={visiting}
+          visitExtra={visiting.houseId ? <VisitLikeButton houseId={visiting.houseId} /> : <span className="text-muted">Visiting from a share code</span>}
+          onLeave={() => setVisiting(null)}
+        />
+      </>
     );
   }
 

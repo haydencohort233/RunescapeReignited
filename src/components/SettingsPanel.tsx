@@ -50,6 +50,12 @@ export default function SettingsPanel() {
           </label>
           <label className="row row-between setting-row">
             <span>
+              Weather effects <span className="text-faint text-small">· rain, snow and leaves in house yards</span>
+            </span>
+            <input type="checkbox" checked={prefs.weatherEffects} onChange={(e) => setPreferences({ weatherEffects: e.target.checked })} />
+          </label>
+          <label className="row row-between setting-row">
+            <span>
               Exact numbers <span className="text-faint text-small">· 1,234,567 GP instead of 1.23M</span>
             </span>
             <input

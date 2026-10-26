@@ -13,4 +13,8 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(version),
   },
+  // In development, /api goes to the house server (npm run server).
+  server: {
+    proxy: { '/api': 'http://localhost:8787' },
+  },
 })

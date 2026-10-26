@@ -24,6 +24,7 @@ import DungeonCard from "./DungeonCard";
 import { ActionCard, LockedCard } from "./ui/ActionCard";
 import { CardPanelContext } from "./ui/cardPanel";
 import { ServantHirePanel } from "./house/ServantPanel";
+import { VisitHousesPanel } from "./house/SharePanel";
 
 /** One amenity at the CURRENT location, as a card. Every kind uses the same
  *  pattern (see ActionCard): click to show its actions, right-click for
@@ -45,7 +46,9 @@ export default function AmenityEntry({ amenity, onStarted }: { amenity: Amenity;
           title={amenity.name}
           description={amenity.description}
           actions={[{ label: "Enter your house", variant: "primary", onClick: openHouse }]}
-        />
+        >
+          <VisitHousesPanel />
+        </ActionCard>
       );
     case "shop":
       return <ShopCard shopId={amenity.shopId} />;

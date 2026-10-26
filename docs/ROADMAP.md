@@ -47,10 +47,10 @@ Decided (Oct 20): Construction gets a player house, one big room like a Club Pen
 | Phase | Scope | State |
 | --- | --- | --- |
 | 1. Room and furniture | Side-view room with floor, wall and surface slots and depth sorting; Build and Default modes; move, rotate, store; furniture limit and house storage; time-gated furniture building resolved offline; crafting stations as placeable facilities; beds and the new 1 hour default offline cap; cosmetic data model, serializable layout, stubbed yard | Built Oct 20 |
-| 2. Cosmetics | Skin unlocks and the Cosmetics button on selected furniture; wallpaper and rug selection; skins from achievements, drops and shops; no payments | Next |
-| 3. Outside and yard | Exterior view with its own cosmetics; 20 decor slots (plants, fences, fountains); facilities placeable outside; yard in the layout data | Later |
-| 4. Servants | Servants' Guild in Draynor Village (100 GP); Butler, Servant, Demon Butler; background work at facilities placed in the house; wages from a coin pouch only while working, in real time and offline; an order only starts when the pouch covers it; a facility in use is occupied; one facility of each kind per house | Built Oct 22 (Phases 2 and 3 skipped for now) |
-| 5. Sharing and online | Share code export and import; read-only visits; likes and a most-popular leaderboard. Needs a backend: hosting decision first | Later |
+| 2. Cosmetics | Skin unlocks and the Cosmetics button on selected furniture; wallpaper and rug selection; skins from achievements, drops and shops; no payments | Next, once cosmetic art exists |
+| 3. Outside and yard | Exterior view with its own cosmetics; 20 decor slots (plants, fences, fountains); facilities placeable outside; yard in the layout data | Built Oct 24 (exterior cosmetics wait for Phase 2) |
+| 4. Servants | Servants' Guild in Draynor Village (100 GP); Butler, Servant, Demon Butler; background work at facilities placed in the house; wages from a coin pouch only while working, in real time and offline; an order only starts when the pouch covers it; a facility in use is occupied; one facility of each kind per house | Built Oct 22 |
+| 5. Sharing and online | Share code export and import; read-only visits; likes and a most-popular leaderboard. Hosting: the owner's Advin server (Node.js app in DirectAdmin) | Built Oct 24; server ready to deploy (docs/SERVER.md) |
 | 6. Microtransactions | Purchasable wallpaper, rug and furniture skins via a payment provider and accounts, plugged into the Phase 2 unlock system | Later |
 
 Later, outside this feature: a bank replacing house storage, and servant delivery into it.
@@ -101,6 +101,78 @@ Decided Oct 23 (Servants, built the same day):
 
 Note: the house portal is in Riverside Town, which has its own public Range, Furnace and Anvil. Those stay free while the servant works the house ones, so today the occupied rule mostly bites on the Workbench and the Altar.
 
+Decided Oct 24 (Yard and sharing, built the same day):
+
+- The yard and the house are one: one share code carries both, never two codes.
+- Visitors start outside and click the door to go in.
+- Online hosting: the owner's Advin server (DirectAdmin, Node.js). The test link's built-in database was ruled out: only the owner could have listed houses or liked.
+- Houses show the player's name only (no typed house names). Until the intro adds names, everyone is "Adventurer's House".
+- Likes: one per player per house, with both lists: Most liked (all time) and This week.
+
+Proposed (Yard and sharing, for review):
+
+- The yard is a lawn 10 wide by 4 deep in front of a drawn house front with a door; drawn until yard art exists. It holds 20 pieces (the decided 20 decor slots), apart from the inside limit.
+- Garden pieces, yard only: Fern (level 1), Small Tree (5), Wooden Fence (8, joins up with neighbours), Flower Bed (10), Lamp Post (20), Small Fountain (25, the owner's art). Oak Bench and Barrel go inside or out; facilities go either way and still count as the house's one of each kind; beds and wall pieces stay inside.
+- Your own house also opens outside the first time, then remembers inside or outside for the session. An "Inside" / "Outside" button sits in the header.
+- A Houses button holds your share code (Copy), the online listing (List, Update, Remove, with your likes) and Visit a house (paste a code, or pick from the two lists).
+- Share codes: RRH1. plus the compressed layout, about 450 characters for a full house. Every code is checked against content before it's drawn (unknown pieces, the wrong area, off-grid, overlaps, a second facility of a kind and over-limit counts are dropped).
+- Your house is listed by hand (List, then Update after changes), not automatically.
+- No accounts: each save gets a random id and secret on first use, kept in the save (v28). Per-IP rate limits on the server. A player can't like their own house.
+- The server is one dependency-free Node file that also serves the game, storing data in one JSON file. The claude.ai test link can't reach it, so it keeps share codes only.
+
+Decided Oct 25 (House overhaul, built the same day):
+
+- The outside is customized like the room: house front, roof, ground and sky are looks, alongside the walls and floor inside.
+- The house screen uses all the space left in the page (sidebars stay). The scene always fits, with no zoom or scrollbars on wide screens.
+- Build mode is a catalog dock under the scene: tabs by kind, picture cards, storage merged in (cards show how many are ready to place), and a small floating toolbar on the selected piece. No pop-up windows while building.
+- Fences join up with their neighbours on their own (runs, corners, T-joins); hedges and walls will work the same way.
+- Paths are painted tiles: tap or drag across the yard, tiles join up, with their own limit apart from the 20 yard pieces.
+
+Proposed (House overhaul, for review):
+
+- Outside looks, drawn until art exists, all free for now (Phase 2 adds unlocks): house fronts Timber and Plaster, Grey Stone, Red Brick, Log Cabin; roofs Red Tiles, Slate, Thatch, Green Tiles; grounds Grass, Meadow, Dirt, Snow, Sand; skies Day, Sunset, Night (night lights the windows).
+- Paths: Dirt (level 1, free), Plank (3, 1 plank), Stone (5, 1 plank and 1 bronze bar), Cobblestones (15, 2 bronze bars), per tile, given back when cleared or painted over. No limit beyond the yard itself (decided). The old Stone Path piece is gone (it became the Stone path style).
+- A Use / Build switch sits in the header; placing or painting from a panel switches to Build on its own.
+- Build's categories inside: Furniture, Facilities, Beds, Wall, Tabletop, Rugs. Outside: Garden, Facilities. A card shows its size, cost, time and XP, with Place (when you have one) and Build.
+- The build in progress shows at the top of the Build panel with Finish now (dev) and Cancel.
+- Phones keep a zoom button; a swipe pans the zoomed scene with no visible scrollbar.
+- Fence art, when it comes, would be a post image and a rail image; until then fences are drawn.
+- Garden pieces face front only (no turning) until they have side art.
+
+Decided Oct 25 (later the same day, built):
+
+- Furniture comes in standard sizes so everything stays in proportion: 64 px of art per grid square. Small 1x1 (64 px wide: chairs, stools, plants, lamp posts, fence posts), Wide 2x1 and Large 2x2 (128 px wide: benches, bookcases, tables, ranges, rugs, wall pieces), Long 2x4 for beds. A rare odd size is allowed. Art keeps to these widths; heights are free.
+- The grids are cut finer, not bigger: room 16 x 8, wall 16 x 4, yard 20 x 8 (each old square is now 2 x 2). Saves (v30) and older share codes convert on their own. Room expansions come later, possibly paid; the grid size lives in one place to make that easy.
+- Paths have no limit beyond the yard itself.
+- Weather follows the ground (grass rain, snow snowfall, dirt leaves, meadow petals, sand heat haze). The owner sets it Auto or Off; it travels in the share code; each viewer can turn weather effects off in Settings. Off with reduced motion.
+- The house has five panels: Build, Storage, Scenery (looks, weather, paths), Houses (my house, most liked, this week, by code) and Servant. Placement was revised Oct 26 (below).
+- Server work for later, in no set order: friends list and messaging (needs player names, so after the intro), cloud saves, hiscores, house visit counts and a guestbook, and report and moderation.
+
+Note: fences placed before the finer grid now stand one square apart, so they don't join until moved next to each other.
+
+Decided Oct 26 (built the same day):
+
+- Build mode always shows the grid. Grid lines are a dark outline under a light line, so they read on every ground (snow included); the kind being placed is a little stronger.
+- Desktop: a left bar (Build, Scenery, Houses) and a bottom bar under the scene (Storage as a sideways strip, and Servant laid out sideways). Revised later on Oct 26: Houses moved back to the left bar and swapped places with Servant.
+- Phones: the panel always sits under the scene and fits the space down to the tab bar; a toolbar picks Build, Storage, Scenery or Servant; a globe in the scene's corner opens Houses and online; Inside / Outside sits in the scene's other corner. Landscape is recommended but not required.
+- The panel no longer repeats its tab's name as a title.
+- Build's categories are square tiles starting with All; All lists every category in sections (the tile of the section you're in lights up), and a tile jumps to its section.
+- Scroll areas have a themed scrollbar plus up and down arrows that show while there's more.
+- Cards fit whole rows: two rows at a time on phones (compact cards, picture on the left).
+- "Build limit" ("Yard limit" outside) is a bar with the count and percent, turning amber near full and red when full.
+- Leave is red. Cards, category tiles, tabs, swatches and storage rows highlight on hover.
+
+Decided later on Oct 26 (built the same day):
+
+- Away from your house portal (another town, or on the road), Home shows where you are, not the house or a visit.
+- Online house actions (listing, updating, removing, likes) only work at your house portal.
+- With no servant, the Servant tab says "You have no help hired. Visit the Servants' Guild in Draynor Village to hire one." and lists the three with their Construction levels.
+- The coin pouch is the gold coins and its amount ("0 GP"); tapping it opens Deposit, Withdraw and Take all in place. Withdrawing can take anything the current order doesn't still need for its wages.
+- Weather is drawn on one canvas at no more than 30 frames a second and pauses when the tab is hidden or the scene is off screen (the CSS particles kept fast monitors' GPUs busy).
+- On desktop the right-hand skills sidebar is hidden while you're in the house; its toggle still opens it, and leaving the house returns to your usual setting.
+- Servants use NPC art as placeholder portraits until they have their own (proposed: Hans for the Butler, Leela for the Servant, the Den Guardian for the Demon Butler).
+- Phones open the house at 1x zoom so the panel under the scene has room; the zoom button still enlarges the scene.
+
 Proposed (Servants, for review):
 
 - Speed is the servant's share of your own time per item; each item gives your full XP, so XP per hour is the same share (Butler 20%, Servant 30%, Demon Butler 50%).
@@ -127,7 +199,7 @@ Proposed (Oct 22, with the owner's art):
 - Rugs (blue, red) are placeable pieces on their own layer under furniture; they only block other rugs. The drawn room-wide rug is gone (the rug cosmetic stays in the save for Phase 2, set to none).
 - The workbench art replaces the Sawhorse: the Workbench saws planks at home.
 - Stone Altar: a facility (level 30) where Offer Bones and Offer Ashes give twice the Prayer XP of burying, 2 seconds each.
-- small_fountain is kept in assets/yard for the yard (Phase 3).
+- small_fountain moved to assets/furniture as the yard's Small Fountain (Oct 24).
 - Pieces still without art keep the drawn stand-ins: crude and wooden chairs, wooden table, oak and mahogany beds, bronze candlestick, small furnace.
 - Phones still open at 1.5x zoom; the art room is wider than before, so 2x may suit better.
 

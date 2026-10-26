@@ -15,7 +15,7 @@ import SettingsPanel from "./components/SettingsPanel";
 import NotificationOverlay from "./components/NotificationOverlay";
 import PlayerSidebar, { PlayerDrawer, PlayerStrip } from "./components/PlayerSidebar";
 import { CompactActionBar } from "./components/ActivityCard";
-import { applySidebarOpen, getSidebarOpen } from "./lib/sidebar";
+import { applySidebarOpen, getSidebarOpen, isHouseScreenOpen, subscribeHouseScreen } from "./lib/sidebar";
 import { useTabTitle } from "./lib/useTabTitle";
 import { DialogHost } from "./components/ui/DialogHost";
 import { QuestCompleteWatcher } from "./components/QuestCompleteWatcher";
@@ -40,6 +40,22 @@ function AppContent() {
   const { engine, state, suspended } = useGame();
 
   useEffect(() => applySidebarOpen(sidebarOpen), [sidebarOpen]);
+  // In the house the sidebar starts hidden (the toggle still opens it);
+  // leaving the house returns to the usual setting.
+  const [inHouse, setInHouse] = useState(isHouseScreenOpen);
+  const [houseSidebar, setHouseSidebar] = useState(false);
+  useEffect(
+    () =>
+      subscribeHouseScreen((open) => {
+        setInHouse(open);
+        setHouseSidebar(false);
+      }),
+    []
+  );
+  const showSidebar = inHouse ? houseSidebar : sidebarOpen;
+  useEffect(() => {
+    document.documentElement.dataset.sidebar = showSidebar ? "open" : "collapsed";
+  }, [showSidebar]);
   useTabTitle(engine, state.activeAction);
 
   const changeView = useCallback((view: View) => {
@@ -102,7 +118,7 @@ function AppContent() {
   }
 
   return (
-    <div className={`shell${sidebarOpen ? "" : " is-sidebar-collapsed"}`}>
+    <div className={`shell${showSidebar ? "" : " is-sidebar-collapsed"}`}>
       <aside className="shell-nav">
         <div className="shell-brand">
           <h1 className="app-title">Idle Engine</h1>
@@ -116,7 +132,10 @@ function AppContent() {
           <PlayerStrip
             onOpen={() => {
               // Wide screens have the sidebar for this; phones get the drawer.
-              if (window.matchMedia("(min-width: 1024px)").matches) setSidebarOpen(true);
+              if (window.matchMedia("(min-width: 1024px)").matches) {
+                if (inHouse) setHouseSidebar(true);
+                else setSidebarOpen(true);
+              }
               else setDrawerOpen(true);
             }}
             alert={hasUnclaimedAchievement}
@@ -139,13 +158,13 @@ function AppContent() {
         <button
           type="button"
           className="sidebar-toggle btn btn-ghost"
-          aria-expanded={sidebarOpen}
-          onClick={() => setSidebarOpen((open) => !open)}
-          title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+          aria-expanded={showSidebar}
+          onClick={() => (inHouse ? setHouseSidebar((open) => !open) : setSidebarOpen((open) => !open))}
+          title={showSidebar ? "Hide sidebar" : "Show sidebar"}
         >
-          {sidebarOpen ? "Hide ›" : "‹"}
+          {showSidebar ? "Hide ›" : "‹"}
         </button>
-        {sidebarOpen && <PlayerSidebar onOpenSkill={openSkill} />}
+        {showSidebar && <PlayerSidebar onOpenSkill={openSkill} />}
       </aside>
 
       <BottomNav activeView={activeView} onChange={changeView} />

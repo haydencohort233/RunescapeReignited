@@ -4,7 +4,11 @@ import type {
   FurniturePlacement,
   FurnitureSkin,
   GameState,
+  HouseArea,
+  HouseLookSlot,
   HouseState,
+  HouseWeather,
+  PathStyle,
   PlacedFurniture,
   RoomCosmetic,
   StationType,
@@ -21,9 +25,16 @@ import {
   HOUSE_STORAGE_PER_FIVE_LEVELS,
   HOUSE_WALL_COLS,
   HOUSE_WALL_ROWS,
+  YARD_COLS,
+  YARD_DECOR_SLOTS,
+  YARD_PATH_TILES,
+  YARD_ROWS,
 } from "../tuning";
 
 const ALL_FACINGS: Facing[] = ["front", "right", "back", "left"];
+
+/** The layout field each look is kept in. */
+const LOOK_KEYS = { wallpaper: "wallpaperId", floor: "floorId", front: "frontId", roof: "roofId", ground: "groundId", sky: "skyId" } as const;
 
 /** Cells a piece covers, as columns and rows. Side facings swap width
  *  and depth. */
@@ -32,9 +43,21 @@ export function footprint(def: FurnitureDefinition, facing: Facing): { w: number
   return side ? { w: def.depth, d: def.width } : { w: def.width, d: def.depth };
 }
 
+/** Where a piece can stand: its `areas`, else inside (facilities: both).
+ *  Wall pieces only hang inside. */
+export function areasOf(def: FurnitureDefinition): HouseArea[] {
+  if (def.slot === "wall") return ["inside"];
+  return def.areas ?? (def.kind === "facility" ? ["inside", "yard"] : ["inside"]);
+}
+
+/** The floor grid of an area, in cells. */
+export function groundGrid(area: HouseArea): { cols: number; rows: number } {
+  return area === "yard" ? { cols: YARD_COLS, rows: YARD_ROWS } : { cols: HOUSE_FLOOR_COLS, rows: HOUSE_FLOOR_ROWS };
+}
+
 /** The facings rotation steps through, in order. */
 export function facingsOf(def: FurnitureDefinition): Facing[] {
-  if (def.slot !== "floor") return ["front"];
+  if (def.slot !== "floor" || def.connects) return ["front"];
   return def.facings && def.facings.length > 0 ? def.facings : ALL_FACINGS;
 }
 
@@ -87,29 +110,44 @@ export class HouseSystem {
     if (!content.wallpapers.some((w) => w.id === layout.wallpaperId)) layout.wallpaperId = content.wallpapers[0]?.id ?? "";
     if (!content.floors.some((f) => f.id === layout.floorId)) layout.floorId = content.floors[0]?.id ?? "";
     if (!content.rugs.some((r) => r.id === layout.rugId)) layout.rugId = content.rugs[0]?.id ?? "";
+    for (const slot of ["front", "roof", "ground", "sky"] as const) {
+      const list = this.looksFor(slot);
+      const key = LOOK_KEYS[slot];
+      if (!list.some((l) => l.id === layout[key])) layout[key] = list[0]?.id ?? "";
+    }
+    // Paths: known styles, on the grid, one per square, within the limit.
+    const seen = new Set<string>();
+    layout.paths = layout.paths.filter((t) => {
+      const key = `${t.x},${t.y}`;
+      const ok = content.paths.some((p) => p.id === t.pathId) && t.x >= 0 && t.y >= 0 && t.x < YARD_COLS && t.y < YARD_ROWS && !seen.has(key);
+      seen.add(key);
+      return ok;
+    }).slice(0, YARD_PATH_TILES);
     layout.inside = layout.inside.filter((p) => this.furnitureById.has(p.furnitureId));
     layout.yard = layout.yard.filter((p) => this.furnitureById.has(p.furnitureId));
     this.house.storage = this.house.storage.filter((s) => this.furnitureById.has(s.furnitureId));
-    const uids = new Set(layout.inside.map((p) => p.uid));
-    for (const p of [...layout.inside]) {
-      if (p.hostId !== undefined && !uids.has(p.hostId)) {
-        layout.inside = layout.inside.filter((q) => q.uid !== p.uid);
-        this.house.storage.push({ uid: p.uid, furnitureId: p.furnitureId, ...(p.skinId ? { skinId: p.skinId } : {}) });
-      }
-    }
-    // One facility of each station stands in the house (decided Oct 23):
-    // extras from before the rule go back into storage.
-    const stations = new Set<StationType>();
-    for (const p of [...layout.inside]) {
-      const station = this.furnitureById.get(p.furnitureId)?.station;
-      if (!station) continue;
-      if (!stations.has(station)) {
-        stations.add(station);
-        continue;
-      }
-      const going = layout.inside.filter((q) => q.uid === p.uid || q.hostId === p.uid);
-      layout.inside = layout.inside.filter((q) => !going.includes(q));
+    const toStorage = (area: HouseArea, uid: string) => {
+      const going = layout[area].filter((q) => q.uid === uid || q.hostId === uid);
+      layout[area] = layout[area].filter((q) => !going.includes(q));
       for (const q of going) this.house.storage.push({ uid: q.uid, furnitureId: q.furnitureId, ...(q.skinId ? { skinId: q.skinId } : {}) });
+    };
+    const stations = new Set<StationType>();
+    for (const area of ["inside", "yard"] as const) {
+      // A piece in an area it can't stand in (content changed) is stored.
+      for (const p of [...layout[area]]) {
+        if (!areasOf(this.furnitureById.get(p.furnitureId)!).includes(area)) toStorage(area, p.uid);
+      }
+      // A surface piece whose host is gone goes back into storage.
+      const uids = new Set(layout[area].map((p) => p.uid));
+      for (const p of [...layout[area]]) if (p.hostId !== undefined && !uids.has(p.hostId)) toStorage(area, p.uid);
+      // One facility of each station stands in the house (decided Oct 23):
+      // extras from before the rule go back into storage.
+      for (const p of [...layout[area]]) {
+        const station = this.furnitureById.get(p.furnitureId)?.station;
+        if (!station) continue;
+        if (stations.has(station)) toStorage(area, p.uid);
+        else stations.add(station);
+      }
     }
     if (this.house.build && !this.furnitureById.has(this.house.build.furnitureId)) {
       for (const c of this.house.build.paid) this.engine.giveBack(c.resource, c.amount);
@@ -143,8 +181,19 @@ export class HouseSystem {
     return this.house.storage.length + (this.house.build ? 1 : 0);
   }
 
-  getPlacedCount(): number {
-    return this.house.layout.inside.length;
+  getPlacedCount(area: HouseArea = "inside"): number {
+    return this.house.layout[area].length;
+  }
+
+  /** Pieces that fit in an area: the furniture limit inside, the decor
+   *  slots in the yard. */
+  getAreaLimit(area: HouseArea): number {
+    return area === "yard" ? YARD_DECOR_SLOTS : this.getFurnitureLimit();
+  }
+
+  /** Every placed piece, inside and out. */
+  private allPlaced(): PlacedFurniture[] {
+    return [...this.house.layout.inside, ...this.house.layout.yard];
   }
 
   /** The best bed standing in the house adds to the offline cap. A bed in
@@ -171,7 +220,7 @@ export class HouseSystem {
 
   /** The facility standing in the house for this station (one at most). */
   getPlacedFacility(station: StationType): FurnitureDefinition | undefined {
-    for (const p of this.house.layout.inside) {
+    for (const p of this.allPlaced()) {
       const def = this.furnitureById.get(p.furnitureId);
       if (def?.station === station) return def;
     }
@@ -181,7 +230,7 @@ export class HouseSystem {
   /** The facility of this station the player owns anywhere (placed,
    *  stored or being built). A house holds one of each (decided Oct 23). */
   private ownedFacility(station: StationType): FurnitureDefinition | undefined {
-    const ids = [...this.house.layout.inside, ...this.house.storage].map((p) => p.furnitureId);
+    const ids = [...this.allPlaced(), ...this.house.storage].map((p) => p.furnitureId);
     if (this.house.build) ids.push(this.house.build.furnitureId);
     return ids.map((id) => this.furnitureById.get(id)).find((d) => d?.station === station);
   }
@@ -192,6 +241,76 @@ export class HouseSystem {
 
   getFloor(): RoomCosmetic | undefined {
     return this.engine.content.house?.floors.find((f) => f.id === this.house.layout.floorId);
+  }
+
+  // ── Looks (wallpaper, floor, and the outside: front, roof, ground, sky) ──
+
+  /** The choices for one look. */
+  looksFor(slot: HouseLookSlot): RoomCosmetic[] {
+    const c = this.engine.content.house;
+    if (!c) return [];
+    return { wallpaper: c.wallpapers, floor: c.floors, front: c.fronts, roof: c.roofs, ground: c.grounds, sky: c.skies }[slot] ?? [];
+  }
+
+  /** Changes one look. All looks are free for now; Phase 2 adds unlocks. */
+  setLook(slot: HouseLookSlot, id: string): boolean {
+    if (!this.requireAtHouse()) return false;
+    if (!this.looksFor(slot).some((l) => l.id === id)) return false;
+    this.house.layout[LOOK_KEYS[slot]] = id;
+    return true;
+  }
+
+  /** Weather in the yard: Auto (follows the ground) or Off. */
+  setWeather(weather: HouseWeather): boolean {
+    if (!this.requireAtHouse()) return false;
+    this.house.layout.weather = weather === "off" ? "off" : "auto";
+    return true;
+  }
+
+  // ── Paths (painted yard tiles) ──
+
+  getPathStyle(id: string): PathStyle | undefined {
+    return this.engine.content.house?.paths.find((p) => p.id === id);
+  }
+
+  /** Why a path can't be painted on this square now, or null. */
+  getPathBlocker(x: number, y: number, pathId: string): string | null {
+    const style = this.getPathStyle(pathId);
+    if (!style) return "There's no such path.";
+    if (!this.isAtHouse()) return "You need to be at your house for that.";
+    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= YARD_COLS || y >= YARD_ROWS) return "That's not a spot in the yard.";
+    if (this.engine.getSkillLevel("construction") < style.levelRequired) return `You need Construction level ${style.levelRequired}.`;
+    const existing = this.house.layout.paths.find((t) => t.x === x && t.y === y);
+    if (existing?.pathId === pathId) return "That's already this path.";
+    if (!existing && this.house.layout.paths.length >= YARD_PATH_TILES) return `Your yard holds ${YARD_PATH_TILES} path tiles.`;
+    const short = style.cost.find((c) => this.engine.getOwnedCount(c.resource) < c.amount);
+    if (short) return `You need ${short.amount} ${this.engine.nameOf(short.resource)}.`;
+    return null;
+  }
+
+  /** Paints a path tile, paying for it; a different path already there is
+   *  replaced and given back. */
+  paintPath(x: number, y: number, pathId: string): boolean {
+    const blocker = this.getPathBlocker(x, y, pathId);
+    if (blocker) return blocker === "That's already this path." ? false : this.warn(blocker);
+    this.clearPathTile(x, y);
+    this.engine.payFor(this.getPathStyle(pathId)!.cost);
+    this.house.layout.paths.push({ x, y, pathId });
+    return true;
+  }
+
+  /** Clears a path tile and gives back what it cost. */
+  erasePath(x: number, y: number): boolean {
+    if (!this.requireAtHouse()) return false;
+    return this.clearPathTile(x, y);
+  }
+
+  private clearPathTile(x: number, y: number): boolean {
+    const tile = this.house.layout.paths.find((t) => t.x === x && t.y === y);
+    if (!tile) return false;
+    this.house.layout.paths = this.house.layout.paths.filter((t) => t !== tile);
+    for (const c of this.getPathStyle(tile.pathId)?.cost ?? []) this.engine.giveBack(c.resource, c.amount);
+    return true;
   }
 
   getRug(): RoomCosmetic | undefined {
@@ -270,21 +389,35 @@ export class HouseSystem {
 
   // ── Placing ──
 
-  private findPlaced(uid: string): PlacedFurniture | undefined {
-    return this.house.layout.inside.find((p) => p.uid === uid);
+  private findPlaced(uid: string): { piece: PlacedFurniture; area: HouseArea } | undefined {
+    for (const area of ["inside", "yard"] as const) {
+      const piece = this.house.layout[area].find((p) => p.uid === uid);
+      if (piece) return { piece, area };
+    }
+    return undefined;
+  }
+
+  /** Which area a placed piece is in. */
+  getAreaOf(uid: string): HouseArea | undefined {
+    return this.findPlaced(uid)?.area;
+  }
+
+  private wrongArea(def: FurnitureDefinition, area: HouseArea): string {
+    return area === "yard" ? `${def.name} goes inside.` : `${def.name} goes in the yard.`;
   }
 
   /** Why `def` can't stand at `placement`, or null. `ignore` is the uid of
    *  the piece being moved or turned, which mustn't block itself. */
-  getPlacementBlocker(def: FurnitureDefinition, placement: FurniturePlacement, ignore?: string): string | null {
+  getPlacementBlocker(def: FurnitureDefinition, placement: FurniturePlacement, ignore?: string, area: HouseArea = "inside"): string | null {
+    if (!areasOf(def).includes(area)) return this.wrongArea(def, area);
     const facing = placement.facing ?? "front";
     if (!facingsOf(def).includes(facing)) return `${def.name} can't face that way.`;
     const { x, y } = placement;
     if (!Number.isInteger(x) || !Number.isInteger(y)) return "That's not a spot in the room.";
-    const inside = this.house.layout.inside;
+    const inside = this.house.layout[area];
 
     if (def.slot === "surface") {
-      const host = placement.hostId ? this.findPlaced(placement.hostId) : undefined;
+      const host = placement.hostId ? inside.find((p) => p.uid === placement.hostId) : undefined;
       const hostDef = host ? this.furnitureById.get(host.furnitureId) : undefined;
       if (!host || !hostDef?.surfaceSlots) return `${def.name} has to sit on a table or shelf.`;
       if (y !== 0 || x < 0 || x >= hostDef.surfaceSlots) return "There's no room for it there.";
@@ -293,7 +426,8 @@ export class HouseSystem {
     }
 
     const { w, d } = footprint(def, facing);
-    const [cols, rows] = def.slot === "wall" ? [HOUSE_WALL_COLS, HOUSE_WALL_ROWS] : [HOUSE_FLOOR_COLS, HOUSE_FLOOR_ROWS];
+    const ground = groundGrid(area);
+    const [cols, rows] = def.slot === "wall" ? [HOUSE_WALL_COLS, HOUSE_WALL_ROWS] : [ground.cols, ground.rows];
     if (x < 0 || y < 0 || x + w > cols || y + d > rows) return "It doesn't fit there.";
     for (const other of inside) {
       if (other.uid === ignore) continue;
@@ -307,21 +441,26 @@ export class HouseSystem {
   }
 
   /** Takes a piece out of storage and stands it in the room. */
-  placeFromStorage(storageUid: string, placement: FurniturePlacement): boolean {
+  placeFromStorage(storageUid: string, placement: FurniturePlacement, area: HouseArea = "inside"): boolean {
     if (!this.requireAtHouse()) return false;
     const stored = this.house.storage.find((s) => s.uid === storageUid);
     const def = stored ? this.furnitureById.get(stored.furnitureId) : undefined;
     if (!stored || !def) return false;
-    if (this.getPlacedCount() >= this.getFurnitureLimit()) {
-      return this.warn(`Your house holds ${this.getFurnitureLimit()} pieces at your Construction level. Store something first.`);
+    if (!areasOf(def).includes(area)) return this.warn(this.wrongArea(def, area));
+    if (this.getPlacedCount(area) >= this.getAreaLimit(area)) {
+      return this.warn(
+        area === "yard"
+          ? `Your yard holds ${YARD_DECOR_SLOTS} pieces. Store something first.`
+          : `Your house holds ${this.getFurnitureLimit()} pieces at your Construction level. Store something first.`
+      );
     }
     const standing = def.station ? this.getPlacedFacility(def.station) : undefined;
     if (standing) return this.warn(`There's already a ${standing.name} in the house. A house holds one of each facility.`);
     const facing = placement.facing ?? facingsOf(def)[0];
-    const blocker = this.getPlacementBlocker(def, { ...placement, facing });
+    const blocker = this.getPlacementBlocker(def, { ...placement, facing }, undefined, area);
     if (blocker) return this.warn(blocker);
     this.house.storage = this.house.storage.filter((s) => s.uid !== storageUid);
-    this.house.layout.inside.push({
+    this.house.layout[area].push({
       uid: stored.uid,
       furnitureId: def.id,
       ...(stored.skinId ? { skinId: stored.skinId } : {}),
@@ -336,11 +475,12 @@ export class HouseSystem {
   /** Moves a placed piece. Anything on its surface moves with it. */
   moveFurniture(uid: string, placement: FurniturePlacement): boolean {
     if (!this.requireAtHouse()) return false;
-    const piece = this.findPlaced(uid);
+    const found = this.findPlaced(uid);
+    const piece = found?.piece;
     const def = piece ? this.furnitureById.get(piece.furnitureId) : undefined;
-    if (!piece || !def) return false;
+    if (!found || !piece || !def) return false;
     if (def.slot === "surface" && placement.hostId === uid) return false;
-    const blocker = this.getPlacementBlocker(def, { ...placement, facing: piece.facing }, uid);
+    const blocker = this.getPlacementBlocker(def, { ...placement, facing: piece.facing }, uid, found.area);
     if (blocker) return this.warn(blocker);
     piece.x = placement.x;
     piece.y = placement.y;
@@ -351,13 +491,14 @@ export class HouseSystem {
   /** Turns a floor piece to its next facing, if it still fits. */
   rotateFurniture(uid: string): boolean {
     if (!this.requireAtHouse()) return false;
-    const piece = this.findPlaced(uid);
+    const found = this.findPlaced(uid);
+    const piece = found?.piece;
     const def = piece ? this.furnitureById.get(piece.furnitureId) : undefined;
-    if (!piece || !def) return false;
+    if (!found || !piece || !def) return false;
     const facings = facingsOf(def);
     if (facings.length < 2) return this.warn(`${def.name} doesn't turn.`);
     const next = facings[(facings.indexOf(piece.facing) + 1) % facings.length];
-    const blocker = this.getPlacementBlocker(def, { x: piece.x, y: piece.y, facing: next }, uid);
+    const blocker = this.getPlacementBlocker(def, { x: piece.x, y: piece.y, facing: next }, uid, found.area);
     if (blocker) return this.warn(`No room to turn it there. ${blocker}`);
     piece.facing = next;
     return true;
@@ -368,9 +509,10 @@ export class HouseSystem {
     if (!this.requireAtHouse()) return false;
     // Work done up to now counts before a facility goes away.
     this.engine.catchUpToNow();
-    const piece = this.findPlaced(uid);
-    if (!piece) return false;
-    const attached = this.house.layout.inside.filter((p) => p.hostId === uid);
+    const found = this.findPlaced(uid);
+    if (!found) return false;
+    const { piece, area } = found;
+    const attached = this.house.layout[area].filter((p) => p.hostId === uid);
     const going = [piece, ...attached];
     // Storage counts the build in progress, but a piece already standing in
     // the house must always be able to go back: only check the real space.
@@ -378,7 +520,7 @@ export class HouseSystem {
       return this.warn(`Not enough room in storage (${going.length} needed).`);
     }
     const ids = new Set(going.map((p) => p.uid));
-    this.house.layout.inside = this.house.layout.inside.filter((p) => !ids.has(p.uid));
+    this.house.layout[area] = this.house.layout[area].filter((p) => !ids.has(p.uid));
     for (const p of going) this.house.storage.push({ uid: p.uid, furnitureId: p.furnitureId, ...(p.skinId ? { skinId: p.skinId } : {}) });
     const storedName = this.furnitureById.get(piece.furnitureId)?.name ?? "it";
     this.stopCraftingWithoutStation(storedName);
@@ -411,7 +553,7 @@ export class HouseSystem {
   /** Dresses a placed piece in an unlocked skin, or back to plain (null). */
   setFurnitureSkin(uid: string, skinId: string | null): boolean {
     if (!this.requireAtHouse()) return false;
-    const piece = this.findPlaced(uid);
+    const piece = this.findPlaced(uid)?.piece;
     if (!piece) return false;
     if (skinId === null) {
       delete piece.skinId;

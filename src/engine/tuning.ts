@@ -97,10 +97,14 @@ export const MIN_GATHER_TIME_MS = 600;
 
 /** The room's grids, in cells (proposed). Floor rows count from the back
  *  wall; wall rows from the top. */
-export const HOUSE_FLOOR_COLS = 8;
-export const HOUSE_FLOOR_ROWS = 4;
-export const HOUSE_WALL_COLS = 8;
-export const HOUSE_WALL_ROWS = 2;
+export const HOUSE_FLOOR_COLS = 16;
+export const HOUSE_FLOOR_ROWS = 8;
+export const HOUSE_WALL_COLS = 16;
+export const HOUSE_WALL_ROWS = 4;
+
+/** The grids were cut into finer squares on Oct 25 (save v30): each old
+ *  square became 2 x 2. Old positions are doubled when loaded. */
+export const GRID_SUBDIVISION = 2;
 
 /** Pieces placed inside: this many at level 1, plus 1 per 2 Construction
  *  levels (decided). */
@@ -112,6 +116,14 @@ export const HOUSE_BASE_STORAGE = 10;
 export const HOUSE_STORAGE_PER_FIVE_LEVELS = 5;
 export const HOUSE_MAX_STORAGE = 100;
 
-/** Decor slots in the yard (decided, Phase 3). */
+/** Pieces placed in the yard (decided, Phase 3: 20 decor slots). */
 export const YARD_DECOR_SLOTS = 20;
+
+/** The yard's ground grid in front of the house (proposed). */
+export const YARD_COLS = 20;
+export const YARD_ROWS = 8;
+
+/** Path tiles painted in the yard: as many as there are squares (decided
+ *  Oct 25: no limit beyond the yard itself). */
+export const YARD_PATH_TILES = YARD_COLS * YARD_ROWS;
 

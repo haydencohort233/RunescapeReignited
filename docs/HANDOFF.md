@@ -1,6 +1,6 @@
 # Handoff
 
-As of Oct 23, 2026. Servants (Player House Phase 4, below) are built on top of Phase 1 and the Oct 18 to 20 round; not yet committed or on the test link. Tests (202), lint and build pass, apart from the flaky "keep fighting doesn't respawn the enemy once the arrows are gone" (one random arrow can miss) and the one oxlint warning listed under Known gaps. The test link (https://claude.ai/artifact/DCwGp4oX62R6pRdFw1ZkdF) still runs the Phase 1 build.
+As of Oct 26, 2026. The house overhaul (below) and the yard and sharing (Player House Phases 3 and 5) are built on top of Servants (committed Oct 24, on the test link). Neither is committed yet; the house server is live at https://idlescape.nashville3dprints.com (deployed Oct 24 with the yard and sharing, before the overhaul). Tests (220), lint and build pass, apart from the flaky "keep fighting doesn't respawn the enemy once the arrows are gone" (one random arrow can miss) and the one oxlint warning listed under Known gaps. The test link (https://claude.ai/artifact/DCwGp4oX62R6pRdFw1ZkdF) runs the Servants build.
 
 ## Where things stand
 
@@ -12,8 +12,57 @@ Combat is complete and most of Phase 1, plus parts of Phases 2 and 3, are built.
 | Skills | Woodcutting, Firemaking, Fletching, Crafting (bowstring), Cooking (range only), Fishing, Mining (copper, tin), Smithing (bronze), Prayer (bury), Construction (from buildings), Farming (flax), Agility (travel speed only). Tools required for gathering; up to 10% faster gathering by level. |
 | World | 7 locations: Riverside Town, Lumber Camp, Lake Shore, Dark Forest, Hidden Grove, Quarry, Draynor Village. Shops: Bob (tools, repairs), Riverside Armoury, Aubury's Rune Shop, Gerrant's fishing shop. Aggie recharges the Amulet of Glory. |
 | Dungeon | Overgrown Den: quest-gated, 3 waves, regear stop, Den Guardian boss, 6-slot loadout. |
-| House | Servants (Phase 4): hire at the Servants' Guild in Draynor, give orders at placed facilities from the house's Servant button, wages from a coin pouch. Player House Phase 1: one side-view room with floor, wall and surface slots, Use and Build modes, time-gated furniture building, facilities that work as crafting stations, beds that raise the offline cap, skins data model. Portal in Riverside Town. Planks from the Sawmill and Sawmill Operator at Lumber Camp. |
+| House | Yard and sharing (Phases 3 and 5): the yard in front of the house, one share code for both, read-only visits, the house server for listings and likes. Servants (Phase 4): hire at the Servants' Guild in Draynor, give orders at placed facilities from the house's Servant button, wages from a coin pouch. Player House Phase 1: one side-view room with floor, wall and surface slots, Use and Build modes, time-gated furniture building, facilities that work as crafting stations, beds that raise the offline cap, skins data model. Portal in Riverside Town. Planks from the Sawmill and Sawmill Operator at Lumber Camp. |
 | Other | Offline progress (1 hour for new saves, plus the best bed; older saves keep 8 hours), degrading gear with repairs (Dharok's Greataxe example), Glory charges, dev tools (spawn, levels, teleport, HP, restore all gear). |
+
+## Oct 26 round: House panels and polish
+
+Later the same day:
+
+- **Panels**: wide screens' left bar is Build, Scenery, Houses; the bottom bar is Storage and Servant (`horizontal`, the servant laid out in columns via `.is-wide-servant`).
+- **Home away from the house**: HomeView closes the house and any visit whenever `engine.isAtHouse()` is false. lib/houseDirectory.ts refuses list, unlist and like away from the portal (`requireHome`).
+- **Sidebar**: lib/sidebar.ts `setHouseScreenOpen` / `subscribeHouseScreen`; App shows the sidebar from `houseSidebar` while the house is open, else the saved setting, and mirrors what's showing onto `<html data-sidebar>`.
+- **Servants**: `ServantDefinition.art` (NPC art for `ChatHead`); `engine.getServantWithdrawable` / `withdrawServantWages`; the coin pouch (`CoinPouch` in ServantPanel.tsx) opens in place.
+- **Weather**: WeatherLayer.tsx is one canvas, 30 fps cap, paused when hidden or off screen.
+
+- **Layout**: HouseView picks phone (< 1024 px) or wide. Wide: `.house-body` holds the left `HousePanel` (Build, Scenery, Servant) and `.house-main` (the stage, then the bottom `HousePanel`: Storage, sideways, and Houses). Phones: the stage, `.house-toolbar`, then `.house-panel.is-phone`, sized to reach the bottom nav (`--panel-h`, measured in an effect); `.house-globe` and `.house-area-btn` float in the scene's corners.
+- **Grid**: `AreaGeometry.gridPath` draws all lines as one path, twice (`.house-grid-under` dark, `.house-grid-over` light). Shown whenever Build is on.
+- **ScrollArea** (HousePanels.tsx): themed scrollbar and up/down (or left/right) arrows that appear while there's more. BuildCatalog uses square `.cat-tile`s (All first) over sections with a scroll spy.
+- **BuildLimit.tsx**: the "Build limit" bar in the header.
+
+## Oct 25 round: House overhaul
+
+Later the same day:
+
+- **Standard sizes and the finer grid**: `SMALL`, `WIDE`, `LARGE`, `LONG` in content/house.ts (64 px of art per square, `ART_PX_PER_CELL` in roomGeometry.ts; drawn stand-ins scale by `DRAWING_UNIT`). Grids in tuning.ts: room 16 x 8, wall 16 x 4, yard 20 x 8; `GRID_SUBDIVISION` = 2. Save v30 doubles old positions (`subdivideLayout` in migrations.ts); share codes carry `g: 2`, and `decodeHouse` converts codes without it.
+- **Weather**: `layout.weather` ("auto" | "off", in the share code as `xw`), `engine.setHouseWeather`; the viewer's switch is `weatherEffects` in lib/preferences.ts (Settings). components/house/weather.ts picks the kind from the ground; WeatherLayer.tsx draws CSS particles.
+- **Panels**: HousePanels.tsx (`HousePanel`, `PanelBody`: Build, Storage, Scenery, Houses, Servant), tab list in panelTabs.ts. HouseView measures `.house-body` (ResizeObserver) and picks two side panels, one, or the phone dock with `.house-toolbar`. SharePanel.tsx now exports `MyHouseShare`, `HouseRanking`, `VisitByCode` (and `VisitHousesPanel` for the portal card); ServantPanel.tsx exports `ServantBody`. BuildDock.tsx is gone.
+- **Paths**: no limit (`YARD_PATH_TILES` is the whole yard).
+
+Earlier that day:
+
+- **Layout**: on wide screens `.shell-main:has(> .house)` takes the full height like the map; `.house-stage` is a size container and `.house-room` is `min(100cqw, 100cqh * 1536 / 830)` wide, so the scene always fits. Phones keep the zoom button with a hidden scrollbar.
+- **Build dock**: components/house/BuildDock.tsx (tabs per area, `CatalogCard`, `PathPainter`, `LooksPicker`). The old BuildMenu and StoragePanel are gone; storage shows as counts on the cards. The selected piece's tools float above it (`.house-piece-tools` in HouseView.tsx); placing and painting show a hint bar over the scene.
+- **Fences**: `FurnitureDefinition.connects`. connectorGeometry.ts works out the post and half-rails toward same-kind neighbours; connectors.tsx draws them. Connecting pieces don't rotate (`facingsOf`).
+- **Paths**: `layout.paths` (`PathTile`: x, y, pathId), styles in `PATH_CATALOG` (content/house.ts), `YARD_PATH_TILES` = 60. Engine: `paintPath`, `erasePath`, `getPathBlocker` (systems/house.ts), cost paid per tile and given back when cleared or replaced. Drawn in YardBackdrop.tsx with edges only where the neighbour isn't the same path.
+- **Outside looks**: `frontId`, `roofId`, `groundId`, `skyId` on the layout; catalogs `FRONT_CATALOG`, `ROOF_CATALOG`, `GROUND_CATALOG`, `SKY_CATALOG`; `HouseLookSlot` and `engine.setHouseLook` / `getHouseLooks`. YardBackdrop.tsx draws them from their colours.
+- **Save**: v29 adds the four look ids and `paths` to the layout (migration 28, sanitized in `sanitizeHouse`, defaults filled by `HouseSystem.normalize`).
+- **Share codes**: optional keys `xf`, `xr`, `xg`, `xs`, `p` (still format 1; older codes open with the default looks).
+
+## Oct 24 round: Yard and sharing (Player House, Phases 3 and 5)
+
+The roadmap's Player House section has the decided details and the proposed values. Where things live:
+
+- **Yard (engine)**: `HouseArea` ("inside" | "yard") in types.ts; `FurnitureDefinition.areas` says where a piece can stand (`areasOf` in systems/house.ts: default inside, facilities both, wall pieces inside only). Every placement call takes an area (`placeFurniture(uid, placement, area)`, `getFurniturePlacementBlocker(..., area)`); move, rotate, store and skins find the piece in either list. The yard grid is `YARD_COLS` x `YARD_ROWS` (tuning.ts), its limit `YARD_DECOR_SLOTS`. `normalize` stores pieces in the wrong area and keeps one facility per station across both areas.
+- **Yard (content)**: garden pieces use the `garden()` helper in content/house.ts (`areas: ["yard"]`). Stand-in drawings for them are at the top of `furnitureDrawing` (furnitureSprites.ts). The fountain art moved to assets/furniture/small_fountain.png.
+- **Drawing**: components/house/roomGeometry.ts is now a factory: `ROOM_GEOMETRY`, `YARD_GEOMETRY`, `geometryOf(area)`; each has its own ground shape and grid. YardBackdrop.tsx draws the yard (house front, door at `YARD_DOOR`, lawn). HouseView.tsx shows either area (Inside / Outside buttons, the door button) and takes `visit` for a read-only layout.
+- **Share codes**: engine/houseShare.ts (`encodeHouse`, `decodeHouse`, which checks everything against content) and lib/shareCode.ts (`toShareCode`, `fromShareCode`: "RRH1." + deflate-raw + base64url, with a decompression size cap).
+- **Visits**: `openVisit` / `subscribeOpenVisit` in lib/dialog.ts (`HouseVisit`); HomeView shows the visited house with `VisitLikeButton` when it came from the list.
+- **Online**: server/house-server.cjs (CommonJS, no dependencies; settings and DirectAdmin steps in docs/SERVER.md). The client is lib/houseDirectory.ts (`houseServerAvailable`, `listMyHouse`, `topHouses`, `likeHouse`...). It calls `/api` on the same site, or `VITE_HOUSE_API` if set at build time. `npm run server` runs it locally and the dev server proxies `/api` to it (vite.config.ts); `.claude/launch.json` has `house-server`.
+- **UI**: the house's Houses button opens components/house/SharePanel.tsx (`ShareHousePanel`: code, Copy, List / Update / Remove, and `VisitHousesPanel`). The House Portal card also shows `VisitHousesPanel`.
+- **Save**: `state.online` (v28): `playerId`, `secret`, `houseId`, made on first use (`onlineIdentity`), sanitized by `sanitizeOnline`.
+- **Tests**: engine/__tests__/yardShare.test.ts (yard rules, codes, identity) and houseServer.test.ts (starts the real server on a spare port).
+- **Not done**: deploying the server (the owner's step, docs/SERVER.md); yard art and exterior cosmetics (Phase 2); player names (the intro).
 
 ## Oct 22 round: Servants (Player House, Phase 4)
 
@@ -120,7 +169,7 @@ From the roadmap, in rough order:
 
 ## Next step
 
-Recommended now: the owner reviews Servants and the Proposed servant values in the roadmap, then commits and publishes the test link. After that, Phase 2 (cosmetics) once cosmetic art exists, or the material tiers (iron to rune, willow to yew), which give servants more to do.
+Recommended now: the owner reviews the house overhaul (and the Proposed values in the roadmap) and commits; then redeploy the game to the Advin host (`npm run build`, upload `dist` over `rs-game/dist`, restart the app; see docs/SERVER.md). Then flesh out the game, as the owner asked: the material tiers (iron to rune, willow to yew, mahogany), which also give the house and servants more to work with. Phase 2 (cosmetics) once cosmetic art exists.
 
 Earlier recommendation, still open:
 

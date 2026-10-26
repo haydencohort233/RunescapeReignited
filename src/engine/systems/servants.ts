@@ -115,6 +115,28 @@ export class ServantSystem {
     return true;
   }
 
+  /** GP that can come back out of the pouch: everything the order in
+   *  progress doesn't still need for its wages. */
+  getWithdrawable(): number {
+    const servant = this.servant;
+    const def = this.getHired();
+    if (!servant || !def) return 0;
+    const owed = (this.getOrderTimeLeftMs() * def.wagePerSecond) / 1000;
+    return Math.max(0, Math.floor(servant.purse - owed + 1e-9));
+  }
+
+  /** Takes GP back out of the pouch (not what the current order needs). */
+  withdraw(amount: number): boolean {
+    this.engine.catchUpToNow();
+    const servant = this.servant;
+    if (!servant || !isWholeQuantity(amount)) return false;
+    const free = this.getWithdrawable();
+    if (amount > free) return this.warn(free > 0 ? `You can take out up to ${free.toLocaleString()} GP; the rest pays for the current order.` : "The pouch only holds what the current order needs.");
+    servant.purse -= amount;
+    this.engine.giveBack("gp", amount);
+    return true;
+  }
+
   /** How long the pouch pays for, in ms of work. */
   getPurseTimeMs(): number {
     const def = this.getHired();

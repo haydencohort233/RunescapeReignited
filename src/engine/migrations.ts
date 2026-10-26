@@ -1,6 +1,6 @@
-import type { Facing, GameState, LoadoutEntry, PlacedFurniture, ServantOrder, StoredFurniture } from "./types";
+import type { Facing, GameState, LoadoutEntry, PathTile, PlacedFurniture, ServantOrder, StoredFurniture } from "./types";
 import { getDailyPeriodNumber } from "./time";
-import { DEFAULT_OFFLINE_CAP_MS } from "./tuning";
+import { DEFAULT_OFFLINE_CAP_MS, GRID_SUBDIVISION } from "./tuning";
 import { SCHEMA_VERSION, STARTING_HITPOINTS_XP, STARTING_LOCATION_ID } from "./state";
 import { DEFAULT_COMBAT_STYLES } from "./combatStyles";
 
@@ -246,12 +246,46 @@ const MIGRATIONS: Record<number, (old: any, now: number) => any> = {
   25: (old) => (isRecord(old.house) && isRecord(old.house.layout) ? { ...old, house: { ...old.house, layout: { ...old.house.layout, floorId: "" } } } : old),
   // v26 -> v27: servants. Nobody has one yet.
   26: (old) => ({ ...old, servant: null }),
+  // v27 -> v28: an anonymous identity for shared houses, made on first use.
+  27: (old) => ({ ...old, online: null }),
+  // v28 -> v29: outside looks (house front, roof, ground, sky) and painted
+  // paths. The engine fills the default looks from content on load.
+  28: (old) =>
+    isRecord(old.house) && isRecord(old.house.layout)
+      ? { ...old, house: { ...old.house, layout: { ...old.house.layout, frontId: "", roofId: "", groundId: "", skyId: "", paths: [] } } }
+      : old,
+  // v29 -> v30: the house grids were cut into finer squares (each old
+  // square is now 2 x 2). Positions double; a surface piece's x is its
+  // slot on its host and stays; each path tile becomes four.
+  // Weather came in the same step, on (Auto) for everyone.
+  29: (old) =>
+    isRecord(old.house) && isRecord(old.house.layout)
+      ? { ...old, house: { ...old.house, layout: { ...subdivideLayout(old.house.layout, GRID_SUBDIVISION), weather: "auto" } } }
+      : old,
 };
+
+/** A layout from before the finer grid, in the new squares. Also used for
+ *  share codes made before it (engine/houseShare.ts). */
+export function subdivideLayout(layout: Record<string, unknown>, by: number): Record<string, unknown> {
+  const scale = (list: unknown) =>
+    Array.isArray(list)
+      ? list.map((p) => (isRecord(p) && p.hostId === undefined && typeof p.x === "number" && typeof p.y === "number" ? { ...p, x: p.x * by, y: p.y * by } : p))
+      : list;
+  const paths = Array.isArray(layout.paths)
+    ? layout.paths.flatMap((t) => {
+        if (!isRecord(t) || typeof t.x !== "number" || typeof t.y !== "number") return [];
+        const out = [];
+        for (let dy = 0; dy < by; dy++) for (let dx = 0; dx < by; dx++) out.push({ ...t, x: t.x * by + dx, y: t.y * by + dy });
+        return out;
+      })
+    : layout.paths;
+  return { ...layout, inside: scale(layout.inside), yard: scale(layout.yard), paths };
+}
 
 /** An empty house. Wallpaper and rug ids are filled from content by the
  *  engine (the engine has no content here). */
 export function emptyHouse(): GameState["house"] {
-  return { layout: { inside: [], yard: [], wallpaperId: "", floorId: "", rugId: "" }, storage: [], build: null, unlockedSkins: [] };
+  return { layout: { inside: [], yard: [], wallpaperId: "", floorId: "", rugId: "", frontId: "", roofId: "", groundId: "", skyId: "", paths: [], weather: "auto" }, storage: [], build: null, unlockedSkins: [] };
 }
 
 /** Brings a parsed save of any version up to the current GameState shape:
@@ -315,6 +349,7 @@ export function migrateSave(parsed: any, now: number): GameState {
     offlineCapMs: finiteOr(parsed.offlineCapMs, DEFAULT_OFFLINE_CAP_MS, 0),
     house: sanitizeHouse(parsed.house),
     servant: sanitizeServant(parsed.servant),
+    online: sanitizeOnline(parsed.online),
     version: SCHEMA_VERSION,
   };
   // Equipment may only point at instances that still exist, or at a worn
@@ -427,6 +462,14 @@ function sanitizeHouse(raw: unknown): GameState["house"] {
     wallpaperId: typeof layout.wallpaperId === "string" ? layout.wallpaperId : "",
     floorId: typeof layout.floorId === "string" ? layout.floorId : "",
     rugId: typeof layout.rugId === "string" ? layout.rugId : "",
+    frontId: typeof layout.frontId === "string" ? layout.frontId : "",
+    roofId: typeof layout.roofId === "string" ? layout.roofId : "",
+    groundId: typeof layout.groundId === "string" ? layout.groundId : "",
+    skyId: typeof layout.skyId === "string" ? layout.skyId : "",
+    paths: (Array.isArray(layout.paths) ? layout.paths : [])
+      .filter((t: unknown): t is PathTile => isRecord(t) && Number.isInteger(t.x) && Number.isInteger(t.y) && typeof t.pathId === "string")
+      .map((t: PathTile) => ({ x: t.x, y: t.y, pathId: t.pathId })),
+    weather: layout.weather === "off" ? "off" : "auto",
   };
   house.storage = (Array.isArray(raw.storage) ? raw.storage : [])
     .filter((s: unknown): s is StoredFurniture => isRecord(s) && typeof s.uid === "string" && typeof s.furnitureId === "string")
@@ -452,6 +495,14 @@ function sanitizeHouse(raw: unknown): GameState["house"] {
   }
   house.unlockedSkins = [...new Set((Array.isArray(raw.unlockedSkins) ? raw.unlockedSkins : []).filter((s: unknown) => typeof s === "string"))] as string[];
   return house;
+}
+
+/** The online identity, or null if any part is malformed. */
+function sanitizeOnline(raw: unknown): GameState["online"] {
+  if (!isRecord(raw)) return null;
+  const ok = (v: unknown) => typeof v === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(v);
+  if (!ok(raw.playerId) || !ok(raw.secret)) return null;
+  return { playerId: raw.playerId as string, secret: raw.secret as string, houseId: ok(raw.houseId) ? (raw.houseId as string) : null };
 }
 
 /** The hired servant, or null if malformed. A bad order is dropped (its

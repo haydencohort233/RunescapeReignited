@@ -19,7 +19,7 @@ import { SPELL_CATALOG } from "./spells";
 import { NPC_CATALOG, STARTER_KIT } from "./npcs";
 import { getSpecialAttack } from "../engine/specialAttacks";
 import { DUNGEON_CATALOG } from "./dungeons";
-import { FLOOR_CATALOG, FURNITURE_CATALOG, HOUSE_PORTAL_LOCATIONS, RUG_CATALOG, SERVANT_CATALOG, SKIN_CATALOG, WALLPAPER_CATALOG } from "./house";
+import { FLOOR_CATALOG, FRONT_CATALOG, FURNITURE_CATALOG, GROUND_CATALOG, HOUSE_PORTAL_LOCATIONS, PATH_CATALOG, ROOF_CATALOG, RUG_CATALOG, SERVANT_CATALOG, SKIN_CATALOG, SKY_CATALOG, WALLPAPER_CATALOG } from "./house";
 import { HOUSE_FLOOR_COLS, HOUSE_FLOOR_ROWS, HOUSE_WALL_COLS, HOUSE_WALL_ROWS } from "../engine/tuning";
 
 /** Ledger ids that are plain currencies rather than items. */
@@ -279,6 +279,17 @@ export function validateContent(): string[] {
     if (c.art && (c.art !== c.art.toLowerCase() || c.art.includes("-"))) err(`room look "${c.id}": art names are lowercase with underscores`);
   }
   if (RUG_CATALOG.length === 0) err("house: needs at least one rug");
+  for (const [what, list] of [["house fronts", FRONT_CATALOG], ["roofs", ROOF_CATALOG], ["grounds", GROUND_CATALOG], ["skies", SKY_CATALOG]] as const) {
+    ids(what, list);
+    if (list.length === 0) err(`house: needs at least one of ${what}`);
+    for (const c of list) if (c.colors.length < 2) err(`${what} "${c.id}": needs at least two colours to draw`);
+  }
+  ids("paths", PATH_CATALOG);
+  for (const p of PATH_CATALOG) {
+    amounts(`path "${p.id}"`, p.cost);
+    if (!(p.levelRequired >= 1 && p.levelRequired <= 99)) err(`path "${p.id}": levelRequired must be 1 to 99`);
+    if (p.colors.length < 2) err(`path "${p.id}": needs a fill and an edge colour`);
+  }
   const achievements = new Set(ACHIEVEMENT_CATALOG.map((a) => a.id));
   for (const f of FURNITURE_CATALOG) {
     const where = `furniture "${f.id}"`;
@@ -297,6 +308,10 @@ export function validateContent(): string[] {
     if (f.facings && f.facings.length === 0) err(`${where}: facings can't be empty (leave it out for all four)`);
     if (f.slot === "surface" && f.surfaceSlots) err(`${where}: a surface piece can't hold others`);
     if (f.station && f.kind !== "facility") err(`${where}: a crafting station must be a facility`);
+    if (f.areas && (f.areas.length === 0 || f.areas.some((x) => x !== "inside" && x !== "yard"))) err(`${where}: areas must list "inside" and/or "yard"`);
+    if (f.slot === "wall" && f.areas?.includes("yard")) err(`${where}: wall pieces hang inside only`);
+    if (f.offlineCapBonusMs && f.areas?.includes("yard")) err(`${where}: beds only count inside`);
+    if (f.connects && (f.slot !== "floor" || f.width !== 1 || f.depth !== 1 || f.facings)) err(`${where}: connecting pieces are 1x1 floor pieces that don't turn`);
     if (f.offlineCapBonusMs !== undefined && !(f.offlineCapBonusMs > 0)) err(`${where}: offlineCapBonusMs must be > 0`);
     for (const id of f.skins ?? []) {
       const skin = SKIN_CATALOG.find((x) => x.id === id);

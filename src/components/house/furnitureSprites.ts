@@ -32,6 +32,36 @@ export function furnitureDrawing(def: FurnitureDefinition, facing: Facing = "fro
   const { main, dark } = wood(id);
   const sideways = facing === "left" || facing === "right";
 
+  // Garden pieces (the yard) come first: "flower-bed" isn't a bed.
+  if (id === "flower-bed") {
+    const flowers = [14, 30, 46, 62, 78]
+      .map((x, i) => `<path d="M${x + 4} 62 V44" stroke="#2f6b2a" stroke-width="3"/><circle cx="${x + 4}" cy="${38 + (i % 2) * 6}" r="7" fill="${["#e04f6a", "#f3c13a", "#9b5de5", "#f08a3a", "#e04f6a"][i]}" ${s(2)}/>`)
+      .join("");
+    return { height: 0.6, svg: `${flowers}<rect x="4" y="60" width="92" height="36" rx="3" fill="#6b4220" ${s()}/><rect x="10" y="60" width="80" height="10" fill="#4a2d16"/>` };
+  }
+  if (id === "wooden-fence")
+    return {
+      height: 0.7,
+      svg: sideways
+        ? `<rect x="44" y="6" width="12" height="92" fill="${main}" ${s()}/><rect x="30" y="20" width="40" height="8" fill="${dark}" ${s(2)}/><rect x="30" y="56" width="40" height="8" fill="${dark}" ${s(2)}/>`
+        : `<rect x="4" y="22" width="92" height="10" fill="${dark}" ${s(2.5)}/><rect x="4" y="58" width="92" height="10" fill="${dark}" ${s(2.5)}/>${[10, 42, 74].map((x) => `<path d="M${x} 98 V14 L${x + 8} 4 L${x + 16} 14 V98 Z" fill="${main}" ${s()}/>`).join("")}`,
+    };
+  if (id === "lamp-post")
+    return {
+      height: 2.2,
+      svg: `<rect x="46" y="20" width="8" height="74" fill="#3a3a3a" ${s(2.5)}/><rect x="36" y="92" width="28" height="6" fill="#3a3a3a" ${s(2)}/><path d="M38 20 L50 6 L62 20 Z" fill="#2b2b2b" ${s(2)}/><rect x="40" y="20" width="20" height="16" fill="#f7d774" ${s(2)}/>`,
+    };
+  if (id === "small-tree")
+    return {
+      height: 1.8,
+      svg: `<rect x="44" y="60" width="12" height="38" fill="#6b4220" ${s()}/><circle cx="50" cy="38" r="30" fill="#3f8a3a" ${s()}/><circle cx="34" cy="48" r="16" fill="#4c9a44" ${s(2)}/><circle cx="66" cy="46" r="16" fill="#4c9a44" ${s(2)}/>`,
+    };
+  if (id === "fern")
+    return {
+      height: 0.7,
+      svg: [-50, -25, 0, 25, 50].map((a) => `<path d="M50 96 Q ${50 + a} 50 ${50 + a * 1.4} 14" stroke="#2f7a2a" stroke-width="7" fill="none" stroke-linecap="round"/>`).join(""),
+    };
+
   if (id.includes("chair"))
     return {
       height: 1.15,

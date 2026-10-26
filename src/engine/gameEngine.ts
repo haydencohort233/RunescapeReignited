@@ -27,6 +27,9 @@ import type {
   RoomCosmetic,
   StationType,
   ServantDefinition,
+  HouseArea,
+  HouseLookSlot,
+  HouseWeather,
 } from "./types";
 import { NotificationQueue } from "./notificationQueue";
 import { levelForXp, xpForLevel, MAX_LEVEL, calculateCombatLevel } from "./xpCurve";
@@ -1593,12 +1596,41 @@ export class GameEngine {
     return this.houseSystem.cancelBuild();
   }
 
-  getFurniturePlacementBlocker(def: FurnitureDefinition, placement: FurniturePlacement, ignoreUid?: string): string | null {
-    return this.houseSystem.getPlacementBlocker(def, placement, ignoreUid);
+  getFurniturePlacementBlocker(def: FurnitureDefinition, placement: FurniturePlacement, ignoreUid?: string, area: HouseArea = "inside"): string | null {
+    return this.houseSystem.getPlacementBlocker(def, placement, ignoreUid, area);
   }
 
-  placeFurniture(storageUid: string, placement: FurniturePlacement): boolean {
-    return this.houseSystem.placeFromStorage(storageUid, placement);
+  placeFurniture(storageUid: string, placement: FurniturePlacement, area: HouseArea = "inside"): boolean {
+    return this.houseSystem.placeFromStorage(storageUid, placement, area);
+  }
+
+  getHouseLooks(slot: HouseLookSlot): RoomCosmetic[] {
+    return this.houseSystem.looksFor(slot);
+  }
+
+  setHouseLook(slot: HouseLookSlot, id: string): boolean {
+    return this.houseSystem.setLook(slot, id);
+  }
+
+  setHouseWeather(weather: HouseWeather): boolean {
+    return this.houseSystem.setWeather(weather);
+  }
+
+  getPathBlocker(x: number, y: number, pathId: string): string | null {
+    return this.houseSystem.getPathBlocker(x, y, pathId);
+  }
+
+  paintPath(x: number, y: number, pathId: string): boolean {
+    return this.houseSystem.paintPath(x, y, pathId);
+  }
+
+  erasePath(x: number, y: number): boolean {
+    return this.houseSystem.erasePath(x, y);
+  }
+
+  /** Pieces that fit in an area (the furniture limit, or the yard's slots). */
+  getHouseAreaLimit(area: HouseArea): number {
+    return this.houseSystem.getAreaLimit(area);
   }
 
   moveFurniture(uid: string, placement: FurniturePlacement): boolean {
@@ -1653,6 +1685,22 @@ export class GameEngine {
     return !inTown && this.houseSystem.hasStationHere(station);
   }
 
+  // Online identity (shared houses)
+
+  getOnlineIdentity(): GameState["online"] {
+    return this.state.online;
+  }
+
+  /** Stores the identity made on first going online (lib/houseDirectory). */
+  setOnlineIdentity(identity: NonNullable<GameState["online"]>): void {
+    this.state.online = { ...identity };
+  }
+
+  /** Remembers which house this save has listed (null after removing it). */
+  setListedHouseId(houseId: string | null): void {
+    if (this.state.online) this.state.online.houseId = houseId;
+  }
+
   // ServantSystem (systems/servants.ts)
 
   getServantDefinitions(): ServantDefinition[] {
@@ -1682,6 +1730,15 @@ export class GameEngine {
 
   depositServantWages(amount: number): boolean {
     return this.servantSystem.deposit(amount);
+  }
+
+  /** GP that can come back out of the coin pouch now. */
+  getServantWithdrawable(): number {
+    return this.servantSystem.getWithdrawable();
+  }
+
+  withdrawServantWages(amount: number): boolean {
+    return this.servantSystem.withdraw(amount);
   }
 
   /** How much work the coin pouch pays for, in ms. */

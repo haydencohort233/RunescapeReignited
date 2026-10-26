@@ -29,6 +29,9 @@ export interface Preferences {
   sceneEditor: boolean;
   /** Player sidebar sections the player folded away ("skills", "resources"). */
   collapsedSections: string[];
+  /** Weather effects in house yards (rain, snow...). Off hides them for
+   *  this player whatever the house's own setting. */
+  weatherEffects: boolean;
 }
 
 const KEY = "idlegame:prefs";
@@ -39,6 +42,7 @@ const DEFAULTS: Preferences = {
   titleAlert: true,
   sceneEditor: false,
   collapsedSections: [],
+  weatherEffects: true,
 };
 
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((t: unknown) => typeof t === "string") : []);
@@ -55,6 +59,7 @@ function load(): Preferences {
       titleAlert: parsed.titleAlert !== false,
       sceneEditor: parsed.sceneEditor === true,
       collapsedSections: strings(parsed.collapsedSections),
+      weatherEffects: parsed.weatherEffects !== false,
     };
   } catch {
     return DEFAULTS;

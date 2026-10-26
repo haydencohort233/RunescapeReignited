@@ -25,3 +25,9 @@ dist-ssr
 
 # Raw art dropped in by the owner, sorted into public/assets by Claude
 art-inbox/
+
+# The house server's data (shared houses and likes)
+server/data/
+
+# Upload bundles for the house server (docs/SERVER.md)
+deploy/

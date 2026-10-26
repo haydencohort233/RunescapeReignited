@@ -217,3 +217,18 @@ describe("servants: saves", () => {
     expect(loaded.getOwnedCount("gp")).toBe(50);
   });
 });
+
+describe("servants: taking GP back out", () => {
+  it("withdraws what the current order doesn't still need", () => {
+    const g = withServant("butler", 1000);
+    const gp = g.engine.getOwnedCount("gp");
+    g.engine.startServantOrder(SAW_PLANK_RECIPE, 10); // 150 GP of wages
+    expect(g.engine.getServantWithdrawable()).toBe(850);
+    expect(g.engine.withdrawServantWages(851)).toBe(false);
+    expect(g.engine.withdrawServantWages(850)).toBe(true);
+    expect(g.engine.getOwnedCount("gp")).toBe(gp + 850);
+    g.advance(BUTLER_PLANK_MS * 10);
+    expect(g.state().servant!.order).toBeNull();
+    expect(g.state().servant!.purse).toBeCloseTo(0);
+  });
+});

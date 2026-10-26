@@ -13,6 +13,14 @@
         "--strictPort"
       ],
       "port": 5173
+    },
+    {
+      "name": "house-server",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "server/house-server.cjs"
+      ],
+      "port": 8787
     }
   ]
 }

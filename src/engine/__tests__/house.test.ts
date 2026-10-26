@@ -118,26 +118,26 @@ describe("player house: limits", () => {
 describe("player house: placing", () => {
   it("floor pieces can't overlap or leave the room", () => {
     const g = builder();
-    const bed = build(g, "plank-bed"); // 1 wide, 2 deep
+    const bed = build(g, "plank-bed"); // 2 wide, 4 deep
     const chair = build(g, "crude-wooden-chair");
-    expect(g.engine.placeFurniture(bed, { x: 0, y: 3 })).toBe(false); // off the front edge
-    expect(g.engine.placeFurniture(bed, { x: 8, y: 0 })).toBe(false); // off the right edge
+    expect(g.engine.placeFurniture(bed, { x: 0, y: 6 })).toBe(false); // off the front edge
+    expect(g.engine.placeFurniture(bed, { x: 16, y: 0 })).toBe(false); // off the right edge
     expect(g.engine.placeFurniture(bed, { x: 0, y: 0 })).toBe(true);
-    expect(g.engine.placeFurniture(chair, { x: 0, y: 1 })).toBe(false);
-    expect(g.engine.placeFurniture(chair, { x: 1, y: 1 })).toBe(true);
+    expect(g.engine.placeFurniture(chair, { x: 0, y: 2 })).toBe(false);
+    expect(g.engine.placeFurniture(chair, { x: 2, y: 2 })).toBe(true);
   });
 
   it("turning swaps the footprint and re-checks the grid", () => {
     const g = builder();
-    const bed = build(g, "plank-bed"); // 1 wide, 2 deep
+    const bed = build(g, "plank-bed"); // 2 wide, 4 deep
     const chair = build(g, "crude-wooden-chair");
     g.engine.placeFurniture(bed, { x: 0, y: 0 });
-    g.engine.placeFurniture(chair, { x: 1, y: 0 });
+    g.engine.placeFurniture(chair, { x: 2, y: 0 });
     expect(g.engine.rotateFurniture(bed)).toBe(false); // turned, it needs columns 0-1 of row 0
     g.engine.storeFurniture(chair);
     expect(g.engine.rotateFurniture(bed)).toBe(true);
     expect(g.state().house.layout.inside[0].facing).toBe("right");
-    expect(g.engine.placeFurniture(build(g, "crude-wooden-chair"), { x: 1, y: 0 })).toBe(false);
+    expect(g.engine.placeFurniture(build(g, "crude-wooden-chair"), { x: 2, y: 0 })).toBe(false);
   });
 
   it("wall pieces use the wall grid and don't turn", () => {
@@ -148,7 +148,7 @@ describe("player house: placing", () => {
     g.engine.placeFurniture(chair, { x: 0, y: 0 });
     expect(g.engine.placeFurniture(shelves, { x: 0, y: 0 })).toBe(true); // a different grid from the chair
     expect(g.engine.placeFurniture(torch, { x: 0, y: 0 })).toBe(false);
-    expect(g.engine.placeFurniture(torch, { x: 0, y: 1 })).toBe(true);
+    expect(g.engine.placeFurniture(torch, { x: 0, y: 2 })).toBe(true);
     expect(g.engine.rotateFurniture(shelves)).toBe(false);
   });
 
@@ -293,10 +293,10 @@ describe("player house: cosmetics", () => {
     const rug = build(g, "blue-rug");
     const rug2 = build(g, "red-rug");
     const chair = build(g, "crude-wooden-chair");
-    expect(g.engine.placeFurniture(rug, { x: 3, y: 2 })).toBe(true);
-    expect(g.engine.placeFurniture(chair, { x: 3, y: 2 })).toBe(true);
-    expect(g.engine.placeFurniture(rug2, { x: 3, y: 2 })).toBe(false);
-    expect(g.engine.placeFurniture(rug2, { x: 4, y: 2 })).toBe(true);
+    expect(g.engine.placeFurniture(rug, { x: 6, y: 4 })).toBe(true);
+    expect(g.engine.placeFurniture(chair, { x: 6, y: 4 })).toBe(true);
+    expect(g.engine.placeFurniture(rug2, { x: 6, y: 4 })).toBe(false);
+    expect(g.engine.placeFurniture(rug2, { x: 8, y: 4 })).toBe(true);
     expect(g.engine.rotateFurniture(rug)).toBe(false);
   });
 });
@@ -322,7 +322,7 @@ describe("player house: saves", () => {
     g.engine.placeFurniture(build(g, "crude-wooden-chair"), { x: 0, y: 0 });
     const layout = g.state().house.layout;
     expect(JSON.parse(JSON.stringify(layout))).toEqual(layout);
-    expect(Object.keys(layout).sort()).toEqual(["floorId", "inside", "rugId", "wallpaperId", "yard"]);
+    expect(Object.keys(layout).sort()).toEqual(["floorId", "frontId", "groundId", "inside", "paths", "roofId", "rugId", "skyId", "wallpaperId", "weather", "yard"]);
     expect(layout.yard).toEqual([]);
   });
 

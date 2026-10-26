@@ -92,7 +92,7 @@ export const AMENITY_CATALOG: Amenity[] = [
     locationId: "town",
     kind: "housePortal",
     name: "House Portal",
-    description: "Step through to your own house: build furniture and arrange the room.",
+    description: "Step through to your own house and yard, or visit someone else's with their share code.",
   },
   {
     id: "lumber-camp-sawmill",

@@ -4,10 +4,10 @@ import type { CraftingRecipe, NpcDefinition, ServantDefinition, StationType } fr
 import { formatDuration } from "../../engine/format";
 import { RECIPE_CATALOG } from "../../content/recipes";
 import { requestConfirm } from "../../lib/dialog";
-import { GpAmount, ItemChip, SkillIcon } from "../ui/GameIcons";
-import { Modal } from "../ui/Modal";
+import { GpAmount, GpIcon, ItemChip, SkillIcon } from "../ui/GameIcons";
+import { ChatHead } from "../ui/Conversation";
 
-const DEPOSITS = [1_000, 10_000, 100_000];
+const AMOUNTS = [1_000, 10_000, 100_000];
 
 /** Time per item: tenths of a second under 10 s ("4.8s"), else as usual. */
 function formatEach(ms: number): string {
@@ -27,8 +27,8 @@ function ServantTerms({ def }: { def: ServantDefinition }) {
 function ServantRow({ def, children }: { def: ServantDefinition; children?: ReactNode }) {
   return (
     <div className="servant-row">
-      <span className="servant-portrait" aria-hidden="true">
-        {def.portrait}
+      <span className="servant-portrait">
+        <ChatHead name={def.art ?? def.name} portrait={def.portrait} size={48} />
       </span>
       <div className="servant-row-text">
         <strong>{def.name}</strong>
@@ -94,95 +94,120 @@ function workableRecipes(placed: Set<StationType>): CraftingRecipe[] {
 }
 
 /**
- * The servant's panel, from the Servant button in the house: who they are,
- * their coin pouch (Deposit GP), the order they're working with its
- * progress and time left, or a picker to give a new one.
+ * The servant's panel in the house: who they are, their coin pouch
+ * (Deposit GP), the order they're working with its progress and time
+ * left, or a picker to give a new one.
  */
-export function ServantPanel({ onClose }: { onClose: () => void }) {
+export function ServantBody() {
   const { engine, state, actions } = useGame();
   const servant = state.servant;
   const def = engine.getHiredServant();
 
-  return (
-    <Modal title={def ? `Your ${def.name}` : "Servants"} onClose={onClose}>
-      {!servant || !def ? (
-        <div className="stack-sm">
-          <p className="empty-state">You don't have a servant. Hire one at the Servants' Guild in Draynor Village.</p>
+  if (!servant || !def) {
+    return (
+      <div className="servant-body is-empty">
+        <p className="servant-empty">You have no help hired. Visit the Servants' Guild in Draynor Village to hire one.</p>
+        <ul className="servant-tiers">
           {engine.getServantDefinitions().map((d) => (
-            <ServantRow key={d.id} def={d}>
+            <li key={d.id} className="servant-tier">
+              <ChatHead name={d.art ?? d.name} portrait={d.portrait} size={32} />
+              <span className="servant-tier-name">{d.name}</span>
               <span className={`text-small ${engine.getSkillLevel("construction") >= d.levelRequired ? "text-success" : "text-danger"}`}>Construction {d.levelRequired}</span>
-            </ServantRow>
+            </li>
           ))}
+        </ul>
+      </div>
+    );
+  }
+
+  return (
+    <div className="servant-body">
+      <div className="servant-head">
+        <ChatHead name={def.art ?? def.name} portrait={def.portrait} size={44} />
+        <div className="servant-row-text">
+          <strong>{def.name}</strong>
+          <ServantTerms def={def} />
         </div>
-      ) : (
-        <div className="stack-sm">
-          <ServantRow def={def} />
-          <CoinPouch />
-          {servant.order ? <OrderProgress /> : <OrderPicker />}
-          <div className="btn-row">
-            <button
-              type="button"
-              className="btn btn-danger"
-              onClick={async () => {
-                const ok = await requestConfirm(`Dismiss your ${def.name}? Their coin pouch and any unused materials come back to you.`, {
-                  confirmLabel: "Dismiss",
-                  danger: true,
-                });
-                if (!ok) return;
-                engine.dismissServant();
-                actions.refresh();
-              }}
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      )}
-    </Modal>
+        <CoinPouch />
+      </div>
+      {servant.order ? <OrderProgress /> : <OrderPicker />}
+      <div className="btn-row">
+        <button
+          type="button"
+          className="btn btn-ghost btn-small"
+          onClick={async () => {
+            const ok = await requestConfirm(`Dismiss your ${def.name}? Their coin pouch and any unused materials come back to you.`, {
+              confirmLabel: "Dismiss",
+              danger: true,
+            });
+            if (!ok) return;
+            engine.dismissServant();
+            actions.refresh();
+          }}
+        >
+          Dismiss
+        </button>
+      </div>
+    </div>
   );
 }
 
+/**
+ * The coin pouch: the gold coins and how much is in it. Tap to put GP in
+ * or take it back out (anything the current order doesn't still need).
+ */
 function CoinPouch() {
   const { engine, state, actions } = useGame();
   const servant = state.servant!;
+  const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState("");
   const gp = Math.floor(engine.getOwnedCount("gp"));
   const purse = Math.floor(servant.purse);
+  const free = engine.getServantWithdrawable();
+  const amount = Math.floor(Number(custom) || 0);
 
-  const deposit = (amount: number) => {
-    if (amount > 0) engine.depositServantWages(amount);
+  const move = (dir: "in" | "out", n: number) => {
+    if (n <= 0) return;
+    if (dir === "in") engine.depositServantWages(Math.min(n, gp));
+    else engine.withdrawServantWages(Math.min(n, free));
+    setCustom("");
     actions.refresh();
   };
 
   return (
-    <div className="card servant-section">
-      <div className="row row-between">
-        <strong>Coin pouch</strong>
-        <GpAmount amount={purse} />
-      </div>
-      <span className="text-small text-muted">
-        {servant.purse > 0 ? `Pays for ${formatDuration(engine.getServantPurseTimeMs())} of work.` : "Empty. An order only starts when the pouch covers all its wages."}
-      </span>
-      <div className="btn-row servant-deposits">
-        {DEPOSITS.map((amount) => (
-          <button key={amount} type="button" className="btn" disabled={gp < amount} onClick={() => deposit(amount)}>
-            +{amount.toLocaleString()}
-          </button>
-        ))}
-      </div>
-      <form
-        className="row servant-custom"
-        onSubmit={(e) => {
-          e.preventDefault();
-          deposit(Math.min(gp, Math.floor(Number(custom) || 0)));
-          setCustom("");
-        }}
-      >
-        <input type="number" inputMode="numeric" min={1} max={gp} placeholder="GP" value={custom} onChange={(e) => setCustom(e.target.value)} aria-label="GP to deposit" />
-        <button type="submit" className="btn" disabled={!(Number(custom) >= 1) || gp < 1}>
-          Deposit GP
-        </button>
-      </form>
+    <div className="coin-pouch">
+      <button type="button" className={`coin-pouch-btn${open ? " is-open" : ""}`} aria-expanded={open} onClick={() => setOpen(!open)} title="Coin pouch: tap to put GP in or take it out">
+        <GpIcon size={18} />
+        <span>{purse.toLocaleString()} GP</span>
+      </button>
+      {open && (
+        <div className="coin-pouch-pop" role="dialog" aria-label="Coin pouch">
+          <span className="text-small text-muted">
+            {servant.purse > 0 ? `Pays for ${formatDuration(engine.getServantPurseTimeMs())} of work.` : "Empty. An order only starts when the pouch covers its wages."}
+          </span>
+          <div className="btn-row">
+            {AMOUNTS.map((n) => (
+              <button key={n} type="button" className="btn btn-small" disabled={gp < n} onClick={() => move("in", n)} title={`Put ${n.toLocaleString()} GP in`}>
+                +{n >= 1000 ? `${n / 1000}k` : n}
+              </button>
+            ))}
+          </div>
+          <div className="row servant-custom">
+            <input type="number" inputMode="numeric" min={1} placeholder="GP" value={custom} onChange={(e) => setCustom(e.target.value)} aria-label="GP amount" />
+          </div>
+          <div className="btn-row">
+            <button type="button" className="btn btn-primary btn-small" disabled={amount < 1 || gp < 1} onClick={() => move("in", amount)}>
+              Deposit
+            </button>
+            <button type="button" className="btn btn-small" disabled={amount < 1 || free < 1} onClick={() => move("out", amount)} title={`Up to ${free.toLocaleString()} GP can come out`}>
+              Withdraw
+            </button>
+            <button type="button" className="btn btn-ghost btn-small" disabled={free < 1} onClick={() => move("out", free)}>
+              Take all ({free.toLocaleString()})
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

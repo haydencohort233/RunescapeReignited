@@ -13,12 +13,34 @@ export function getSidebarOpen(): boolean {
   }
 }
 
+/** Remembers the player's usual setting. What's showing right now (the
+ *  house may hide it) is mirrored onto <html data-sidebar> by App. */
 export function applySidebarOpen(open: boolean): void {
-  document.documentElement.dataset.sidebar = open ? "open" : "collapsed";
   try {
     if (open) window.localStorage.removeItem(SIDEBAR_KEY);
     else window.localStorage.setItem(SIDEBAR_KEY, "collapsed");
   } catch {
     // Not remembered, but still applied for this session.
   }
+}
+
+// The house screen hides the sidebar on wide screens while it's open
+// (decided Oct 26); the player can still open it. Leaving the house goes
+// back to their usual setting.
+const houseListeners = new Set<(open: boolean) => void>();
+let houseOpen = false;
+
+export function setHouseScreenOpen(open: boolean): void {
+  if (open === houseOpen) return;
+  houseOpen = open;
+  houseListeners.forEach((l) => l(open));
+}
+
+export function subscribeHouseScreen(listener: (open: boolean) => void): () => void {
+  houseListeners.add(listener);
+  return () => houseListeners.delete(listener);
+}
+
+export function isHouseScreenOpen(): boolean {
+  return houseOpen;
 }

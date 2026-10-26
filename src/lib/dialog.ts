@@ -5,6 +5,7 @@
 // is pending here.
 
 import type { AwaySummary } from "../engine/awaySummary";
+import type { HouseLayout } from "../engine/types";
 
 /** One side of a "switch activity?" prompt: what's running, or what's next. */
 export interface ActivityPreview {
@@ -277,4 +278,25 @@ export function showText(title: string, message: string, text: string): Promise<
       },
     })
   );
+}
+
+/** Someone else's house, seen read-only: from a share code, or from the
+ *  house server's list (then `houseId` lets you like it). */
+export interface HouseVisit {
+  name: string;
+  layout: HouseLayout;
+  houseId?: string;
+}
+
+const openVisitListeners = new Set<(visit: HouseVisit) => void>();
+
+/** Visits someone else's house (from a share code or the most-liked
+ *  list): Home shows it read-only, starting in the yard. */
+export function openVisit(visit: HouseVisit): void {
+  openVisitListeners.forEach((l) => l(visit));
+}
+
+export function subscribeOpenVisit(listener: (visit: HouseVisit) => void): () => void {
+  openVisitListeners.add(listener);
+  return () => openVisitListeners.delete(listener);
 }

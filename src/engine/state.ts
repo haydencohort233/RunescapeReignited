@@ -5,7 +5,7 @@ import { DEFAULT_COMBAT_STYLES } from "./combatStyles";
 
 /** Bump when GameState's shape changes, and add a matching entry to
  *  MIGRATIONS in migrations.ts. */
-export const SCHEMA_VERSION = 27;
+export const SCHEMA_VERSION = 30;
 
 /** OSRS-authentic: Hitpoints starts pre-leveled at 10 (unlike every other
  *  skill, which starts at 1) — this is the XP threshold for level 10. */
@@ -39,8 +39,9 @@ export function createInitialState(now: number = Date.now()): GameState {
     statistics: {},
     lastTickTimestamp: now,
     offlineCapMs: DEFAULT_OFFLINE_CAP_MS,
-    house: { layout: { inside: [], yard: [], wallpaperId: "", floorId: "", rugId: "" }, storage: [], build: null, unlockedSkins: [] },
+    house: { layout: { inside: [], yard: [], wallpaperId: "", floorId: "", rugId: "", frontId: "", roofId: "", groundId: "", skyId: "", paths: [], weather: "auto" }, storage: [], build: null, unlockedSkins: [] },
     servant: null,
+    online: null,
     version: SCHEMA_VERSION,
   };
 }
