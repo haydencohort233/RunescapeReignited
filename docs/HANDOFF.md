@@ -1,6 +1,6 @@
 # Handoff
 
-As of Oct 26, 2026. The house overhaul (below) and the yard and sharing (Player House Phases 3 and 5) are built on top of Servants (committed Oct 24, on the test link). Neither is committed yet; the house server is live at https://idlescape.nashville3dprints.com (deployed Oct 24 with the yard and sharing, before the overhaul). Tests (220), lint and build pass, apart from the flaky "keep fighting doesn't respawn the enemy once the arrows are gone" (one random arrow can miss) and the one oxlint warning listed under Known gaps. The test link (https://claude.ai/artifact/DCwGp4oX62R6pRdFw1ZkdF) runs the Servants build.
+As of Oct 27, 2026 (art round below; the rest as of Oct 26). The house overhaul (below) and the yard and sharing (Player House Phases 3 and 5) are built on top of Servants (committed Oct 24, on the test link). All of it, and the Oct 27 art round, is committed and pushed (Oct 27); the house server is live at https://idlescape.nashville3dprints.com (deployed Oct 24 with the yard and sharing, before the overhaul). Tests (220), lint and build pass, apart from the flaky "keep fighting doesn't respawn the enemy once the arrows are gone" (one random arrow can miss) and the one oxlint warning listed under Known gaps. The test link (https://claude.ai/artifact/DCwGp4oX62R6pRdFw1ZkdF) runs the Servants build.
 
 ## Where things stand
 
@@ -14,6 +14,16 @@ Combat is complete and most of Phase 1, plus parts of Phases 2 and 3, are built.
 | Dungeon | Overgrown Den: quest-gated, 3 waves, regear stop, Den Guardian boss, 6-slot loadout. |
 | House | Yard and sharing (Phases 3 and 5): the yard in front of the house, one share code for both, read-only visits, the house server for listings and likes. Servants (Phase 4): hire at the Servants' Guild in Draynor, give orders at placed facilities from the house's Servant button, wages from a coin pouch. Player House Phase 1: one side-view room with floor, wall and surface slots, Use and Build modes, time-gated furniture building, facilities that work as crafting stations, beds that raise the offline cap, skins data model. Portal in Riverside Town. Planks from the Sawmill and Sawmill Operator at Lumber Camp. |
 | Other | Offline progress (1 hour for new saves, plus the best bed; older saves keep 8 hours), degrading gear with repairs (Dharok's Greataxe example), Glory charges, dev tools (spawn, levels, teleport, HP, restore all gear). |
+
+## Oct 27 round: Second art drop
+
+The owner's art from art-inbox/ is sorted into public/assets (inbox kept, still git-ignored):
+
+- **Items**: placed per art-inbox/_map.txt; 37 files replaced, 21 new. Files the map left out went to the existing file of the same name, or by category: Ores (adamantite, silver, corrupted), a new Gems folder (amethyst, uncut sapphire to dragonstone), Materials (eye of newt, oyster, oyster pearl, pure and rune essence, seaweed, soft clay, vial, vial of water, bird_nest_empty), Tools (pestle and mortar, rake, spade, tackle box), Fish (raw cod, mackerel, dark crab). No items use the new files yet; an item named to match picks its file up with no code change.
+- **Skills**: 32 x 32 icons replace the old wiki ones (several were not real PNGs). runecrafting.png went in as runecraft.png (the OSRS name); sailing.png and hammer.png are spare. Richtext now knows Prayer, Mining, Smithing and Construction tags.
+- **NPCs**: identical to the Oct 22 portraits, nothing changed. No servant art yet; servants still borrow hans, leela and den_guardian.
+- **Room looks**: five walls and five floors added to `WALLPAPER_CATALOG` / `FLOOR_CATALOG` (names Proposed in the roadmap). All line up with the traced room shape. The halloween1 wall arrived as house_halloween1_wall.png and was renamed. Looks swatches no longer shrink (`.build-looks .build-swatch` is `flex: none`), so names stay readable and the row scrolls.
+- **Furniture**: the 30 pieces already in the catalog got identical files. 37 new images are in public/assets/furniture without catalog entries; furnitureArt.test.ts lists them in `AWAITING_CATALOG` (take a name off as its piece is added). Wall art (large_landscape, large_portrait, small_portrait, mounted_bass, stained_glass, saradomin_icon, zamorak_icon) is 128 x 144, Wide. Everything else (garden plants, trees, hedges, gazebo, firepit, candles, dartboard, teak_bookcase, oak_shelves_2, jack_lantern_mask...) is 192 x 192, scaled to fill the canvas, so it needs resizing before use (192 would be 3 squares wide).
 
 ## Oct 26 round: House panels and polish
 
@@ -169,8 +179,5 @@ From the roadmap, in rough order:
 
 ## Next step
 
-Recommended now: the owner reviews the house overhaul (and the Proposed values in the roadmap) and commits; then redeploy the game to the Advin host (`npm run build`, upload `dist` over `rs-game/dist`, restart the app; see docs/SERVER.md). Then flesh out the game, as the owner asked: the material tiers (iron to rune, willow to yew, mahogany), which also give the house and servants more to work with. Phase 2 (cosmetics) once cosmetic art exists.
+Recommended now: redeploy the game to the Advin host (`npm run build`, upload `dist` over `rs-game/dist`, restart the app; see docs/SERVER.md), since the server still runs the build from before the house overhaul. Then follow "Up next" in docs/ROADMAP.md: material tiers, shops buying their own category, cooking burn chance, the bank and inventory cap, more quests.
 
-Earlier recommendation, still open:
-
-Recommended: more quests (5 to 10) on the new quest system, with new step types such as "kill a boss" and "talk to another NPC". After that, Slayer with weapon-restricted enemies (rows 5 and 6), then potions (row 8). Confirm the order with the owner.

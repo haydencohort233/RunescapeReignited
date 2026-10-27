@@ -146,10 +146,25 @@ export const SKIN_CATALOG: FurnitureSkin[] = [
 /** Room looks. `art` is the file in public/assets/house/ (without .png),
  *  drawn on a 1536 x 1024 canvas that lines up with the room's grid (see
  *  roomGeometry.ts); `colors` draw a stand-in until it loads. The first
- *  of each list is the default. */
-export const WALLPAPER_CATALOG: RoomCosmetic[] = [{ id: "wood-wall", name: "Timber and Stone", colors: ["#d9c9a8", "#c7b48f"], art: "house_wall_wood" }];
+ *  of each list is the default. All free for now (proposed); Phase 2 adds
+ *  unlocks. */
+export const WALLPAPER_CATALOG: RoomCosmetic[] = [
+  { id: "wood-wall", name: "Timber and Stone", colors: ["#d9c9a8", "#c7b48f"], art: "house_wall_wood" },
+  { id: "stone-wall", name: "Grey Stone", colors: ["#6a6a6b", "#5a3718"], art: "house_wall_stone2" },
+  { id: "marble-wall", name: "Marble and Slate", colors: ["#75797d", "#948c7d"], art: "house_wall_marble" },
+  { id: "ornate-wall", name: "Crimson Marble", colors: ["#e1d0b4", "#642529"], art: "house_wall_ornate" },
+  { id: "halloween1-wall", name: "Bat Crypt", colors: ["#3b1b21", "#323032"], art: "house_wall_halloween1" },
+  { id: "halloween2-wall", name: "Cobwebbed Stone", colors: ["#3d3b3e", "#432d45"], art: "house_wall_halloween2" },
+];
 
-export const FLOOR_CATALOG: RoomCosmetic[] = [{ id: "wood-floor", name: "Wooden Floor", colors: ["#a87a4c", "#7a5432"], art: "house_floor_wood" }];
+export const FLOOR_CATALOG: RoomCosmetic[] = [
+  { id: "wood-floor", name: "Wooden Floor", colors: ["#a87a4c", "#7a5432"], art: "house_floor_wood" },
+  { id: "stone-floor", name: "Slate Flagstones", colors: ["#55585b", "#77471e"], art: "house_floor_stone2" },
+  { id: "marble-floor", name: "Marble Tiles", colors: ["#d5c7b2", "#beb19d"], art: "house_floor_marble" },
+  { id: "ornate-floor", name: "Chequered Marble", colors: ["#8f8678", "#492f31"], art: "house_floor_ornate" },
+  { id: "halloween1-floor", name: "Crypt Boards", colors: ["#392c3d", "#391f26"], art: "house_floor_halloween1" },
+  { id: "halloween2-floor", name: "Dark Planks", colors: ["#443e3c", "#3e343b"], art: "house_floor_halloween2" },
+];
 
 /** A room-wide rug under everything. Only "none" for now: rugs are
  *  placeable furniture since the art arrived (Oct 22). Kept in the save

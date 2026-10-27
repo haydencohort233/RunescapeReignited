@@ -5009,9 +5009,11 @@ html.is-modal-open body {
 }
 
 .build-looks .build-swatch {
+  flex: none;
   flex-direction: row;
   min-width: 0;
   padding: 4px 8px 4px 4px;
+  white-space: nowrap;
 }
 
 .build-looks .build-swatch-chip {

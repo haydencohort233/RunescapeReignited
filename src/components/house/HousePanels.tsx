@@ -80,7 +80,11 @@ export function ScrollArea({ children, className = "", innerRef, horizontal = fa
     const check = () => {
       const pos = horizontal ? el.scrollLeft : el.scrollTop;
       const max = horizontal ? el.scrollWidth - el.clientWidth : el.scrollHeight - el.clientHeight;
-      setMore({ back: pos > 2, forward: pos < max - 2 });
+      const back = pos > 2;
+      const forward = pos < max - 2;
+      // Keep the same object when nothing changed, or this effect (which runs
+      // after every render) would re-render forever.
+      setMore((m) => (m.back === back && m.forward === forward ? m : { back, forward }));
     };
     check();
     el.addEventListener("scroll", check, { passive: true });

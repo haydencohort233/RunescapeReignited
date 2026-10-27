@@ -5,7 +5,8 @@ Read [docs/HANDOFF.md](docs/HANDOFF.md) for the current state and [docs/ROADMAP.
 ## How decisions are made
 
 - The owner is the original author and makes all design calls. When they answer open questions, fold the answers into the live roadmap doc (mark "Decided:", tick open questions) and sync docs/ROADMAP.md.
-- Before building a feature, read its roadmap row and follow the decided details. Values nobody decided are marked "Proposed" in the roadmap so the owner can review them.
+- The live doc's Roadmap tab (docs/ROADMAP.md) stays short: Up next, Waiting on you, the backlog by area, one line per built round. Decided and Proposed details go in its History and decisions tab (docs/ROADMAP-ARCHIVE.md). When something is built, drop it from the backlog and add it to Built.
+- Before building a feature, read its roadmap row and its decided details in the archive, and follow them. Values nobody decided are marked "Proposed" in the roadmap so the owner can review them.
 - Desktop and phone are both first-class: every new screen must work at 375px wide with no sideways scroll.
 - The game follows OSRS where it can (formulas, levels, XP, names) unless a decision says otherwise.
 
